@@ -13,16 +13,21 @@ import {
   Container,
   Link,
   FormErrorMessage,
+  Radio,
+  RadioGroup,
+  Stack,
 } from '@chakra-ui/react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import NextLink from 'next/link';
+import { UserRole } from '@/lib/roles';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<UserRole>('user');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const { signUp } = useAuth();
@@ -62,7 +67,7 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-      await signUp(email, password);
+      await signUp(email, password, role);
       toast({
         title: 'Account created.',
         description: "We've created your account for you.",
@@ -70,7 +75,7 @@ export default function Signup() {
         duration: 5000,
         isClosable: true,
       });
-      router.push('/dashboard');
+      router.push('/login');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -135,6 +140,16 @@ export default function Signup() {
                   required
                 />
                 <FormErrorMessage>{errors.confirmPassword}</FormErrorMessage>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Role</FormLabel>
+                <RadioGroup value={role} onChange={(value) => setRole(value as UserRole)}>
+                  <Stack direction="row">
+                    <Radio value="user">User</Radio>
+                    <Radio value="admin">Admin</Radio>
+                  </Stack>
+                </RadioGroup>
               </FormControl>
 
               <Button

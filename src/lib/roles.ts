@@ -1,12 +1,12 @@
-export type UserRole = 'admin' | 'supervisor';
+export type UserRole = 'admin' | 'user';
 
 export const ROLES = {
   ADMIN: 'admin',
-  SUPERVISOR: 'supervisor',
+  USER: 'user',
 } as const;
 
 export const ROLE_PERMISSIONS = {
-  [ROLES.ADMIN]: [
+  admin: [
     '/dashboard',
     '/surveys',
     '/inward',
@@ -14,17 +14,17 @@ export const ROLE_PERMISSIONS = {
     '/reports',
     '/ro',
     '/master-data',
+    '/admin',
   ],
-  [ROLES.SUPERVISOR]: [
+  user: [
     '/dashboard',
     '/surveys',
     '/inward',
     '/outward',
-    '/reports',
   ],
 } as const;
 
-export function hasPermission(role: UserRole | undefined, path: string): boolean {
+export function hasPermission(role: UserRole | null, path: string): boolean {
   if (!role) return false;
   return ROLE_PERMISSIONS[role].includes(path);
 } 

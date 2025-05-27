@@ -1,4 +1,4 @@
-import { Box, Flex, IconButton, Text, Button, useColorModeValue, HStack } from '@chakra-ui/react';
+import { Box, Flex, IconButton, Text, Button, useColorModeValue, HStack, Badge } from '@chakra-ui/react';
 import { FiMenu } from 'react-icons/fi';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
@@ -10,6 +10,17 @@ interface HeaderProps {
 export default function Header({ onMenuClick }: HeaderProps) {
   const { user, role, signOut } = useAuth();
   const bgColor = useColorModeValue('white', 'gray.800');
+
+  const getRoleColor = (role: string | null) => {
+    switch (role) {
+      case 'admin':
+        return 'purple';
+      case 'user':
+        return 'blue';
+      default:
+        return 'gray';
+    }
+  };
 
   return (
     <Box
@@ -55,9 +66,20 @@ export default function Header({ onMenuClick }: HeaderProps) {
         </HStack>
 
         <Flex alignItems="center" gap="4">
-          <Text fontSize="sm" fontWeight="medium" display={{ base: 'none', md: 'block' }}>
-            {user?.email} ({role || 'User'})
-          </Text>
+          <HStack spacing={2}>
+            <Text fontSize="sm" fontWeight="medium" display={{ base: 'none', md: 'block' }}>
+              {user?.email}
+            </Text>
+            <Badge
+              colorScheme={getRoleColor(role)}
+              px={2}
+              py={1}
+              borderRadius="md"
+              textTransform="capitalize"
+            >
+              {role || 'No Role'}
+            </Badge>
+          </HStack>
           <Button
             size="sm"
             colorScheme="red"
