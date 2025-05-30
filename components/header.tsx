@@ -2,8 +2,7 @@
 
 import { useAuth } from '@/contexts/Auth';
 import { Button } from '@/components/ui/button';
-import { LogOut, Sun, Moon, MenuIcon } from 'lucide-react';
-import { useTheme } from 'next-themes';
+import { LogOut, MenuIcon } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -21,7 +20,6 @@ import { useState } from 'react';
 
 export default function Header() {
   const { user, userRole, logout } = useAuth();
-  const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const [isNavOpen, setIsNavOpen] = useState(false);
 
@@ -119,19 +117,9 @@ export default function Header() {
       </div>
       
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          aria-label="Toggle theme"
-        >
-          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-        </Button>
-        
         <div className="flex items-center gap-2">
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-medium">{user?.email}</p>
-            <p className="text-xs text-muted-foreground capitalize">{userRole}</p>
+            <p className="text-sm font-bold">{user?.username} ({user?.role})</p>
           </div>
           <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Logout">
             <LogOut size={18} />
