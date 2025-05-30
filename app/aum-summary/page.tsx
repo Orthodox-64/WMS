@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DateRange } from "react-day-picker";
 import DashboardLayout from "@/components/dashboard-layout";
 import { DateRangePicker } from "@/components/date-range-picker";
@@ -13,6 +13,7 @@ import { formatFileNameDate } from "@/lib/utils";
 import { saveAs } from "file-saver";
 import { parse } from "json2csv";
 import { ColumnDef } from "@tanstack/react-table";
+import { PieChartComponent } from "@/components/pie-chart";
 
 const columns: ColumnDef<AUM, any>[] = [
   {
@@ -51,6 +52,21 @@ export default function AUMSummaryPage() {
     date ? { from: date.from!, to: date.to! } : undefined
   );
 
+  const pieChartData = useMemo(() => {
+    if (!aumData) return [];
+    
+    const stateTotals = aumData.reduce((acc, curr) => {
+      const state = curr.state;
+      acc[state] = (acc[state] || 0) + parseFloat(curr.aum);
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(stateTotals)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [aumData]);
+
   const handleExportCSV = () => {
     try {
       const csvData = parse(aumData);
@@ -67,32 +83,38 @@ export default function AUMSummaryPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-base font-medium">
-              AUM Summary
-            </CardTitle>
-            <div className="flex items-center gap-4">
-              <DateRangePicker date={date} onDateChange={setDate} />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleExportCSV}
-                disabled={loading || Boolean(error) || !aumData?.length}
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={columns}
-              data={aumData || []}
-              isLoading={loading}
-              error={error?.message}
-            />
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-base font-medium">
+                AUM Summary
+              </CardTitle>
+              <div className="flex items-center gap-4">
+                <DateRangePicker date={date} onDateChange={setDate} />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleExportCSV}
+                  disabled={loading || Boolean(error) || !aumData?.length}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={columns}
+                data={aumData || []}
+                isLoading={loading}
+                error={error?.message}
+              />
+            </CardContent>
+          </Card>
+          <PieChartComponent
+            title="AUM Distribution by State"
+            data={pieChartData}
+          />
+        </div>
       </div>
     </DashboardLayout>
   );
