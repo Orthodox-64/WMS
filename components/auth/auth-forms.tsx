@@ -1,32 +1,30 @@
 'use client';
 
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/Auth";
-import { useToast } from "@/hooks/use-toast"
-
-type UserRole = 'maker' | 'checker' | 'admin';
+import { useToast } from "@/hooks/use-toast";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 export function AuthForms() {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>('maker');
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [role, setRole] = useState<"maker" | "checker" | "admin">("maker");
   const { login, register } = useAuth();
   const { toast } = useToast();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (isLogin) {
-        await login(mobileNumber, password);
+        await login(username, password);
       } else {
-        await register(username, mobileNumber, password);
-        // Role will be set by the backend after registration
+        await register(username, phoneNumber, password, role);
       }
     } catch (error) {
       toast({
@@ -38,80 +36,105 @@ export function AuthForms() {
   };
 
   return (
-    <Card className="w-[350px]">
-      <CardHeader>
-        <CardTitle>{isLogin ? "Login" : "Register"}</CardTitle>
-        <CardDescription>
+    <Card className="w-[350px] border-2 border-orange-500 bg-white/95 shadow-lg">
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-2xl font-bold text-orange-600">{isLogin ? "Login" : "Register"}</CardTitle>
+        <CardDescription className="text-green-500">
           {isLogin
-            ? "Enter your credentials to access your account"
-            : "Create a new account"}
+            ? "Enter your username and password to login"
+            : "Create a new account with your details"}
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">          {!isLogin && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Select
-                  value={role}
-                  onValueChange={(value: UserRole) => setRole(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="maker">Maker</SelectItem>
-                    <SelectItem value="checker">Checker</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
-          )}
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="mobile">Mobile Number</Label>
+            <Label htmlFor="username" className="text-orange-600">Username</Label>
             <Input
-              id="mobile"
-              type="tel"
-              value={mobileNumber}
-              onChange={(e) => setMobileNumber(e.target.value)}
+              id="username"
+              placeholder="Enter your username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
-              pattern="[0-9]{10}"
-              placeholder="10-digit mobile number"
+              className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
             />
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-orange-600">Password</Label>
             <Input
               id="password"
               type="password"
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
             />
           </div>
-          <Button type="submit" className="w-full">
+          
+          {!isLogin && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="phone" className="text-orange-600">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Enter your phone number"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  required
+                  className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-orange-600">Role</Label>
+                <RadioGroup
+                  value={role}
+                  onValueChange={(value) => setRole(value as "maker" | "checker" | "admin")}
+                  className="flex flex-col space-y-1"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="maker" id="maker" className="border-orange-500 text-orange-500" />
+                    <Label htmlFor="maker" className="text-green-600">Maker</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="checker" id="checker" className="border-orange-500 text-orange-500" />
+                    <Label htmlFor="checker" className="text-green-600">Checker</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="admin" id="admin" className="border-orange-500 text-orange-500" />
+                    <Label htmlFor="admin" className="text-green-600">Admin</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </>
+          )}
+        </CardContent>
+        <CardFooter className="flex flex-col space-y-4">
+          <Button 
+            type="submit" 
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+          >
             {isLogin ? "Login" : "Register"}
           </Button>
           <Button
             type="button"
             variant="ghost"
-            className="w-full"
-            onClick={() => setIsLogin(!isLogin)}
+            className="w-full text-green-600 hover:text-green-700 hover:bg-green-50"
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setUsername("");
+              setPassword("");
+              setPhoneNumber("");
+            }}
           >
-            {isLogin ? "Need an account? Register" : "Have an account? Login"}
+            {isLogin
+              ? "Don't have an account? Register"
+              : "Already have an account? Login"}
           </Button>
-        </form>
-      </CardContent>
+        </CardFooter>
+      </form>
     </Card>
   );
 }

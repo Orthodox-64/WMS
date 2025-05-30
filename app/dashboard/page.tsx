@@ -1,7 +1,10 @@
+'use client';
+
 import DashboardLayout from '@/components/dashboard-layout';
 import { DashboardCards } from '@/components/dashboard/dashboard-cards';
 import { DashboardCharts } from '@/components/dashboard/dashboard-charts';
 import { SidebarStats } from '@/components/dashboard/sidebar-stats';
+import { DistributionChart } from "@/components/dashboard/distribution-chart";
 
 export default function DashboardPage() {
   return (

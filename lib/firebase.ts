@@ -1,21 +1,18 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCFdbSFYfjh9UIvrfFJZr60U7OAZIUNU8I",
-  authDomain: "goods-ab8b5.firebaseapp.com",
-  projectId: "goods-ab8b5",
-  storageBucket: "goods-ab8b5.firebasestorage.app",
-  messagingSenderId: "1084647770453",
-  appId: "1:1084647770453:web:53d5c957527728c6fd47dc"
+  apiKey: "AIzaSyAgx99BlTjlGd5YBXqfP4_pf4H18y1eguA",
+  authDomain: "warehouse-76615.firebaseapp.com",
+  projectId: "warehouse-76615",
+  storageBucket: "warehouse-76615.firebasestorage.app",
+  messagingSenderId: "483921345711",
+  appId: "1:483921345711:web:8346076f025108af08685a"
 };
 
 // Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getFirestore(app);
 
-export { app, auth, db, signInWithEmailAndPassword, signOut, onAuthStateChanged };
-export type { User };
+export { app, db };

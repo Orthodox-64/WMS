@@ -1,7 +1,8 @@
+'use client';
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { useRouter } from "next/navigation";
-
 import { useEffect, useState } from "react";
 import { collection, query, getDocs, orderBy, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -11,6 +12,8 @@ interface ChartData {
   name: string;
   value: number;
 }
+
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
 function useDashboardData() {
   const [commodityData, setCommodityData] = useState<ChartData[]>([]);
@@ -65,53 +68,7 @@ function useDashboardData() {
   }, []);
 
   return { commodityData, aumData, loading };
-    async function fetchData() {
-      try {
-        // Fetch commodity data
-        const commodityRef = collection(db, "commodities");
-        const commoditySnapshot = await getDocs(
-          query(commodityRef, orderBy("quantity", "desc"), limit(5))
-        );
-        const commodityResults = commoditySnapshot.docs.map((doc) => ({
-          name: doc.data().name,
-          value: doc.data().quantity,
-        }));
-        setCommodityData(commodityResults);
-
-        // Fetch AUM data
-        const aumRef = collection(db, "aum_by_state");
-        const aumSnapshot = await getDocs(
-          query(aumRef, orderBy("value", "desc"), limit(5))
-        );
-        const aumResults = aumSnapshot.docs.map((doc) => ({
-          name: doc.data().state,
-          value: doc.data().value,
-        }));
-        setAumData(aumResults);
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-        // Use mock data as fallback
-        setCommodityData([
-          { name: "Wheat", value: 400 },
-          { name: "Rice", value: 300 },
-          { name: "Corn", value: 200 },
-          { name: "Soybeans", value: 100 },
-        ]);
-        setAumData([
-          { name: "Maharashtra", value: 500 },
-          { name: "Gujarat", value: 400 },
-          { name: "Punjab", value: 300 },
-          { name: "Haryana", value: 200 },
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, []);
-
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
+}
 
 interface PieChartCardProps {
   title: string;

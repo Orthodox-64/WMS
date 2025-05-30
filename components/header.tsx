@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/Auth';
 import { Button } from '@/components/ui/button';
 import { LogOut, Sun, Moon, MenuIcon } from 'lucide-react';
 import { useTheme } from 'next-themes';

@@ -7,18 +7,30 @@ import {
   useEffect,
   ReactNode,
 } from "react";
-import { auth, User } from "@/lib/firebase";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { toast } from "@/components/ui/use-toast";
 
 type UserRole = "maker" | "checker" | "admin" | null;
 
+interface User {
+  id: string;
+  username: string;
+  phoneNumber: string;
+  role: UserRole;
+  createdAt: string;
+}
+
+interface UserWithPassword extends User {
+  password: string;
+}
+
 interface AuthContextType {
   user: User | null;
-  userRole: UserRole;
   loading: boolean;
-  login: (mobileNumber: string, password: string) => Promise<void>;
-  register: (username: string, mobileNumber: string, password: string) => Promise<void>;
+  register: (username: string, phoneNumber: string, password: string, role: UserRole) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -26,93 +38,177 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = auth.onIdTokenChanged(async (user) => {
-      setUser(user);
-      
-      if (user) {
-        try {
-          // Get the ID token with updated claims
-          const token = await user.getIdToken(true);
-          const idTokenResult = await user.getIdTokenResult();
-          setUserRole(idTokenResult.claims.role as UserRole || null);
-          
-          // Send the token to your backend to create a session cookie
-          await fetch("/api/auth/session", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idToken: token }),
-          });
-        } catch (error) {
-          console.error("Auth error:", error);
-          setUserRole(null);
-        }
-      } else {
-        setUserRole(null);
-      }
-      
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    // Check for stored user session
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+    setLoading(false);
   }, []);
 
-  const register = async (username: string, mobileNumber: string, password: string) => {
+  const register = async (username: string, phoneNumber: string, password: string, role: UserRole) => {
     try {
-      const email = `${mobileNumber}@wms.com`;
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      await fetch("/api/auth/set-claims", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uid: userCredential.user.uid,
-          username,
-          mobileNumber,
-          role: "maker",
-        }),
-      });
+      if (!role || (role !== "maker" && role !== "checker" && role !== "admin")) {
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: "Please select a valid role (maker, checker, or admin).",
+        });
+        return;
+      }
 
+      if (!password || password.length < 6) {
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: "Password must be at least 6 characters long.",
+        });
+        return;
+      }
+
+      // Check if username is already taken
+      const usernameQuery = query(
+        collection(db, 'users'),
+        where('username', '==', username)
+      );
+      const usernameSnapshot = await getDocs(usernameQuery);
+      
+      if (!usernameSnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: "Username is already taken. Please choose a different username.",
+        });
+        return;
+      }
+
+      // Check if phone number is already registered
+      const phoneQuery = query(
+        collection(db, 'users'),
+        where('phoneNumber', '==', phoneNumber)
+      );
+      const phoneSnapshot = await getDocs(phoneQuery);
+      
+      if (!phoneSnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: "Phone number is already registered. Please use a different phone number.",
+        });
+        return;
+      }
+
+      // Create new user document
+      const userRef = doc(collection(db, 'users'));
+      const newUser: UserWithPassword = {
+        id: userRef.id,
+        username,
+        phoneNumber,
+        password, // Note: In a production environment, you should hash the password
+        role,
+        createdAt: new Date().toISOString()
+      };
+
+      await setDoc(userRef, newUser);
+      
+      // Store user in local storage (excluding password)
+      const { password: _, ...userWithoutPassword } = newUser;
+      localStorage.setItem('user', JSON.stringify(userWithoutPassword));
+      setUser(userWithoutPassword);
+      
+      toast({
+        title: "Registration Successful",
+        description: "Your account has been created successfully.",
+      });
+      
       router.push("/dashboard");
     } catch (error) {
       console.error("Registration error:", error);
-      throw error;
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: "An error occurred during registration. Please try again.",
+      });
     }
   };
 
-  const login = async (mobileNumber: string, password: string) => {
+  const login = async (username: string, password: string) => {
     try {
-      const email = `${mobileNumber}@wms.com`;
-      await signInWithEmailAndPassword(auth, email, password);
+      const userQuery = query(
+        collection(db, 'users'),
+        where('username', '==', username)
+      );
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (userSnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "User not found. Please check your username and try again.",
+        });
+        return;
+      }
+
+      const userData = userSnapshot.docs[0].data() as UserWithPassword;
+      
+      if (userData.password !== password) {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "Incorrect password. Please try again.",
+        });
+        return;
+      }
+
+      // Store user in local storage (excluding password)
+      const { password: _, ...userWithoutPassword } = userData;
+      localStorage.setItem('user', JSON.stringify(userWithoutPassword));
+      setUser(userWithoutPassword);
+      
+      toast({
+        title: "Login Successful",
+        description: "Welcome back!",
+      });
+      
       router.push("/dashboard");
     } catch (error) {
       console.error("Login error:", error);
-      throw error;
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: "An error occurred during login. Please try again.",
+      });
     }
   };
 
   const logout = async () => {
     try {
-      await signOut(auth);
-      // Clear the session cookie
-      await fetch("/api/auth/logout", { method: "POST" });
+      localStorage.removeItem('user');
+      setUser(null);
+      toast({
+        title: "Logged Out",
+        description: "You have been successfully logged out.",
+      });
       router.push("/login");
     } catch (error) {
       console.error("Logout error:", error);
-      throw error;
+      toast({
+        variant: "destructive",
+        title: "Logout Failed",
+        description: "An error occurred during logout. Please try again.",
+      });
     }
   };
 
   const value = {
     user,
-    userRole,
     loading,
-    login,
     register,
+    login,
     logout,
   };
 
