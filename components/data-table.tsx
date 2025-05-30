@@ -30,11 +30,15 @@ import {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  isLoading?: boolean;
+  error?: string;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  isLoading,
+  error,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -47,6 +51,30 @@ export function DataTable<TData, TValue>({
       },
     },
   });
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-32 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-32 flex items-center justify-center text-destructive">
+        {error}
+      </div>
+    );
+  }
+
+  if (!data.length) {
+    return (
+      <div className="w-full h-32 flex items-center justify-center text-muted-foreground">
+        No data available
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -98,18 +126,22 @@ export function DataTable<TData, TValue>({
         <Pagination>
           <PaginationContent>
             <PaginationItem>
-              <PaginationPrevious 
-                href="#" 
+              <PaginationPrevious
+                href="#"
                 onClick={(e) => {
                   e.preventDefault();
                   table.previousPage();
                 }}
-                className={!table.getCanPreviousPage() ? "pointer-events-none opacity-50" : ""}
+                className={
+                  !table.getCanPreviousPage()
+                    ? "pointer-events-none opacity-50"
+                    : ""
+                }
               />
             </PaginationItem>
             {table.getPageCount() > 0 && (
               <PaginationItem>
-                <PaginationLink 
+                <PaginationLink
                   href="#"
                   isActive={table.getState().pagination.pageIndex === 0}
                   onClick={(e) => {
@@ -121,34 +153,40 @@ export function DataTable<TData, TValue>({
                 </PaginationLink>
               </PaginationItem>
             )}
-            {table.getPageCount() > 3 && table.getState().pagination.pageIndex > 1 && (
-              <PaginationItem>
-                <PaginationEllipsis />
-              </PaginationItem>
-            )}
-            {table.getState().pagination.pageIndex > 0 && table.getState().pagination.pageIndex < table.getPageCount() - 1 && (
-              <PaginationItem>
-                <PaginationLink 
-                  href="#"
-                  isActive={true}
-                  onClick={(e) => {
-                    e.preventDefault();
-                  }}
-                >
-                  {table.getState().pagination.pageIndex + 1}
-                </PaginationLink>
-              </PaginationItem>
-            )}
-            {table.getPageCount() > 3 && table.getState().pagination.pageIndex < table.getPageCount() - 2 && (
-              <PaginationItem>
-                <PaginationEllipsis />
-              </PaginationItem>
-            )}
+            {table.getPageCount() > 3 &&
+              table.getState().pagination.pageIndex > 1 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+            {table.getState().pagination.pageIndex > 0 &&
+              table.getState().pagination.pageIndex < table.getPageCount() - 1 && (
+                <PaginationItem>
+                  <PaginationLink
+                    href="#"
+                    isActive={true}
+                    onClick={(e) => {
+                      e.preventDefault();
+                    }}
+                  >
+                    {table.getState().pagination.pageIndex + 1}
+                  </PaginationLink>
+                </PaginationItem>
+              )}
+            {table.getPageCount() > 3 &&
+              table.getState().pagination.pageIndex < table.getPageCount() - 2 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
             {table.getPageCount() > 1 && (
               <PaginationItem>
-                <PaginationLink 
+                <PaginationLink
                   href="#"
-                  isActive={table.getState().pagination.pageIndex === table.getPageCount() - 1}
+                  isActive={
+                    table.getState().pagination.pageIndex ===
+                    table.getPageCount() - 1
+                  }
                   onClick={(e) => {
                     e.preventDefault();
                     table.setPageIndex(table.getPageCount() - 1);
@@ -159,13 +197,17 @@ export function DataTable<TData, TValue>({
               </PaginationItem>
             )}
             <PaginationItem>
-              <PaginationNext 
-                href="#" 
+              <PaginationNext
+                href="#"
                 onClick={(e) => {
                   e.preventDefault();
                   table.nextPage();
                 }}
-                className={!table.getCanNextPage() ? "pointer-events-none opacity-50" : ""}
+                className={
+                  !table.getCanNextPage()
+                    ? "pointer-events-none opacity-50"
+                    : ""
+                }
               />
             </PaginationItem>
           </PaginationContent>

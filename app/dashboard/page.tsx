@@ -1,44 +1,29 @@
 import DashboardLayout from '@/components/dashboard-layout';
-import MetricCard from '@/components/metric-card';
-import DistributionChart from '@/components/distribution-chart';
-import { Warehouse, Package, TruckIcon, BoxIcon } from 'lucide-react';
+import { DashboardCards } from '@/components/dashboard/dashboard-cards';
+import { DashboardCharts } from '@/components/dashboard/dashboard-charts';
+import { SidebarStats } from '@/components/dashboard/sidebar-stats';
 
 export default function DashboardPage() {
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-8">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard
-            title="Total Warehouses"
-            value="42"
-            icon={<Warehouse size={24} />}
-            href="/master-data"
-          />
-          <MetricCard
-            title="Pending Inward Entries"
-            value="18"
-            icon={<Package size={24} />}
-            href="/inward"
-          />
-          <MetricCard
-            title="Pending Delivery Orders"
-            value="24"
-            icon={<TruckIcon size={24} />}
-            href="/ro"
-          />
-          <MetricCard
-            title="Pending Outward Entries"
-            value="12"
-            icon={<BoxIcon size={24} />}
-            href="/outward"
-          />
+        {/* Pie Charts */}
+        <DashboardCharts />
+        
+        {/* Info Panel */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-1">
+            <SidebarStats />
+          </div>
+          <div className="md:col-span-2">
+            <DistributionChart />
+          </div>
         </div>
         
-        <div className="grid grid-cols-1 gap-6">
-          <DistributionChart />
-        </div>
+        {/* Dashboard Cards */}
+        <DashboardCards />
       </div>
     </DashboardLayout>
   );
