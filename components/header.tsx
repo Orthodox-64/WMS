@@ -117,12 +117,12 @@ export default function Header() {
       </div>
       
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-6">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-bold">{user?.username} ({user?.role})</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Logout">
-            <LogOut size={18} />
+          <Button variant="ghost" onClick={handleLogout} className="text-primary hover:text-primary/80 hover:bg-transparent">
+            Logout
           </Button>
         </div>
       </div>
