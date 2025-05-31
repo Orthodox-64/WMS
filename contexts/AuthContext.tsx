@@ -41,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+      }
+      setLoading(false);
   }, []);
 
   const register = async (username: string, phoneNumber: string) => {
@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userRef = doc(collection(db, 'users'));
       const newUser: User = {
         id: userRef.id,
-        username,
+          username,
         phoneNumber,
         role: 'maker',
         createdAt: new Date().toISOString()
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Store user in local storage
       localStorage.setItem('user', JSON.stringify(newUser));
       setUser(newUser);
-      
+
       router.push("/dashboard");
     } catch (error) {
       console.error("Registration error:", error);

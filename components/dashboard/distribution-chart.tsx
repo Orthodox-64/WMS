@@ -50,26 +50,22 @@ function useDistributionData() {
 }
 
 export function DistributionChart() {
-  const { distributionData, loading } = useDistributionData();
-  const locations = Object.keys(distributionData[0]).filter(key => key !== 'date');
+  // Dummy data for warehouse status
+  const distributionData = [
+    { date: 'Jan', Active: 25, Inactive: 8, Pending: 12 },
+    { date: 'Feb', Active: 28, Inactive: 7, Pending: 10 },
+    { date: 'Mar', Active: 30, Inactive: 6, Pending: 9 },
+    { date: 'Apr', Active: 32, Inactive: 5, Pending: 8 },
+    { date: 'May', Active: 35, Inactive: 4, Pending: 7 },
+    { date: 'Jun', Active: 38, Inactive: 3, Pending: 6 }
+  ];
 
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Loading Distribution Data...</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[400px] flex items-center justify-center">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        </CardContent>
-      </Card>
-    );
-  }
+  const locations = Object.keys(distributionData[0]).filter(key => key !== 'date');
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Distribution by Location Over Time</CardTitle>
+        <CardTitle>Warehouse Status</CardTitle>
       </CardHeader>
       <CardContent className="h-[400px]">
         <ResponsiveContainer width="100%" height="100%">

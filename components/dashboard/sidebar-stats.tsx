@@ -22,9 +22,9 @@ const mockStats: StatsData = {
 
 export function SidebarStats() {
   return (
-    <Card>
+    <Card className="bg-white">
       <CardHeader>
-        <CardTitle>Warehouse Statistics</CardTitle>
+        <CardTitle className="border-b-2 border-green-500 pb-2">Warehouse Statistics</CardTitle>
       </CardHeader>
       <CardContent>
         <Table>

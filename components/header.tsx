@@ -77,10 +77,10 @@ export default function Header() {
   ];
 
   return (
-    <header className="border-b border-border h-16 px-6 flex items-center justify-between bg-card z-10 w-full relative">
+    <header className="border-b border-border h-24 px-8 flex items-center justify-between bg-card z-10 w-full relative">
       <div className="flex items-center gap-4">
-        <Image src="/logo 3.jpeg" alt="AgroGreen Logo" width={40} height={40} />
-        <div className="font-bold text-xl text-primary">AgroGreen Warehousing</div>
+        <Image src="/Group 86.png" alt="AgroGreen Logo" width={40} height={40} />
+        <div className="font-bold text-xl text-primary">Agrogreen Warehousing Private Limited</div>
 
         <Button
           variant="ghost"

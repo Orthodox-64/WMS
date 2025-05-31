@@ -13,12 +13,6 @@ import {
 
 const dashboardCards = [
   {
-    title: "Warehouse Status",
-    icon: Warehouse,
-    href: "/warehouse-status",
-    color: "text-blue-500",
-  },
-  {
     title: "Survey",
     icon: ClipboardCheck,
     href: "/surveys",
@@ -69,10 +63,10 @@ export function DashboardCards() {
         const Icon = card.icon;
         return (
           <Link key={card.title} href={card.href}>
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer bg-gray-100">
               <CardContent className="p-6 flex flex-col items-center justify-center space-y-2">
                 <Icon className={`w-8 h-8 ${card.color}`} />
-                <span className="text-sm font-medium text-center">
+                <span className="text-sm font-medium text-center border-b-2 border-green-500 pb-1">
                   {card.title}
                 </span>
               </CardContent>

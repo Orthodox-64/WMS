@@ -30,7 +30,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   register: (username: string, phoneNumber: string, password: string, role: UserRole) => Promise<void>;
-  login: (username: string, password: string) => Promise<void>;
+  login: (phoneNumber: string, password: string, username: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -50,22 +50,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  const validateUsername = (username: string): boolean => {
+    // Only alphabets and spaces allowed, no special characters or numbers
+    const usernameRegex = /^[A-Za-z\s]+$/;
+    return usernameRegex.test(username);
+  };
+
+  const validatePassword = (password: string): boolean => {
+    // Minimum 8 characters, first letter capital, must contain special character and alphanumeric
+    const passwordRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])[A-Za-z\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,}$/;
+    return passwordRegex.test(password);
+  };
+
   const register = async (username: string, phoneNumber: string, password: string, role: UserRole) => {
     try {
-      if (!role || (role !== "maker" && role !== "checker" && role !== "admin")) {
+      if (!role || (role !== "maker" && role !== "checker")) {
         toast({
           variant: "destructive",
           title: "Registration Failed",
-          description: "Please select a valid role (maker, checker, or admin).",
+          description: "Please select a valid role (maker or checker).",
         });
         return;
       }
 
-      if (!password || password.length < 6) {
+      // Validate username format
+      if (!validateUsername(username)) {
         toast({
           variant: "destructive",
           title: "Registration Failed",
-          description: "Password must be at least 6 characters long.",
+          description: "Username can only contain alphabets and spaces. No special characters or numbers allowed.",
+        });
+        return;
+      }
+
+      // Validate password format
+      if (!validatePassword(password)) {
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: "Password must be at least 8 characters long, start with a capital letter, and contain at least one special character and one number.",
         });
         return;
       }
@@ -136,11 +159,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (username: string, password: string) => {
+  const login = async (phoneNumber: string, password: string, username: string) => {
     try {
-      const userQuery = query(
+      // Validate username format
+      if (!validateUsername(username)) {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "Invalid username format. Username can only contain alphabets and spaces.",
+        });
+        return;
+      }
+
+      // Validate password format
+      if (!validatePassword(password)) {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "Invalid password format. Please check your password requirements.",
+        });
+        return;
+      }
+
+      // First check if username exists
+      const usernameQuery = query(
         collection(db, 'users'),
         where('username', '==', username)
+      );
+      const usernameSnapshot = await getDocs(usernameQuery);
+      
+      if (usernameSnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "Username not found. Please check your username and try again.",
+        });
+        return;
+      }
+
+      // Then check phone number and password
+      const userQuery = query(
+        collection(db, 'users'),
+        where('phoneNumber', '==', phoneNumber)
       );
       const userSnapshot = await getDocs(userQuery);
       
@@ -148,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast({
           variant: "destructive",
           title: "Login Failed",
-          description: "User not found. Please check your username and try again.",
+          description: "Phone number not found. Please check your phone number and try again.",
         });
         return;
       }
@@ -160,6 +220,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           variant: "destructive",
           title: "Login Failed",
           description: "Incorrect password. Please try again.",
+        });
+        return;
+      }
+
+      // Verify that the username matches the phone number
+      if (userData.username !== username) {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "Username does not match the phone number. Please check your details and try again.",
         });
         return;
       }
