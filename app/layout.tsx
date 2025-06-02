@@ -1,12 +1,14 @@
-'use client';
-
 import './globals.css';
 import { Inter } from 'next/font/google';
-import { AuthProvider } from '@/contexts/Auth';
-import { ThemeProvider } from '@/components/theme-provider';
-import { Toaster } from '@/components/ui/toaster';
+import type { Metadata } from 'next';
+import ClientLayout from '@/components/layout/client-layout';
 
 const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'WMS - Warehouse Management System',
+  description: 'A comprehensive warehouse management system',
+};
 
 export default function RootLayout({
   children,
@@ -16,16 +18,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-        >
-          <AuthProvider>
-            {children}
-            <Toaster />
-          </AuthProvider>
-        </ThemeProvider>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
       </body>
     </html>
   );

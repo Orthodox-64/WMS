@@ -3,7 +3,7 @@
 import { ReactNode } from 'react';
 import Header from '@/components/header';
 import Footer from '@/components/footer';
-import { useAuth } from '@/contexts/Auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -12,7 +12,7 @@ interface DashboardLayoutProps {
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, loading, userRole } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -30,10 +30,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   if (!user) return null;
-
-  if (!user) {
-    return null;
-  }
 
   return (
     <div className="flex flex-col h-screen bg-background">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from '@/contexts/Auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut, MenuIcon } from 'lucide-react';
 import Image from 'next/image';
@@ -17,48 +17,11 @@ import {
   Database,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { auth, db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 
 export default function Header() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const pathname = usePathname();
   const [isNavOpen, setIsNavOpen] = useState(false);
-  const [userData, setUserData] = useState<{ username: string; role: string; email: string } | null>(null);
-
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        // Get current user from Firebase Auth
-        const currentUser = auth.currentUser;
-        if (currentUser?.uid) {
-          // Fetch user data from Firestore
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setUserData({
-              username: data.username,
-              role: data.role,
-              email: data.email
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      }
-    };
-
-    // Set up auth state listener
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        fetchUserData();
-      } else {
-        setUserData(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -73,31 +36,31 @@ export default function Header() {
       name: 'Dashboard',
       href: '/dashboard',
       icon: LayoutDashboard,
-      allowedRoles: ['admin', 'supervisor']
+      allowedRoles: ['admin', 'maker', 'checker']
     },
     {
       name: 'UH Surveys',
       href: '/surveys',
       icon: ClipboardList,
-      allowedRoles: ['admin', 'supervisor']
+      allowedRoles: ['admin', 'checker']
     },
     {
       name: 'Inward',
       href: '/inward',
       icon: ArrowDownCircle,
-      allowedRoles: ['admin', 'supervisor']
+      allowedRoles: ['admin', 'maker']
     },
     {
       name: 'Outward',
       href: '/outward',
       icon: ArrowUpCircle,
-      allowedRoles: ['admin', 'supervisor']
+      allowedRoles: ['admin', 'maker']
     },
     {
       name: 'Reports',
       href: '/reports',
       icon: FileBarChart2,
-      allowedRoles: ['admin', 'supervisor']
+      allowedRoles: ['admin', 'checker']
     },
     {
       name: 'Release Order',
@@ -133,7 +96,7 @@ export default function Header() {
           isNavOpen ? "absolute top-16 left-0 w-full bg-green-600 shadow-md flex-col space-x-0 space-y-2 p-4 md:relative md:flex-row md:space-y-0 md:p-0 md:shadow-none" : "hidden md:flex"
         )}>
           {navigationItems
-            .filter(item => userData?.role && item.allowedRoles.includes(userData.role))
+            .filter(item => user?.role && item.allowedRoles.includes(user.role))
             .map(item => (
               <Link
                 key={item.href}
@@ -159,16 +122,16 @@ export default function Header() {
 
       {/* User info and logout */}
       <div className="flex items-center gap-4">
-        {userData && (
+        {user && (
           <div className="hidden sm:flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               <span className="text-white text-sm font-semibold">
-                {userData.username[0].toUpperCase()}
+                {user.username[0].toUpperCase()}
               </span>
             </div>
             <div className="flex flex-col">
-              <p className="text-sm font-medium text-white">{userData.username}</p>
-              <p className="text-xs text-white/80 capitalize">{userData.role}</p>
+              <p className="text-sm font-medium text-white">{user.username}</p>
+              <p className="text-xs text-white/80 capitalize">{user.role}</p>
             </div>
           </div>
         )}

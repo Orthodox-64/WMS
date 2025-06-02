@@ -9,8 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { useRouter } from 'next/navigation';
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AuthFormsProps {
   onFormTypeChange: (isLogin: boolean) => void;
@@ -29,44 +30,47 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
   
   const { toast } = useToast();
   const router = useRouter();
+  const { login, register } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (isLogin) {
-        // Login
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        
-        // Get user data from Firestore
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          if (userData.username !== username) {
-            throw new Error("Username does not match");
-          }
-        } else {
-          throw new Error("User data not found");
+        // First search for username in users collection
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("username", "==", username));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          throw new Error("Username not found");
         }
 
-        setAlertMessage("Successfully logged in! Redirecting to dashboard...");
-        setShowAlert(true);
-        setTimeout(() => {
-          setShowAlert(false);
-          router.push('/dashboard');
-        }, 2000);
+        // Get the user document and email
+        const userDoc = querySnapshot.docs[0];
+        const userData = userDoc.data();
+        const userEmail = userData.email;
+
+        // Now perform Firebase authentication with the email and password
+        const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
+        const user = userCredential.user;
+
+        // Call the login function from auth context
+        await login(username, userEmail, password);
+
+        // Show success message
+        toast({
+          title: "Success",
+          description: "Successfully logged in!",
+          variant: "default",
+          className: "bg-green-100 border-green-500 text-green-700"
+        });
       } else {
         // Register
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         
-        // Store additional user data in Firestore
-        await setDoc(doc(db, "users", user.uid), {
-          username,
-          email,
-          role,
-          createdAt: new Date().toISOString()
-        });
+        // Call the register function from auth context
+        await register(username, email, password, role);
 
         setAlertMessage("Registration successful! Please log in to continue.");
         setShowAlert(true);
@@ -116,8 +120,7 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
   };
 
   return (
-    <div className="relative">{/* Remove the alert div since we're using toast */}
-      
+    <div className="relative">
       <Card className="w-[350px] border-2 border-orange-500 bg-white/95 shadow-lg backdrop-blur-sm">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-orange-600">
@@ -148,18 +151,20 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-orange-600">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
-              />
-            </div>
+            {(!isLogin || isResetPassword) && (
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-orange-600">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
+                />
+              </div>
+            )}
 
             {!isResetPassword && (
               <div className="space-y-2">

@@ -16,7 +16,7 @@ type UserRole = "maker" | "checker" | "admin" | null;
 interface User {
   id: string;
   username: string;
-  phoneNumber: string;
+  email: string;
   role: UserRole;
   createdAt: string;
 }
@@ -24,8 +24,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  register: (username: string, phoneNumber: string) => Promise<void>;
-  login: (username: string) => Promise<void>;
+  register: (username: string, email: string, password: string, role: UserRole) => Promise<void>;
+  login: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -41,11 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
-      }
-      setLoading(false);
+    }
+    setLoading(false);
   }, []);
 
-  const register = async (username: string, phoneNumber: string) => {
+  const register = async (username: string, email: string, password: string, role: UserRole) => {
     try {
       // Check if username is already taken
       const usernameQuery = query(
@@ -58,24 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Username is already taken");
       }
 
-      // Check if phone number is already registered
-      const phoneQuery = query(
-        collection(db, 'users'),
-        where('phoneNumber', '==', phoneNumber)
-      );
-      const phoneSnapshot = await getDocs(phoneQuery);
-      
-      if (!phoneSnapshot.empty) {
-        throw new Error("Phone number is already registered");
-      }
-
       // Create new user document
       const userRef = doc(collection(db, 'users'));
       const newUser: User = {
         id: userRef.id,
-          username,
-        phoneNumber,
-        role: 'maker',
+        username,
+        email,
+        role,
         createdAt: new Date().toISOString()
       };
 
@@ -92,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (username: string) => {
+  const login = async (username: string, email: string, password: string) => {
     try {
       const userQuery = query(
         collection(db, 'users'),
