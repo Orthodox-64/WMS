@@ -24,34 +24,34 @@ export function SidebarStats() {
   return (
     <Card className="bg-white">
       <CardHeader>
-        <CardTitle className="border-b-2 border-green-500 pb-2">Warehouse Statistics</CardTitle>
+        <CardTitle className="inline-block border-b-2 border-green-500 pb-2 w-fit">Warehouse Statistics</CardTitle>
       </CardHeader>
       <CardContent>
         <Table>
           <TableBody>
             <TableRow>
               <TableCell className="font-medium">Number of Warehouses</TableCell>
-              <TableCell className="text-right">{mockStats.warehouseCount}</TableCell>
+              <TableCell className="text-right text-orange-400">{mockStats.warehouseCount}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending Surveys</TableCell>
-              <TableCell className="text-right">{mockStats.pendingSurveys}</TableCell>
+              <TableCell className="text-right text-orange-400">{mockStats.pendingSurveys}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending Inward Entries</TableCell>
-              <TableCell className="text-right">{mockStats.pendingInward}</TableCell>
+              <TableCell className="text-right text-orange-400">{mockStats.pendingInward}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending Outward Entries</TableCell>
-              <TableCell className="text-right">{mockStats.pendingOutward}</TableCell>
+              <TableCell className="text-right text-orange-400">{mockStats.pendingOutward}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending DO Entries</TableCell>
-              <TableCell className="text-right">{mockStats.pendingDO}</TableCell>
+              <TableCell className="text-right text-orange-400">{mockStats.pendingDO}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending RO Entries</TableCell>
-              <TableCell className="text-right">{mockStats.pendingRO}</TableCell>
+              <TableCell className="text-right text-orange-400">{mockStats.pendingRO}</TableCell>
             </TableRow>
           </TableBody>
         </Table>

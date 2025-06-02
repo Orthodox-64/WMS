@@ -86,7 +86,7 @@ function PieChartCard({ title, data, redirectPath }: PieChartCardProps) {
   return (
     <Card className="cursor-pointer bg-white" onClick={() => router.push(redirectPath)}>
       <CardHeader>
-        <CardTitle className="border-b-2 border-green-500 pb-2">{title}</CardTitle>
+        <CardTitle className="inline-block w-fit border-b-2 border-green-500 pb-2">{title}</CardTitle>
       </CardHeader>
       <CardContent className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">

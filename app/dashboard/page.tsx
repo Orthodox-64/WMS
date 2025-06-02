@@ -5,28 +5,43 @@ import { DashboardCards } from '@/components/dashboard/dashboard-cards';
 import { DashboardCharts } from '@/components/dashboard/dashboard-charts';
 import { SidebarStats } from '@/components/dashboard/sidebar-stats';
 import { DistributionChart } from "@/components/dashboard/distribution-chart";
-
 export default function DashboardPage() {
   return (
     <DashboardLayout>
-      <div className="space-y-8">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        
-        {/* Pie Charts */}
-        <DashboardCharts />
-        
-        {/* Info Panel */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-1">
-            <SidebarStats />
+      <div className="relative min-h-screen overflow-hidden">
+        {/* Background image layer */}
+        <div
+          className="absolute inset-0 bg-center bg-no-repeat bg-fixed"
+          style={{
+            backgroundImage: 'url("/Group 86.png")',
+            backgroundSize: '0%',
+            opacity: 0.5, 
+            zIndex: 1
+          }}
+        ></div>
+
+        {/* Main dashboard content */}
+        <div className="relative z-10 space-y-8">
+          <button onClick={() => window.location.reload()}>
+            <h1 className="inline-block text-xl font-semibold tracking-tight bg-orange-500 text-white px-3 py-1 rounded-md hover:bg-orange-600 transition-colors">Dashboard</h1>
+          </button>
+
+          {/* Pie Charts */}
+          <DashboardCharts />
+
+          {/* Info Panel */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-1">
+              <SidebarStats />
+            </div>
+            <div className="md:col-span-2">
+              <DistributionChart />
+            </div>
           </div>
-          <div className="md:col-span-2">
-            <DistributionChart />
-          </div>
+
+          {/* Dashboard Cards */}
+          <DashboardCards />
         </div>
-        
-        {/* Dashboard Cards */}
-        <DashboardCards />
       </div>
     </DashboardLayout>
   );

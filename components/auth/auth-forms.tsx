@@ -5,41 +5,97 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/contexts/Auth";
 import { useToast } from "@/hooks/use-toast";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { auth, db } from "@/lib/firebase";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { useRouter } from 'next/navigation';
 
 interface AuthFormsProps {
   onFormTypeChange: (isLogin: boolean) => void;
 }
 
 export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
+  // States
   const [isLogin, setIsLogin] = useState(true);
+  const [isResetPassword, setIsResetPassword] = useState(false);
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
   const [role, setRole] = useState<"maker" | "checker">("maker");
   const [showAlert, setShowAlert] = useState(false);
-  const { login, register } = useAuth();
+  const [alertMessage, setAlertMessage] = useState("");
+  
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (isLogin) {
-        await login(phoneNumber, password, username);
+        // Login
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Get user data from Firestore
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.username !== username) {
+            throw new Error("Username does not match");
+          }
+        } else {
+          throw new Error("User data not found");
+        }
+
+        setAlertMessage("Successfully logged in! Redirecting to dashboard...");
         setShowAlert(true);
         setTimeout(() => {
           setShowAlert(false);
-        }, 3000);
+          router.push('/dashboard');
+        }, 2000);
       } else {
-        await register(username, phoneNumber, password, role);
+        // Register
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Store additional user data in Firestore
+        await setDoc(doc(db, "users", user.uid), {
+          username,
+          email,
+          role,
+          createdAt: new Date().toISOString()
+        });
+
+        setAlertMessage("Registration successful! Please log in to continue.");
         setShowAlert(true);
         setTimeout(() => {
           setShowAlert(false);
-        }, 3000);
+          setIsLogin(true);
+          onFormTypeChange(true);
+        }, 2000);
       }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast({
+        title: "Reset Password",
+        description: "Please check your email to reset the password",
+        variant: "default",
+        className: "bg-green-100 border-green-500 text-green-700"
+      });
+      setIsResetPassword(false);
     } catch (error) {
       toast({
         title: "Error",
@@ -51,119 +107,149 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
 
   const handleFormTypeChange = (newIsLogin: boolean) => {
     setIsLogin(newIsLogin);
+    setIsResetPassword(false);
     onFormTypeChange(newIsLogin);
     setUsername("");
+    setEmail("");
     setPassword("");
-    setPhoneNumber("");
     setShowAlert(false);
   };
 
   return (
-    <>
-      {showAlert && (
-        <div className="fixed top-0 left-0 right-0 z-50">
-          <Alert className="bg-green-100 border-green-500 text-green-700 shadow-lg w-full max-w-md mx-auto mt-4 py-2">
-            <AlertDescription className="text-center font-medium text-base">
-              {isLogin 
-                ? "Thank you, welcome to Agrogreen Warehousing Private Limited!"
-                : "Thank you for registering, welcome to Agrogreen Warehousing Private Limited!"}
-            </AlertDescription>
-          </Alert>
-        </div>
-      )}
-      <Card className="w-[350px] border-2 border-orange-500 bg-white/95 shadow-lg">
+    <div className="relative">{/* Remove the alert div since we're using toast */}
+      
+      <Card className="w-[350px] border-2 border-orange-500 bg-white/95 shadow-lg backdrop-blur-sm">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-orange-600">{isLogin ? "Login" : "Register"}</CardTitle>
+          <CardTitle className="text-2xl font-bold text-orange-600">
+            {isResetPassword ? "Reset Password" : isLogin ? "Login" : "Register"}
+          </CardTitle>
           <CardDescription className="text-green-500">
-            {isLogin
-              ? "Enter your phone number and password to login"
+            {isResetPassword
+              ? "Enter your email to reset password"
+              : isLogin
+              ? "Enter your credentials to login"
               : "Create a new account with your details"}
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+
+        <form onSubmit={isResetPassword ? handleResetPassword : handleSubmit}>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-orange-600">Username</Label>
-              <Input
-                id="username"
-                placeholder="Enter your username (alphabets and spaces only)"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
-              />
-              <p className="text-xs text-green-500">Only alphabets and spaces allowed</p>
-            </div>
+            {!isResetPassword && (
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-orange-600">Username</Label>
+                <Input
+                  id="username"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-orange-600">Phone Number</Label>
+              <Label htmlFor="email" className="text-orange-600">Email</Label>
               <Input
-                id="phone"
-                type="tel"
-                placeholder="Enter your phone number"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-orange-600">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
-              />
-              <p className="text-xs text-green-500">
-                Must be at least 8 characters, start with a capital letter, and include a special character and number
-              </p>
-            </div>
-            
-            {!isLogin && (
+            {!isResetPassword && (
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-orange-600">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
+                />
+              </div>
+            )}
+
+            {!isLogin && !isResetPassword && (
               <div className="space-y-2">
                 <Label className="text-orange-600">Role</Label>
-                <RadioGroup
-                  value={role}
-                  onValueChange={(value) => setRole(value as "maker" | "checker")}
-                  className="flex flex-col space-y-1"
-                >
+                <div className="flex gap-4">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="maker" id="maker" className="border-orange-500 text-orange-500" />
+                    <input
+                      type="radio"
+                      id="maker"
+                      value="maker"
+                      checked={role === "maker"}
+                      onChange={(e) => setRole(e.target.value as "maker" | "checker")}
+                      className="text-orange-500 focus:ring-orange-500"
+                    />
                     <Label htmlFor="maker" className="text-green-600">Maker</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="checker" id="checker" className="border-orange-500 text-orange-500" />
+                    <input
+                      type="radio"
+                      id="checker"
+                      value="checker"
+                      checked={role === "checker"}
+                      onChange={(e) => setRole(e.target.value as "maker" | "checker")}
+                      className="text-orange-500 focus:ring-orange-500"
+                    />
                     <Label htmlFor="checker" className="text-green-600">Checker</Label>
                   </div>
-                </RadioGroup>
+                </div>
               </div>
             )}
           </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <Button 
-              type="submit" 
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold shadow-md"
-            >
-              {isLogin ? "Login" : "Register"}
-            </Button>
+
+          <CardFooter className="flex flex-col gap-4">
             <Button
-              type="button"
-              variant="ghost"
-              className="w-full bg-green-100 hover:bg-green-200 text-green-700 font-semibold shadow-sm"
-              onClick={() => handleFormTypeChange(!isLogin)}
+              type="submit"
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
             >
-              {isLogin
-                ? "Don't have an account? Register"
-                : "Already have an account? Login"}
+              {isResetPassword ? "Reset Password" : isLogin ? "Login" : "Register"}
             </Button>
+
+            {isLogin && !isResetPassword && (
+              <Button
+                type="button"
+                variant="link"
+                className="text-green-600 hover:text-green-700"
+                onClick={() => setIsResetPassword(true)}
+              >
+                Forgot Password?
+              </Button>
+            )}
+
+            {!isResetPassword && (
+              <Button
+                type="button"
+                variant="link"
+                className="text-green-600 hover:text-green-700"
+                onClick={() => handleFormTypeChange(!isLogin)}
+              >
+                {isLogin ? "Need an account? Register" : "Already have an account? Login"}
+              </Button>
+            )}
+
+            {isResetPassword && (
+              <Button
+                type="button"
+                variant="link"
+                className="text-green-600 hover:text-green-700"
+                onClick={() => setIsResetPassword(false)}
+              >
+                Back to Login
+              </Button>
+            )}
           </CardFooter>
         </form>
       </Card>
-    </>
+    </div>
   );
 }
