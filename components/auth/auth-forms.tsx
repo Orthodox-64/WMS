@@ -69,6 +69,22 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         
+        // Set custom claims using the API route
+        const response = await fetch('/api/auth/set-claims', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            uid: user.uid,
+            role: role
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to set user role');
+        }
+        
         // Call the register function from auth context
         await register(username, email, password, role);
 

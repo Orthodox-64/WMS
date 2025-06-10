@@ -12,12 +12,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Set custom claims
+    // Validate role
+    const validRoles = ['maker', 'checker', 'admin'];
+    if (!validRoles.includes(role)) {
+      return NextResponse.json(
+        { error: 'Invalid role specified' },
+        { status: 400 }
+      );
+    }
+
+    // Set custom claims with additional metadata
     await auth.setCustomUserClaims(uid, {
       role: role,
+      createdAt: new Date().toISOString(),
+      isActive: true
     });
 
-    return NextResponse.json({ success: true });
+    // Get the user to verify claims were set
+    const user = await auth.getUser(uid);
+    
+    return NextResponse.json({ 
+      success: true,
+      user: {
+        uid: user.uid,
+        customClaims: user.customClaims
+      }
+    });
   } catch (error) {
     console.error('Error setting custom claims:', error);
     return NextResponse.json(
