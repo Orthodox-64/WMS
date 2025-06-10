@@ -23,6 +23,10 @@ const roleBasedRoutes: Record<string, Set<string>> = {
   admin: new Set([
     '/dashboard',
     '/master-data',
+    '/master-data/clients',
+    '/master-data/commodities',
+    '/master-data/banks',
+    '/master-data/branches',
     '/reports',
     '/surveys',
     '/inward',
@@ -65,7 +69,11 @@ export default function AuthCheck({ children }: { children: React.ReactNode }) {
     const userRole = user.role as keyof typeof roleBasedRoutes;
     if (userRole && roleBasedRoutes[userRole]) {
       const allowedPaths = roleBasedRoutes[userRole];
-      if (!allowedPaths.has(pathname)) {
+      // Check if the current path or any parent path is allowed
+      const isPathAllowed = allowedPaths.has(pathname) || 
+        Array.from(allowedPaths).some(allowedPath => pathname.startsWith(allowedPath));
+      
+      if (!isPathAllowed) {
         router.push('/dashboard');
       }
     }

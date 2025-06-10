@@ -38,42 +38,6 @@ export default function Header() {
       icon: LayoutDashboard,
       allowedRoles: ['admin', 'maker', 'checker']
     },
-    {
-      name: 'UH Surveys',
-      href: '/surveys',
-      icon: ClipboardList,
-      allowedRoles: ['admin', 'checker']
-    },
-    {
-      name: 'Inward',
-      href: '/inward',
-      icon: ArrowDownCircle,
-      allowedRoles: ['admin', 'maker']
-    },
-    {
-      name: 'Outward',
-      href: '/outward',
-      icon: ArrowUpCircle,
-      allowedRoles: ['admin', 'maker']
-    },
-    {
-      name: 'Reports',
-      href: '/reports',
-      icon: FileBarChart2,
-      allowedRoles: ['admin', 'checker']
-    },
-    {
-      name: 'Release Order',
-      href: '/ro',
-      icon: FileOutput,
-      allowedRoles: ['admin']
-    },
-    {
-      name: 'Master Data',
-      href: '/master-data',
-      icon: Database,
-      allowedRoles: ['admin']
-    }
   ];
 
   return (

@@ -28,6 +28,10 @@ const roleBasedRoutes: Record<string, Set<string>> = {
   admin: new Set([
     '/dashboard',
     '/master-data',
+    '/master-data/clients',
+    '/master-data/commodities',
+    '/master-data/banks',
+    '/master-data/branches',
     '/reports',
     '/surveys',
     '/inward',

@@ -24,7 +24,7 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"maker" | "checker">("maker");
+  const [role, setRole] = useState<"maker" | "checker" | "admin">("maker");
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
   
@@ -184,17 +184,17 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
             {!isLogin && !isResetPassword && (
               <div className="space-y-2">
                 <Label className="text-orange-600">Role</Label>
-                <div className="flex gap-4">
+                <div className="grid grid-cols-3 gap-2">
                   <div className="flex items-center space-x-2">
                     <input
                       type="radio"
                       id="maker"
                       value="maker"
                       checked={role === "maker"}
-                      onChange={(e) => setRole(e.target.value as "maker" | "checker")}
+                      onChange={(e) => setRole(e.target.value as "maker" | "checker" | "admin")}
                       className="text-orange-500 focus:ring-orange-500"
                     />
-                    <Label htmlFor="maker" className="text-green-600">Maker</Label>
+                    <Label htmlFor="maker" className="text-green-600 text-sm">Maker</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <input
@@ -202,10 +202,21 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
                       id="checker"
                       value="checker"
                       checked={role === "checker"}
-                      onChange={(e) => setRole(e.target.value as "maker" | "checker")}
+                      onChange={(e) => setRole(e.target.value as "maker" | "checker" | "admin")}
                       className="text-orange-500 focus:ring-orange-500"
                     />
-                    <Label htmlFor="checker" className="text-green-600">Checker</Label>
+                    <Label htmlFor="checker" className="text-green-600 text-sm">Checker</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="admin"
+                      value="admin"
+                      checked={role === "admin"}
+                      onChange={(e) => setRole(e.target.value as "maker" | "checker" | "admin")}
+                      className="text-orange-500 focus:ring-orange-500"
+                    />
+                    <Label htmlFor="admin" className="text-green-600 text-sm">Admin</Label>
                   </div>
                 </div>
               </div>
