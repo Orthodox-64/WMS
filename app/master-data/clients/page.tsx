@@ -12,12 +12,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileImage, Trash2, Edit } from "lucide-react";
+import { Upload, FileImage, Trash2, Edit, CheckCircle, AlertCircle, X } from "lucide-react";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface ClientData {
   id?: string;
+  clientId: string;
   firmName: string;
   authorizedPersonName: string;
   firmType: string;
@@ -43,6 +46,7 @@ export default function ClientModulePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ClientData>({
+    clientId: '',
     firmName: '',
     authorizedPersonName: '',
     firmType: '',
@@ -56,6 +60,10 @@ export default function ClientModulePage() {
     alternateNumber: '',
   });
   const [uploadedFiles, setUploadedFiles] = useState<{name: string, type: string}[]>([]);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState({ title: '', description: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Check if user has access
   useEffect(() => {
@@ -80,6 +88,25 @@ export default function ClientModulePage() {
     } catch (error) {
       console.error('Error loading clients:', error);
     }
+  };
+
+  // Generate unique client ID
+  const generateClientId = () => {
+    if (clients.length === 0) {
+      return 'CC-0001';
+    }
+    
+    // Extract numbers from existing client IDs and find the highest
+    const existingNumbers = clients
+      .map(client => client.clientId)
+      .filter(id => id && id.startsWith('CC-'))
+      .map(id => parseInt(id.split('-')[1]))
+      .filter(num => !isNaN(num));
+    
+    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+    const nextNumber = maxNumber + 1;
+    
+    return `CC-${nextNumber.toString().padStart(4, '0')}`;
   };
 
   const handleInputChange = (field: keyof ClientData, value: string) => {
@@ -130,6 +157,7 @@ export default function ClientModulePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
     try {
       const clientData = {
@@ -139,24 +167,28 @@ export default function ClientModulePage() {
 
       if (isEditing && editingId) {
         await updateDoc(doc(db, 'clients', editingId), clientData);
-        toast({
-          title: "🎉 Client Updated!",
-          description: "Client information has been successfully updated in the system.",
-          className: "bg-green-100 border-green-500 text-green-700",
-          duration: 3000,
+        setSuccessMessage({
+          title: "Client Updated Successfully! 🎉",
+          description: `${formData.firmName} (${formData.clientId}) has been updated in the system. All information has been saved and is now available in the client database.`
         });
       } else {
-        await addDoc(collection(db, 'clients'), clientData);
-        toast({
-          title: "🎉 Client Added Successfully!",
-          description: "New client has been registered and saved to the database.",
-          className: "bg-green-100 border-green-500 text-green-700",
-          duration: 3000,
+        // Generate unique client ID for new clients
+        const newClientId = generateClientId();
+        const newClientData = { ...clientData, clientId: newClientId };
+        
+        await addDoc(collection(db, 'clients'), newClientData);
+        setSuccessMessage({
+          title: "New Client Added Successfully! 🎉",
+          description: `${formData.firmName} has been registered with Client ID: ${newClientId}. The client information is now saved and can be accessed from the client database.`
         });
       }
 
+      // Show success modal
+      setShowSuccessModal(true);
+
       // Reset form
       setFormData({
+        clientId: '',
         firmName: '',
         authorizedPersonName: '',
         firmType: '',
@@ -173,12 +205,21 @@ export default function ClientModulePage() {
       setEditingId(null);
       setUploadedFiles([]);
       loadClients();
+      
+      // Auto close modal after 4 seconds
+      setTimeout(() => {
+        setShowSuccessModal(false);
+      }, 4000);
+      
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to save client. Please try again.",
+        title: "❌ Error Occurred",
+        description: "Failed to save client information. Please check your connection and try again.",
         variant: "destructive",
+        duration: 4000,
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -191,17 +232,25 @@ export default function ClientModulePage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'clients', id));
-      toast({
-        title: "Success",
-        description: "Client deleted successfully!",
-        className: "bg-green-100 border-green-500 text-green-700"
+      setSuccessMessage({
+        title: "Client Deleted Successfully! 🗑️",
+        description: "The client has been permanently removed from the database. This action cannot be undone."
       });
+      setShowSuccessModal(true);
+      setDeleteId(null);
       loadClients();
+      
+      // Auto close modal after 3 seconds for delete
+      setTimeout(() => {
+        setShowSuccessModal(false);
+      }, 3000);
+      
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to delete client. Please try again.",
+        title: "❌ Delete Failed",
+        description: "Failed to delete client. Please check your connection and try again.",
         variant: "destructive",
+        duration: 4000,
       });
     }
   };
@@ -455,6 +504,7 @@ export default function ClientModulePage() {
                       setEditingId(null);
                       setUploadedFiles([]);
                       setFormData({
+                        clientId: '',
                         firmName: '',
                         authorizedPersonName: '',
                         firmType: '',
@@ -474,9 +524,13 @@ export default function ClientModulePage() {
                 )}
                 <Button
                   type="submit"
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-2 shadow-lg"
+                  disabled={isSubmitting}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isEditing ? '🔄 Update Client' : ' Add Client'}
+                  {isSubmitting 
+                    ? (isEditing ? '🔄 Updating...' : '⏳ Adding Client...') 
+                    : (isEditing ? '🔄 Update Client' : '✅ Add Client')
+                  }
                 </Button>
               </div>
             </form>
@@ -493,6 +547,7 @@ export default function ClientModulePage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-orange-50">
+                    <TableHead className="text-orange-700 font-semibold">Client ID</TableHead>
                     <TableHead className="text-orange-700 font-semibold">Firm Name</TableHead>
                     <TableHead className="text-orange-700 font-semibold">Authorized Person</TableHead>
                     <TableHead className="text-orange-700 font-semibold">Firm Type</TableHead>
@@ -506,6 +561,7 @@ export default function ClientModulePage() {
                 <TableBody>
                   {clients.map((client) => (
                     <TableRow key={client.id} className="hover:bg-green-50">
+                      <TableCell className="text-orange-700 font-bold bg-orange-50">{client.clientId}</TableCell>
                       <TableCell className="text-green-700 font-medium">{client.firmName}</TableCell>
                       <TableCell className="text-orange-700">{client.authorizedPersonName}</TableCell>
                       <TableCell className="text-green-700">{client.firmType}</TableCell>
@@ -523,21 +579,47 @@ export default function ClientModulePage() {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-red-300 text-red-600 hover:bg-red-50"
-                            onClick={() => client.id && handleDelete(client.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-red-300 text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="border-red-200">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="text-red-600 flex items-center gap-2">
+                                  <AlertCircle className="w-5 h-5" />
+                                  Confirm Deletion
+                                </AlertDialogTitle>
+                                <AlertDialogDescription className="text-gray-700">
+                                  Are you sure you want to delete <strong>{client.firmName}</strong>? 
+                                  This action cannot be undone and will permanently remove all client data from the system.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel className="border-gray-300 text-gray-600 hover:bg-gray-50">
+                                  Cancel
+                                </AlertDialogCancel>
+                                <AlertDialogAction 
+                                  className="bg-red-500 hover:bg-red-600 text-white"
+                                  onClick={() => client.id && handleDelete(client.id)}
+                                >
+                                  🗑️ Delete Client
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
                   {clients.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-gray-500 py-8">
+                      <TableCell colSpan={9} className="text-center text-gray-500 py-8">
                         No clients registered yet
                       </TableCell>
                     </TableRow>
@@ -546,8 +628,31 @@ export default function ClientModulePage() {
               </Table>
             </div>
           </CardContent>
-        </Card>
-      </div>
-    </DashboardLayout>
-  );
-} 
+                  </Card>
+        </div>
+
+        {/* Success Modal */}
+        <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+          <DialogContent className="border-green-300 max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-green-700 flex items-center gap-3 text-xl">
+                <CheckCircle className="w-6 h-6 text-green-500" />
+                {successMessage.title}
+              </DialogTitle>
+              <DialogDescription className="text-gray-700 mt-3 text-base leading-relaxed">
+                {successMessage.description}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end mt-6">
+              <Button 
+                onClick={() => setShowSuccessModal(false)}
+                className="bg-green-500 hover:bg-green-600 text-white px-6"
+              >
+                ✅ Got it!
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </DashboardLayout>
+    );
+  } 
