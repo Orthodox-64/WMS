@@ -38,7 +38,7 @@ const masterDataModules = [
   {
     title: "Branch & Location Module",
     icon: MapPin,
-    href: "/master-data/branches",
+    href: "/master-data/branch",
     color: "text-orange-500",
     description: "Manage branch and location data"
   },
@@ -60,9 +60,26 @@ export default function MasterDataPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Master Data</h1>
-          <p className="text-muted-foreground">Manage warehouse master data and configurations.</p>
+        {/* Header with Back Button and Centered Title */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={() => router.back()}
+              className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+            >
+              ← Dashboard
+            </button>
+          </div>
+          
+          {/* Centered Title with Light Orange Background */}
+          <div className="flex-1 text-center">
+            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+              Master Data
+            </h1>
+          </div>
+          
+          {/* Empty div for spacing */}
+          <div className="w-32"></div>
         </div>
         
         {/* Master Data Module Cards */}

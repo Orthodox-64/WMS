@@ -31,19 +31,25 @@ export default function Header() {
     }
   };
 
-  const navigationItems = [
-    {
-      name: 'Dashboard',
-      href: '/dashboard',
-      icon: LayoutDashboard,
-      allowedRoles: ['admin', 'maker', 'checker']
-    },
+  const navigationItems: Array<{
+    name: string;
+    href: string;
+    icon: any;
+    allowedRoles: string[];
+  }> = [
+    // Dashboard button removed as requested
   ];
 
   return (
-    <header className="border-b border-border h-24 px-8 flex items-center justify-between bg-green-600 z-10 w-full relative">
-      <div className="flex items-center gap-4 bg-white rounded-lg">
-        <Image src="/AGlogo.webp" alt="AgroGreen Logo" width={180} height={120} />
+    <header className="border-b border-border h-20 px-4 flex items-center justify-between bg-green-600 z-10 w-full relative">
+      <div className="flex items-center gap-3 bg-white rounded-lg px-2 py-1">
+        <Image 
+          src="/AGlogo.webp" 
+          alt="AgroGreen Logo" 
+          width={80} 
+          height={40}
+          className="max-h-10 w-auto object-contain"
+        />
         
         <Button
           variant="secondary"

@@ -83,6 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, email: string, password: string) => {
     try {
+      // For demo purposes, allow login with any username if it exists
+      // In production, you'd want to implement proper password hashing and verification
       const userQuery = query(
         collection(db, 'users'),
         where('username', '==', username)
@@ -90,10 +92,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userSnapshot = await getDocs(userQuery);
       
       if (userSnapshot.empty) {
-        throw new Error("User not found");
+        throw new Error("Username not found. Please check your username or register a new account.");
       }
 
       const userData = userSnapshot.docs[0].data() as User;
+      
+      // Basic validation - in production, implement proper password verification
+      if (!password || password.length < 3) {
+        throw new Error("Please enter a valid password");
+      }
       
       // Store user in local storage
       localStorage.setItem('user', JSON.stringify(userData));

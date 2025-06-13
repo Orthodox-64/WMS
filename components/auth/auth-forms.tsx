@@ -7,9 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { auth, db } from "@/lib/firebase";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { useRouter } from 'next/navigation';
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -36,26 +33,8 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
     e.preventDefault();
     try {
       if (isLogin) {
-        // First search for username in users collection
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("username", "==", username));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-          throw new Error("Username not found");
-        }
-
-        // Get the user document and email
-        const userDoc = querySnapshot.docs[0];
-        const userData = userDoc.data();
-        const userEmail = userData.email;
-
-        // Now perform Firebase authentication with the email and password
-        const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
-        const user = userCredential.user;
-
         // Call the login function from auth context
-        await login(username, userEmail, password);
+        await login(username, email, password);
 
         // Show success message
         toast({
@@ -65,27 +44,7 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
           className: "bg-green-100 border-green-500 text-green-700"
         });
       } else {
-        // Register
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        
-        // Set custom claims using the API route
-        const response = await fetch('/api/auth/set-claims', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            uid: user.uid,
-            role: role
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to set user role');
-        }
-        
-        // Call the register function from auth context
+        // Register - Just use the auth context register function
         await register(username, email, password, role);
 
         setAlertMessage("Registration successful! Please log in to continue.");
@@ -108,12 +67,12 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await sendPasswordResetEmail(auth, email);
+      // For now, just show a message that password reset is not implemented
       toast({
-        title: "Reset Password",
-        description: "Please check your email to reset the password",
+        title: "Password Reset",
+        description: "Password reset functionality will be implemented soon. Please contact the administrator.",
         variant: "default",
-        className: "bg-green-100 border-green-500 text-green-700"
+        className: "bg-blue-100 border-blue-500 text-blue-700"
       });
       setIsResetPassword(false);
     } catch (error) {

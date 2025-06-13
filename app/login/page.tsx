@@ -19,6 +19,7 @@ export default function LoginPage() {
               height={100}
               priority
               className="object-contain"
+              style={{ width: 'auto', height: 'auto' }}
             />
           </div>
           <h1 className="text-2xl font-bold text-white">Agrogreen Warehousing Private Limited</h1>
