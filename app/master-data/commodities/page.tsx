@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Edit, CheckCircle, AlertCircle, X, Download, Search, Plus, MapPin, Package, Minus } from "lucide-react";
+import { Trash2, Edit, CheckCircle, AlertCircle, X, Download, Search, Plus, Package, Minus } from "lucide-react";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -106,6 +106,26 @@ export default function CommodityModulePage() {
   useEffect(() => {
     filterCommoditiesBySearch();
   }, [commodities, searchTerm]);
+
+  // Real-time validation for commodity name uniqueness
+  useEffect(() => {
+    if (formData.commodityName.trim().length >= 3) {
+      const timeoutId = setTimeout(() => {
+        if (!isCommodityNameUnique(formData.commodityName, editingId ?? undefined)) {
+          console.log('🚫 DUPLICATE DETECTED - Showing toast for:', formData.commodityName);
+          
+          toast({
+            title: "⚠️ Duplicate Commodity Name",
+            description: `"${formData.commodityName}" already exists (case-insensitive). Please choose a different name.`,
+            variant: "destructive",
+            duration: 4000,
+          });
+        }
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [formData.commodityName, commodities, editingId]);
 
   const loadCommodities = async () => {
     try {
@@ -294,6 +314,16 @@ export default function CommodityModulePage() {
     return `CV-${nextNumber.toString().padStart(4, '0')}`;
   };
 
+  // Check if commodity name is unique (case-insensitive)
+  const isCommodityNameUnique = (commodityName: string, excludeId?: string) => {
+    const nameLower = commodityName.toLowerCase().trim();
+    const isDuplicate = commodities.some(commodity => 
+      commodity.commodityName.toLowerCase().trim() === nameLower && commodity.id !== excludeId
+    );
+    
+    return !isDuplicate;
+  };
+
   const handleInputChange = (field: keyof CommodityData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -336,6 +366,20 @@ export default function CommodityModulePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate commodity name uniqueness
+    if (!isCommodityNameUnique(formData.commodityName, editingId ?? undefined)) {
+      console.log('🚫 SUBMIT BLOCKED - Duplicate commodity name:', formData.commodityName);
+      
+      toast({
+        title: "🚫 Cannot Save - Duplicate Commodity Name",
+        description: `"${formData.commodityName}" is already registered. Commodity names must be unique (case-insensitive). Please choose a different name.`,
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
@@ -630,7 +674,7 @@ export default function CommodityModulePage() {
                   id="searchTerm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by commodity name, variety, location, or branch..."
+                  placeholder="Search by commodity name, variety, or branch..."
                   className="border-green-300 focus:border-green-500 flex-1"
                 />
                 {searchTerm && (
@@ -727,7 +771,7 @@ export default function CommodityModulePage() {
                           <span className="text-gray-400 text-xs">-</span>
                         </TableCell>
                         <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">
-                          {commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : '-'}
+                          <span className="text-gray-400 text-xs">-</span>
                         </TableCell>
                         <TableCell className="sticky right-0 bg-white border-l border-gray-300 text-center p-2">
                           <div className="flex space-x-2">
@@ -795,8 +839,7 @@ export default function CommodityModulePage() {
                           <TableCell className="text-blue-700 border-r border-blue-300 text-center p-2 whitespace-nowrap pl-8">
                             {commodity.commodityName}
                           </TableCell>
-                          <TableCell className="text-blue-700 border-r border-blue-300 text-center p-2 whitespace-nowrap flex items-center gap-2 pl-8">
-                            <MapPin className="w-4 h-4 text-blue-600" />
+                          <TableCell className="text-blue-700 border-r border-blue-300 text-center p-2 whitespace-nowrap pl-8">
                             {variety.varietyName}
                           </TableCell>
                           <TableCell className="text-blue-700 border-r border-blue-300 text-center p-2 whitespace-nowrap">
@@ -876,6 +919,9 @@ export default function CommodityModulePage() {
                     placeholder="e.g., Wheat, Rice, Corn"
                     required
                   />
+                  <p className="text-xs text-orange-600 mt-1">
+                    Commodity name must be unique (case-insensitive). "Wheat", "WHEAT", and "wheat" are considered the same.
+                  </p>
                 </div>
               </div>
 

@@ -220,7 +220,189 @@ export default function ClientModulePage() {
     );
   };
 
+  const isGstNumberUnique = (gstNumber: string, excludeId?: string) => {
+    const gstLower = gstNumber.toLowerCase().trim();
+    return !clients.some(client => 
+      client.gstNumber.toLowerCase() === gstLower && client.id !== excludeId
+    );
+  };
+
   const handleInputChange = (field: keyof ClientData, value: string) => {
+    // Contact Number Validation - Indian mobile number
+    if (field === 'contactNumber') {
+      // Allow only digits
+      const digitsOnly = value.replace(/\D/g, '');
+      
+      // Limit to 10 digits
+      const limitedDigits = digitsOnly.slice(0, 10);
+      
+      // Validate Indian mobile number format (starts with 6, 7, 8, or 9)
+      if (limitedDigits.length > 0 && !/^[6-9]/.test(limitedDigits)) {
+        toast({
+          title: "❌ Invalid Mobile Number",
+          description: "Indian mobile numbers should start with 6, 7, 8, or 9",
+          variant: "destructive",
+          duration: 2000,
+        });
+        return;
+      }
+      
+      setFormData(prev => ({ ...prev, [field]: limitedDigits }));
+      return;
+    }
+    
+    // PAN Number Validation
+    if (field === 'panNumber') {
+      const upperValue = value.toUpperCase();
+      
+      // Allow only alphanumeric characters and limit to 10
+      const cleanValue = upperValue.replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      
+      // Real-time format validation
+      if (cleanValue.length > 0) {
+        // First 5 characters should be letters
+        if (cleanValue.length <= 5 && !/^[A-Z]*$/.test(cleanValue)) {
+          toast({
+            title: "💡 PAN Format Tip",
+            description: "First 5 characters should be letters (e.g., ABCDE)",
+            variant: "default",
+            duration: 2000,
+          });
+        }
+        
+        // Characters 6-9 should be digits
+        if (cleanValue.length > 5 && cleanValue.length <= 9) {
+          const digitsPart = cleanValue.slice(5);
+          if (!/^\d*$/.test(digitsPart)) {
+            toast({
+              title: "💡 PAN Format Tip",
+              description: "Characters 6-9 should be digits (e.g., 1234)",
+              variant: "default",
+              duration: 2000,
+            });
+          }
+        }
+        
+        // 10th character should be a letter
+        if (cleanValue.length === 10 && !/^[A-Z]{5}\d{4}[A-Z]$/.test(cleanValue)) {
+          toast({
+            title: "💡 PAN Format Tip",
+            description: "Last character should be a letter (e.g., F)",
+            variant: "default",
+            duration: 2000,
+          });
+        }
+        
+        // Check uniqueness when PAN is complete and valid
+        if (cleanValue.length === 10 && /^[A-Z]{5}\d{4}[A-Z]$/.test(cleanValue)) {
+          if (!isPanNumberUnique(cleanValue, editingId ?? undefined)) {
+            toast({
+              title: "⚠️ PAN Already Exists",
+              description: "This PAN number is already registered with another firm",
+              variant: "destructive",
+              duration: 3000,
+            });
+          }
+        }
+      }
+      
+      setFormData(prev => ({ ...prev, [field]: cleanValue }));
+      return;
+    }
+    
+    // GST Number Validation
+    if (field === 'gstNumber') {
+      const upperValue = value.toUpperCase();
+      
+      // Allow only alphanumeric characters and limit to 15
+      const cleanValue = upperValue.replace(/[^A-Z0-9]/g, '').slice(0, 15);
+      
+      // Real-time format validation for GST
+      if (cleanValue.length > 0) {
+        // First 2 digits should be state code (numbers)
+        if (cleanValue.length <= 2 && !/^\d*$/.test(cleanValue)) {
+          toast({
+            title: "💡 GST Format Tip",
+            description: "First 2 characters should be state code digits (e.g., 27)",
+            variant: "default",
+            duration: 2000,
+          });
+        }
+        
+        // Characters 3-12 should be PAN format
+        if (cleanValue.length > 2 && cleanValue.length <= 12) {
+          const panPart = cleanValue.slice(2);
+          if (panPart.length === 10 && !/^[A-Z]{5}\d{4}[A-Z]$/.test(panPart)) {
+            toast({
+              title: "💡 GST Format Tip",
+              description: "Characters 3-12 should follow PAN format",
+              variant: "default",
+              duration: 2000,
+            });
+          }
+        }
+        
+        // Check uniqueness when GST is complete and valid
+        if (cleanValue.length === 15 && /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]{3}$/.test(cleanValue)) {
+          if (!isGstNumberUnique(cleanValue, editingId ?? undefined)) {
+            toast({
+              title: "⚠️ GST Already Exists",
+              description: "This GST number is already registered with another firm",
+              variant: "destructive",
+              duration: 3000,
+            });
+          }
+        }
+      }
+      
+      setFormData(prev => ({ ...prev, [field]: cleanValue }));
+      return;
+    }
+    
+    // Aadhar Number Validation (optional field)
+    if (field === 'aadharNumber') {
+      // Allow only digits
+      const digitsOnly = value.replace(/\D/g, '');
+      
+      // Limit to 12 digits
+      const limitedDigits = digitsOnly.slice(0, 12);
+      
+      setFormData(prev => ({ ...prev, [field]: limitedDigits }));
+      return;
+    }
+    
+    // Landline validation
+    if (field === 'landline') {
+      // Allow digits, spaces, hyphens, and parentheses for landline format
+      const cleanValue = value.replace(/[^\d\s\-\(\)]/g, '');
+      setFormData(prev => ({ ...prev, [field]: cleanValue }));
+      return;
+    }
+    
+    // Alternate number validation (same as contact number)
+    if (field === 'alternateNumber') {
+      // Allow only digits
+      const digitsOnly = value.replace(/\D/g, '');
+      
+      // Limit to 10 digits
+      const limitedDigits = digitsOnly.slice(0, 10);
+      
+      // Validate Indian mobile number format if not empty
+      if (limitedDigits.length > 0 && limitedDigits.length === 10 && !/^[6-9]/.test(limitedDigits)) {
+        toast({
+          title: "❌ Invalid Mobile Number",
+          description: "Indian mobile numbers should start with 6, 7, 8, or 9",
+          variant: "destructive",
+          duration: 2000,
+        });
+        return;
+      }
+      
+      setFormData(prev => ({ ...prev, [field]: limitedDigits }));
+      return;
+    }
+    
+    // Default behavior for other fields
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -293,6 +475,97 @@ export default function ClientModulePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Comprehensive field validations before submission
+    
+    // Contact Number validation
+    if (!formData.contactNumber || formData.contactNumber.length !== 10) {
+      toast({
+        title: "❌ Invalid Contact Number",
+        description: "Please enter a valid 10-digit Indian mobile number",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+    
+    if (!/^[6-9]\d{9}$/.test(formData.contactNumber)) {
+      toast({
+        title: "❌ Invalid Contact Number Format",
+        description: "Contact number should be 10 digits starting with 6, 7, 8, or 9",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+    
+    // PAN Number validation
+    if (!formData.panNumber || formData.panNumber.length !== 10) {
+      toast({
+        title: "❌ Invalid PAN Number",
+        description: "PAN number must be exactly 10 characters long",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+    
+    if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(formData.panNumber)) {
+      toast({
+        title: "❌ Invalid PAN Number Format",
+        description: "PAN format should be: 5 letters + 4 digits + 1 letter (e.g., ABCDE1234F)",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
+    
+    // GST Number validation
+    if (!formData.gstNumber || formData.gstNumber.length !== 15) {
+      toast({
+        title: "❌ Invalid GST Number",
+        description: "GST number must be exactly 15 characters long",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+    
+    if (!/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]{3}$/.test(formData.gstNumber)) {
+      toast({
+        title: "❌ Invalid GST Number Format",
+        description: "GST format should be: 2 state digits + 10 PAN characters + 3 additional characters",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
+    
+    // Aadhar validation (if provided)
+    if (formData.aadharNumber && formData.aadharNumber.length > 0) {
+      if (formData.aadharNumber.length !== 12 || !/^\d{12}$/.test(formData.aadharNumber)) {
+        toast({
+          title: "❌ Invalid Aadhar Number",
+          description: "Aadhar number should be exactly 12 digits",
+          variant: "destructive",
+          duration: 3000,
+        });
+        return;
+      }
+    }
+    
+    // Alternate number validation (if provided)
+    if (formData.alternateNumber && formData.alternateNumber.length > 0) {
+      if (formData.alternateNumber.length !== 10 || !/^[6-9]\d{9}$/.test(formData.alternateNumber)) {
+        toast({
+          title: "❌ Invalid Alternate Number",
+          description: "Alternate number should be a valid 10-digit Indian mobile number",
+          variant: "destructive",
+          duration: 3000,
+        });
+        return;
+      }
+    }
+    
     // Enhanced validation for file upload requirement
     if (uploadedFiles.length === 0) {
       toast({
@@ -322,11 +595,22 @@ export default function ClientModulePage() {
       return;
     }
 
-    // Validate PAN uniqueness
+    // Validate PAN uniqueness - each firm must have unique PAN
     if (!isPanNumberUnique(formData.panNumber, editingId ?? undefined)) {
       toast({
         title: "❌ PAN Number Already Exists",
-        description: "This PAN number is already registered with another client. Please check and enter a different PAN number.",
+        description: "This PAN number is already registered with another firm. Each firm must have a unique PAN number.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return;
+    }
+    
+    // Validate GST uniqueness - each firm must have unique GST
+    if (!isGstNumberUnique(formData.gstNumber, editingId ?? undefined)) {
+      toast({
+        title: "❌ GST Number Already Exists",
+        description: "This GST number is already registered with another firm. Each firm must have a unique GST number.",
         variant: "destructive",
         duration: 5000,
       });
@@ -825,8 +1109,13 @@ export default function ClientModulePage() {
                     value={formData.contactNumber}
                     onChange={(e) => handleInputChange('contactNumber', e.target.value)}
                     className="border-orange-300 focus:border-orange-500 text-orange-700"
+                    placeholder="e.g., 9876543210"
+                    maxLength={10}
                     required
                   />
+                  <p className="text-xs text-orange-600 mt-1">
+                    10-digit Indian mobile number starting with 6, 7, 8, or 9 (can be shared between firms)
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -836,11 +1125,15 @@ export default function ClientModulePage() {
                   <Input
                     id="panNumber"
                     value={formData.panNumber}
-                    onChange={(e) => handleInputChange('panNumber', e.target.value.toUpperCase())}
+                    onChange={(e) => handleInputChange('panNumber', e.target.value)}
                     className="border-orange-300 focus:border-orange-500 text-orange-700"
+                    placeholder="e.g., ABCDE1234F"
                     maxLength={10}
                     required
                   />
+                  <p className="text-xs text-orange-600 mt-1">
+                    Format: 5 letters + 4 digits + 1 letter (e.g., ABCDE1234F) - Must be unique per firm
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -850,11 +1143,15 @@ export default function ClientModulePage() {
                   <Input
                     id="gstNumber"
                     value={formData.gstNumber}
-                    onChange={(e) => handleInputChange('gstNumber', e.target.value.toUpperCase())}
+                    onChange={(e) => handleInputChange('gstNumber', e.target.value)}
                     className="border-orange-300 focus:border-orange-500 text-orange-700"
+                    placeholder="e.g., 27ABCDE1234F1Z5"
                     maxLength={15}
                     required
                   />
+                  <p className="text-xs text-orange-600 mt-1">
+                    Format: 2 state digits + 10 PAN chars + 3 additional chars - Must be unique per firm
+                  </p>
                 </div>
 
                 {/* Optional Fields */}
@@ -867,8 +1164,12 @@ export default function ClientModulePage() {
                     value={formData.aadharNumber}
                     onChange={(e) => handleInputChange('aadharNumber', e.target.value)}
                     className="border-green-300 focus:border-green-500 text-orange-700"
+                    placeholder="e.g., 123456789012"
                     maxLength={12}
                   />
+                  <p className="text-xs text-green-600 mt-1">
+                    12-digit Aadhar number (if provided)
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -905,7 +1206,12 @@ export default function ClientModulePage() {
                     value={formData.alternateNumber}
                     onChange={(e) => handleInputChange('alternateNumber', e.target.value)}
                     className="border-green-300 focus:border-green-500 text-orange-700"
+                    placeholder="e.g., 9876543210"
+                    maxLength={10}
                   />
+                  <p className="text-xs text-green-600 mt-1">
+                    10-digit mobile number (if provided, can be shared between firms)
+                  </p>
                 </div>
               </div>
 

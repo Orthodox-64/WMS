@@ -549,7 +549,7 @@ export default function BranchModulePage() {
                   id="searchTerm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by name, state, branch, location, or pincode..."
+                  placeholder="Search by state, branch, location..."
                   className="border-green-300 focus:border-green-500 flex-1"
                 />
                 {searchTerm && (

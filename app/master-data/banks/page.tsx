@@ -274,6 +274,56 @@ export default function BankModulePage() {
   };
 
   const handleLocationInputChange = (field: keyof BankLocation, value: string) => {
+    // Special validation for IFSC code
+    if (field === 'ifscCode') {
+      // Convert to uppercase and limit to 11 characters
+      const upperValue = value.toUpperCase().slice(0, 11);
+      
+      // Allow only alphanumeric characters
+      if (!/^[A-Z0-9]*$/.test(upperValue)) {
+        toast({
+          title: "❌ Invalid Characters",
+          description: "IFSC code can only contain letters and numbers",
+          variant: "destructive",
+          duration: 2000,
+        });
+        return;
+      }
+      
+      // IFSC code validation: Should not be all numbers
+      if (/^\d+$/.test(upperValue) && upperValue.length > 0) {
+        toast({
+          title: "❌ Invalid IFSC Code",
+          description: "IFSC code cannot contain only numbers. Format: ABCD0123456",
+          variant: "destructive",
+          duration: 2000,
+        });
+        return; // Don't update the field
+      }
+      
+      // Validate format as user types (for guidance)
+      if (upperValue.length >= 1 && !/^[A-Z]/.test(upperValue)) {
+        toast({
+          title: "💡 IFSC Format Tip",
+          description: "IFSC code should start with bank letters (e.g., SBIN, HDFC, ICIC)",
+          variant: "default",
+          duration: 2000,
+        });
+      }
+      
+      if (upperValue.length === 5 && upperValue[4] !== '0') {
+        toast({
+          title: "💡 IFSC Format Tip",
+          description: "The 5th character should always be '0' (zero)",
+          variant: "default",
+          duration: 2000,
+        });
+      }
+      
+      setLocationFormData(prev => ({ ...prev, [field]: upperValue }));
+      return;
+    }
+    
     setLocationFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -410,6 +460,54 @@ export default function BankModulePage() {
     e.preventDefault();
     
     if (!selectedBank) return;
+    
+    // Comprehensive IFSC Code Validation
+    const ifscCode = locationFormData.ifscCode.trim();
+    
+    // Check if IFSC code is empty
+    if (!ifscCode) {
+      toast({
+        title: "❌ IFSC Code Required",
+        description: "Please enter a valid IFSC code",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+    
+    // Check if IFSC code is only numbers
+    if (/^\d+$/.test(ifscCode)) {
+      toast({
+        title: "❌ Invalid IFSC Code Format",
+        description: "IFSC code cannot contain only numbers. Format: ABCD0123456 (4 letters + 0 + 6 alphanumeric)",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
+    
+    // Check IFSC code length
+    if (ifscCode.length !== 11) {
+      toast({
+        title: "❌ Invalid IFSC Code Length",
+        description: "IFSC code must be exactly 11 characters long. Format: ABCD0123456",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+    
+    // Check IFSC code format: 4 letters + 0 + 6 alphanumeric
+    const ifscPattern = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    if (!ifscPattern.test(ifscCode)) {
+      toast({
+        title: "❌ Invalid IFSC Code Format",
+        description: "IFSC code should follow format: ABCD0123456 (4 letters + 0 + 6 alphanumeric characters)",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
     
     setIsSubmitting(true);
     
@@ -660,7 +758,7 @@ export default function BankModulePage() {
                   id="searchTerm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by bank name, state, branch, location, or IFSC..."
+                  placeholder="Search by bank name, state, or IFSC..."
                   className="border-green-300 focus:border-green-500 flex-1"
                 />
                 {searchTerm && (
@@ -1047,12 +1145,15 @@ export default function BankModulePage() {
                   <Input
                     id="ifscCode"
                     value={locationFormData.ifscCode}
-                    onChange={(e) => handleLocationInputChange('ifscCode', e.target.value.toUpperCase())}
+                    onChange={(e) => handleLocationInputChange('ifscCode', e.target.value)}
                     className="border-blue-300 focus:border-blue-500 text-blue-700"
                     maxLength={11}
                     placeholder="e.g., SBIN0001234"
                     required
                   />
+                  <p className="text-xs text-blue-600 mt-1">
+                    Format: 4 letters + 0 + 6 alphanumeric characters (e.g., SBIN0001234)
+                  </p>
                 </div>
 
                 {/* Authorize Person 1 */}
