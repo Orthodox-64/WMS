@@ -8,10 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, ClipboardCheck, Edit, Trash2, Plus, Download } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck,   Plus, Download, Eye } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from "@/hooks/use-toast";
 
@@ -75,6 +76,14 @@ interface InspectionData {
   createdAt: string;
 }
 
+interface WarehouseInspectionData {
+  id: string;
+  warehouseName: string;
+  warehouseCode: string;
+  status: 'pending' | 'submitted' | 'activated' | 'rejected' | 'resubmitted' | 'closed';
+  [key: string]: any;
+}
+
 export default function InspectionCreationPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -84,6 +93,7 @@ export default function InspectionCreationPage() {
   const [banksData, setBanksData] = useState<BankData[]>([]);
   const [inspections, setInspections] = useState<InspectionData[]>([]);
   const [existingWarehouses, setExistingWarehouses] = useState<string[]>([]);
+  const [warehouseInspections, setWarehouseInspections] = useState<WarehouseInspectionData[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -113,6 +123,8 @@ export default function InspectionCreationPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddBankModal, setShowAddBankModal] = useState(false);
   const [selectedInspectionForBank, setSelectedInspectionForBank] = useState<InspectionData | null>(null);
+  const [showWarehouseInspectionModal, setShowWarehouseInspectionModal] = useState(false);
+  const [selectedWarehouseInspection, setSelectedWarehouseInspection] = useState<WarehouseInspectionData | null>(null);
   
   // Bank form state for adding new bank to existing warehouse
   const [bankFormData, setBankFormData] = useState({
@@ -127,6 +139,7 @@ export default function InspectionCreationPage() {
     loadBranchesData();
     loadBanksData();
     loadInspections();
+    loadWarehouseInspections();
   }, []);
 
   // Extract unique states from branches data
@@ -406,11 +419,65 @@ export default function InspectionCreationPage() {
     }
   };
 
+  const loadWarehouseInspections = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'warehouse-inspections'));
+      const warehouseInspectionsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as WarehouseInspectionData[];
+      setWarehouseInspections(warehouseInspectionsData);
+    } catch (error) {
+      console.error('Error loading warehouse inspections:', error);
+    }
+  };
+
   const generateCodes = () => {
     const inspectionCount = inspections.length + 1;
     const inspectionCode = `SUR-${inspectionCount.toString().padStart(4, '0')}`;
     const warehouseCode = `WH-${inspectionCount.toString().padStart(4, '0')}`;
     return { inspectionCode, warehouseCode };
+  };
+
+  // Get warehouse status for inspection
+  const getWarehouseStatus = (warehouseCode: string): 'pending' | 'submitted' | 'activated' | 'rejected' | 'resubmitted' | 'closed' => {
+    const warehouseInspection = warehouseInspections.find(wi => wi.warehouseCode === warehouseCode);
+    return warehouseInspection?.status || 'pending';
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      pending: { color: 'bg-yellow-100 text-yellow-800', label: 'Pending' },
+      submitted: { color: 'bg-blue-100 text-blue-800', label: 'Submitted' },
+      activated: { color: 'bg-green-100 text-green-800', label: 'Activated' },
+      rejected: { color: 'bg-red-100 text-red-800', label: 'Rejected' },
+      resubmitted: { color: 'bg-purple-100 text-purple-800', label: 'Resubmitted' },
+      closed: { color: 'bg-gray-100 text-gray-800', label: 'Closed' }
+    };
+    
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
+    
+    return (
+      <Badge className={`${config.color} cursor-pointer hover:opacity-80`}>
+        {config.label}
+      </Badge>
+    );
+  };
+
+  // Handle remarks click
+  const handleRemarksClick = (inspection: InspectionData) => {
+    const warehouseInspection = warehouseInspections.find(wi => wi.warehouseCode === inspection.warehouseCode);
+    if (warehouseInspection) {
+      setSelectedWarehouseInspection(warehouseInspection);
+      setShowWarehouseInspectionModal(true);
+    } else {
+      toast({
+        title: "No Inspection Found",
+        description: "No warehouse inspection form found for this warehouse",
+        variant: "destructive",
+      });
+    }
   };
 
   // Handle add bank button click
@@ -640,8 +707,12 @@ export default function InspectionCreationPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      // In a real app, you'd delete from Firebase here
+      // Delete from Firebase database
+      await deleteDoc(doc(db, 'inspections', id));
+      
+      // Update local state
       setInspections(prev => prev.filter(inspection => inspection.id !== id));
+      
       toast({
         title: "Deleted",
         description: "Inspection deleted successfully",
@@ -964,21 +1035,6 @@ export default function InspectionCreationPage() {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              className="border-orange-300 text-orange-600 hover:bg-orange-50"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleDelete(inspection.id)}
-                              className="border-red-300 text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
                               onClick={() => handleAddBankClick(inspection)}
                               className="border-blue-300 text-blue-600 hover:bg-blue-50"
                               title="Add Bank"
@@ -1095,6 +1151,193 @@ export default function InspectionCreationPage() {
                 </Button>
               </div>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Warehouse Inspection Details Modal */}
+        <Dialog open={showWarehouseInspectionModal} onOpenChange={setShowWarehouseInspectionModal}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <Eye className="mr-2 h-5 w-5 text-green-600" />
+                Warehouse Inspection Details: {selectedWarehouseInspection?.warehouseCode}
+              </DialogTitle>
+              <DialogDescription>
+                View the detailed warehouse inspection form for {selectedWarehouseInspection?.warehouseName}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedWarehouseInspection && (
+              <div className="space-y-6">
+                {/* Status Badge */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium">Status:</span>
+                    {getStatusBadge(selectedWarehouseInspection.status)}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // Navigate to warehouse creation page with this inspection
+                      router.push('/surveys/warehouse-creation');
+                    }}
+                    className="bg-blue-50 text-blue-600 border-blue-300 hover:bg-blue-100"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    View in Warehouse Creation
+                  </Button>
+                </div>
+
+                {/* Basic Information */}
+                <Card className="border-green-300">
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">Basic Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="font-medium">Warehouse Name:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseName}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Warehouse Code:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseCode}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Type of Warehouse:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.typeOfWarehouse}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Date of Inspection:</Label>
+                        <p className="text-gray-700">
+                          {selectedWarehouseInspection.dateOfInspection ? 
+                            new Date(selectedWarehouseInspection.dateOfInspection).toLocaleDateString() : 
+                            'N/A'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Address */}
+                {selectedWarehouseInspection.address && (
+                  <Card className="border-green-300">
+                    <CardHeader className="bg-green-50">
+                      <CardTitle className="text-green-700">Address</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <p className="text-gray-700">{selectedWarehouseInspection.address}</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Bank Details */}
+                <Card className="border-green-300">
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">Bank Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="font-medium">Bank State:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.bankState}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Bank Branch:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.bankBranch}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Bank Name:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.bankName}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">IFSC Code:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.ifscCode}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Warehouse Dimensions */}
+                <Card className="border-green-300">
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">Warehouse Dimensions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label className="font-medium">Length (sq ft):</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseLength}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Breadth (sq ft):</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseBreadth}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Height (sq ft):</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseHeight}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Capacity (MT):</Label>
+                        <p className="text-gray-700 font-semibold text-green-600">
+                          {selectedWarehouseInspection.warehouseCapacity}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Construction Year:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.constructionYear}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Total Chambers:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.totalChambers}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* OE Details */}
+                <Card className="border-green-300">
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">OE Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="font-medium">Name of OE:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.nameOfOE}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Contact Number:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.contactNumber}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Place:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.place}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Date:</Label>
+                        <p className="text-gray-700">
+                          {selectedWarehouseInspection.oeDate ? 
+                            new Date(selectedWarehouseInspection.oeDate).toLocaleDateString() : 
+                            'N/A'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="flex justify-end">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowWarehouseInspectionModal(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
