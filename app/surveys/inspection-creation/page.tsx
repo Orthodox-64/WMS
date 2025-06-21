@@ -1,0 +1,1378 @@
+"use client";
+
+import DashboardLayout from '@/components/dashboard-layout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ArrowLeft, ClipboardCheck,   Plus, Download, Eye, Search } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from "@/hooks/use-toast";
+
+// Data interfaces matching the master data modules
+interface BranchLocation {
+  id?: string;
+  locationId: string;
+  locationName: string;
+  address?: string;
+  pincode?: string;
+  createdAt?: string;
+}
+
+interface BranchData {
+  id?: string;
+  branchId: string;
+  name: string;
+  state: string;
+  branch: string;
+  locations: BranchLocation[];
+  createdAt?: string;
+}
+
+interface BankLocation {
+  id?: string;
+  locationId: string;
+  locationName: string;
+  branchName: string;
+  ifscCode: string;
+  address?: string;
+  authorizePerson1?: string;
+  authorizePerson2?: string;
+  createdAt?: string;
+}
+
+interface BankData {
+  id?: string;
+  bankId: string;
+  bankName: string;
+  state: string;
+  branch: string;
+  locations: BankLocation[];
+  createdAt?: string;
+}
+
+interface InspectionData {
+  id: string;
+  inspectionCode: string;
+  warehouseCode: string;
+  state: string;
+  branch: string;
+  location: string;
+  businessType: string;
+  warehouseStatus: string;
+  warehouseName?: string;
+  bankState: string;
+  bankBranch: string;
+  bankName: string;
+  ifscCode: string;
+  receiptType: string;
+  createdAt: string;
+}
+
+interface WarehouseInspectionData {
+  id: string;
+  warehouseName: string;
+  warehouseCode: string;
+  status: 'pending' | 'submitted' | 'activated' | 'rejected' | 'resubmitted' | 'closed';
+  [key: string]: any;
+}
+
+export default function InspectionCreationPage() {
+  const router = useRouter();
+  const { toast } = useToast();
+  
+  // Data from Firebase
+  const [branchesData, setBranchesData] = useState<BranchData[]>([]);
+  const [banksData, setBanksData] = useState<BankData[]>([]);
+  const [inspections, setInspections] = useState<InspectionData[]>([]);
+  const [existingWarehouses, setExistingWarehouses] = useState<string[]>([]);
+  const [warehouseInspections, setWarehouseInspections] = useState<WarehouseInspectionData[]>([]);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    state: '',
+    branch: '',
+    location: '',
+    businessType: '',
+    warehouseStatus: '',
+    warehouseName: '',
+    existingWarehouse: '',
+    bankState: '',
+    bankBranch: '',
+    bankName: '',
+    ifscCode: '',
+    receiptType: ''
+  });
+
+  // Dropdown options state (derived from Firebase data)
+  const [availableStates, setAvailableStates] = useState<string[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<string[]>([]);
+  const [availableLocations, setAvailableLocations] = useState<string[]>([]);
+  const [availableBankStates, setAvailableBankStates] = useState<string[]>([]);
+  const [availableBankBranches, setAvailableBankBranches] = useState<string[]>([]);
+  const [availableBanks, setAvailableBanks] = useState<{locationName: string, ifscCode: string}[]>([]);
+  
+  // Modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddBankModal, setShowAddBankModal] = useState(false);
+  const [selectedInspectionForBank, setSelectedInspectionForBank] = useState<InspectionData | null>(null);
+  const [showWarehouseInspectionModal, setShowWarehouseInspectionModal] = useState(false);
+  const [selectedWarehouseInspection, setSelectedWarehouseInspection] = useState<WarehouseInspectionData | null>(null);
+  
+  // Bank form state for adding new bank to existing warehouse
+  const [bankFormData, setBankFormData] = useState({
+    bankState: '',
+    bankBranch: '',
+    bankName: '',
+    ifscCode: ''
+  });
+
+  // Add search state
+  const [searchTerm, setSearchTerm] = useState("");
+  // Filtered inspections
+  const filteredInspections = inspections.filter((inspection) => {
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return true;
+    return (
+      (inspection.state && inspection.state.toLowerCase().includes(search)) ||
+      (inspection.branch && inspection.branch.toLowerCase().includes(search)) ||
+      (inspection.location && inspection.location.toLowerCase().includes(search)) ||
+      (inspection.warehouseName && inspection.warehouseName.toLowerCase().includes(search)) ||
+      (inspection.receiptType && inspection.receiptType.toLowerCase().includes(search))
+    );
+  });
+
+  // Load data from Firebase on component mount
+  useEffect(() => {
+    loadBranchesData();
+    loadBanksData();
+    loadInspections();
+    loadWarehouseInspections();
+  }, []);
+
+  // Extract unique states from branches data
+  useEffect(() => {
+    if (branchesData.length > 0) {
+      const states = [...new Set(branchesData.map(branch => branch.state))];
+      setAvailableStates(states);
+    }
+  }, [branchesData]);
+
+  // Extract unique bank states from banks data
+  useEffect(() => {
+    if (banksData.length > 0) {
+      const states = [...new Set(banksData.map(bank => bank.state))];
+      setAvailableBankStates(states);
+    }
+  }, [banksData]);
+
+  // Update branches when state changes
+  useEffect(() => {
+    if (formData.state) {
+      const branchesInState = branchesData.filter(branch => branch.state === formData.state);
+      const branches = [...new Set(branchesInState.map(branch => branch.branch))];
+      setAvailableBranches(branches);
+      setFormData(prev => ({ ...prev, branch: '', location: '' }));
+    }
+  }, [formData.state, branchesData]);
+
+  // Update locations when branch changes
+  useEffect(() => {
+    if (formData.branch) {
+      const branchData = branchesData.find(branch => 
+        branch.state === formData.state && branch.branch === formData.branch
+      );
+      if (branchData) {
+        const locations = branchData.locations.map(loc => loc.locationName);
+        setAvailableLocations(locations);
+      }
+      setFormData(prev => ({ ...prev, location: '' }));
+    }
+  }, [formData.branch, formData.state, branchesData]);
+
+  // Update bank branches when bank state changes
+  useEffect(() => {
+    if (formData.bankState) {
+      const banksInState = banksData.filter(bank => bank.state === formData.bankState);
+      
+      // Get branch names from locations (green row level - BankLocation.branchName)
+      const branches: string[] = [];
+      banksInState.forEach(bank => {
+        bank.locations.forEach(location => {
+          if (location.branchName && location.branchName.trim() !== '') {
+            branches.push(location.branchName);
+          }
+        });
+      });
+      
+      // Remove duplicates
+      const uniqueBranches = [...new Set(branches)];
+      setAvailableBankBranches(uniqueBranches);
+      setFormData(prev => ({ ...prev, bankBranch: '', bankName: '', ifscCode: '' }));
+    }
+  }, [formData.bankState, banksData]);
+
+  // Update banks when bank branch changes
+  useEffect(() => {
+    if (formData.bankBranch) {
+      const banksInState = banksData.filter(bank => bank.state === formData.bankState);
+      
+      // Find banks that have locations with the selected branch name
+      const banksWithIFSC: {locationName: string, ifscCode: string}[] = [];
+      
+      banksInState.forEach(bank => {
+        // Check if this bank has a location with the selected branch name
+        const matchingLocations = bank.locations.filter(location => 
+          location.branchName === formData.bankBranch
+        );
+        
+        if (matchingLocations.length > 0) {
+          // Use the bank name from blue row and IFSC from the matching location
+          banksWithIFSC.push({
+            locationName: bank.bankName, // Using bankName from blue row
+            ifscCode: matchingLocations[0].ifscCode || ''
+          });
+        }
+      });
+      
+      setAvailableBanks(banksWithIFSC);
+      setFormData(prev => ({ ...prev, bankName: '', ifscCode: '' }));
+    }
+  }, [formData.bankBranch, formData.bankState, banksData]);
+
+  // Update IFSC when bank is selected
+  useEffect(() => {
+    if (formData.bankName) {
+      const selectedBank = availableBanks.find(bank => bank.locationName === formData.bankName);
+      setFormData(prev => ({ ...prev, ifscCode: selectedBank?.ifscCode || '' }));
+    }
+  }, [formData.bankName, availableBanks]);
+
+  // Bank form dropdown states
+  const [bankFormBankBranches, setBankFormBankBranches] = useState<string[]>([]);
+  const [bankFormBanks, setBankFormBanks] = useState<{locationName: string, ifscCode: string}[]>([]);
+
+  // Update bank branches when bank state changes (for bank form)
+  useEffect(() => {
+    if (bankFormData.bankState) {
+      const banksInState = banksData.filter(bank => bank.state === bankFormData.bankState);
+      
+      // Get branch names from locations
+      const branches: string[] = [];
+      banksInState.forEach(bank => {
+        bank.locations.forEach(location => {
+          if (location.branchName && location.branchName.trim() !== '') {
+            branches.push(location.branchName);
+          }
+        });
+      });
+      
+      const uniqueBranches = [...new Set(branches)];
+      setBankFormBankBranches(uniqueBranches);
+      setBankFormData(prev => ({ ...prev, bankBranch: '', bankName: '', ifscCode: '' }));
+    }
+  }, [bankFormData.bankState, banksData]);
+
+  // Update banks when bank branch changes (for bank form)
+  useEffect(() => {
+    if (bankFormData.bankBranch) {
+      const banksInState = banksData.filter(bank => bank.state === bankFormData.bankState);
+      
+      const banksWithIFSC: {locationName: string, ifscCode: string}[] = [];
+      
+      banksInState.forEach(bank => {
+        const matchingLocations = bank.locations.filter(location => 
+          location.branchName === bankFormData.bankBranch
+        );
+        
+        if (matchingLocations.length > 0) {
+          banksWithIFSC.push({
+            locationName: bank.bankName,
+            ifscCode: matchingLocations[0].ifscCode || ''
+          });
+        }
+      });
+      
+      setBankFormBanks(banksWithIFSC);
+      setBankFormData(prev => ({ ...prev, bankName: '', ifscCode: '' }));
+    }
+  }, [bankFormData.bankBranch, bankFormData.bankState, banksData]);
+
+  // Update IFSC when bank is selected (for bank form)
+  useEffect(() => {
+    if (bankFormData.bankName) {
+      const selectedBank = bankFormBanks.find(bank => bank.locationName === bankFormData.bankName);
+      setBankFormData(prev => ({ ...prev, ifscCode: selectedBank?.ifscCode || '' }));
+    }
+  }, [bankFormData.bankName, bankFormBanks]);
+
+  // Export to CSV function
+  const exportToCSV = () => {
+    if (inspections.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No inspections available to export",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const headers = [
+      'Inspection Code',
+      'Warehouse Code', 
+      'State',
+      'Branch',
+      'Location',
+      'Business Type',
+      'Warehouse Name',
+      'Bank State',
+      'Bank Branch',
+      'Bank Name',
+      'IFSC Code',
+      'Receipt Type',
+      'Created Date'
+    ];
+
+    const csvData = inspections.map(inspection => [
+      inspection.inspectionCode,
+      inspection.warehouseCode,
+      inspection.state,
+      inspection.branch,
+      inspection.location,
+      inspection.businessType.toUpperCase(),
+      inspection.warehouseName || '',
+      inspection.bankState,
+      inspection.bankBranch,
+      inspection.bankName,
+      inspection.ifscCode,
+      inspection.receiptType,
+      inspection.createdAt
+    ]);
+
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `inspections_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Export Successful",
+      description: `${inspections.length} inspections exported to CSV`,
+    });
+  };
+
+  const loadBranchesData = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'branches'));
+      const branches = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        locations: doc.data().locations || []
+      })) as BranchData[];
+      setBranchesData(branches);
+    } catch (error) {
+      console.error('Error loading branches:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load branches data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadBanksData = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'banks'));
+      const banks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        locations: doc.data().locations || []
+      })) as BankData[];
+      setBanksData(banks);
+    } catch (error) {
+      console.error('Error loading banks:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load banks data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadInspections = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'inspections'));
+      const inspectionsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as InspectionData[];
+      setInspections(inspectionsData);
+
+      // Extract existing warehouse names
+      const warehouses = inspectionsData
+        .filter(inspection => inspection.warehouseName)
+        .map(inspection => inspection.warehouseName!)
+        .filter((name, index, self) => self.indexOf(name) === index); // Remove duplicates
+      setExistingWarehouses(warehouses);
+    } catch (error) {
+      console.error('Error loading inspections:', error);
+    }
+  };
+
+  const loadWarehouseInspections = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'warehouse-inspections'));
+      const warehouseInspectionsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as WarehouseInspectionData[];
+      setWarehouseInspections(warehouseInspectionsData);
+    } catch (error) {
+      console.error('Error loading warehouse inspections:', error);
+    }
+  };
+
+  const generateCodes = () => {
+    const inspectionCount = inspections.length + 1;
+    const inspectionCode = `SUR-${inspectionCount.toString().padStart(4, '0')}`;
+    const warehouseCode = `WH-${inspectionCount.toString().padStart(4, '0')}`;
+    return { inspectionCode, warehouseCode };
+  };
+
+  // Get warehouse status for inspection
+  const getWarehouseStatus = (warehouseCode: string): 'pending' | 'submitted' | 'activated' | 'rejected' | 'resubmitted' | 'closed' => {
+    const warehouseInspection = warehouseInspections.find(wi => wi.warehouseCode === warehouseCode);
+    return warehouseInspection?.status || 'pending';
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      pending: { color: 'bg-yellow-100 text-yellow-800', label: 'Pending' },
+      submitted: { color: 'bg-blue-100 text-blue-800', label: 'Submitted' },
+      activated: { color: 'bg-green-100 text-green-800', label: 'Activated' },
+      rejected: { color: 'bg-red-100 text-red-800', label: 'Rejected' },
+      resubmitted: { color: 'bg-purple-100 text-purple-800', label: 'Resubmitted' },
+      closed: { color: 'bg-gray-100 text-gray-800', label: 'Closed' }
+    };
+    
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
+    
+    return (
+      <Badge className={`${config.color} cursor-pointer hover:opacity-80`}>
+        {config.label}
+      </Badge>
+    );
+  };
+
+  // Handle remarks click
+  const handleRemarksClick = (inspection: InspectionData) => {
+    const warehouseInspection = warehouseInspections.find(wi => wi.warehouseCode === inspection.warehouseCode);
+    if (warehouseInspection) {
+      setSelectedWarehouseInspection(warehouseInspection);
+      setShowWarehouseInspectionModal(true);
+    } else {
+      toast({
+        title: "No Inspection Found",
+        description: "No warehouse inspection form found for this warehouse",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle add bank button click
+  const handleAddBankClick = (inspection: InspectionData) => {
+    setSelectedInspectionForBank(inspection);
+    setBankFormData({
+      bankState: '',
+      bankBranch: '',
+      bankName: '',
+      ifscCode: ''
+    });
+    setShowAddBankModal(true);
+  };
+
+  // Handle bank form submission
+  const handleBankSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedInspectionForBank) return;
+
+    // Form validation for bank fields
+    const requiredBankFields = [
+      { field: bankFormData.bankState, name: 'Bank State' },
+      { field: bankFormData.bankBranch, name: 'Bank Branch' },
+      { field: bankFormData.bankName, name: 'Bank Name' },
+      { field: bankFormData.ifscCode, name: 'IFSC Code' }
+    ];
+
+    const missingFields = requiredBankFields.filter(item => !item.field || item.field.trim() === '');
+    
+    if (missingFields.length > 0) {
+      toast({
+        title: "Missing Required Fields",
+        description: `Please fill in: ${missingFields.map(f => f.name).join(', ')}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check for duplicate bank for the same warehouse
+    const duplicateBank = inspections.find(inspection => 
+      inspection.warehouseCode === selectedInspectionForBank.warehouseCode &&
+      inspection.bankState === bankFormData.bankState &&
+      inspection.bankBranch === bankFormData.bankBranch &&
+      inspection.bankName === bankFormData.bankName &&
+      inspection.ifscCode === bankFormData.ifscCode
+    );
+
+    if (duplicateBank) {
+      toast({
+        title: "Duplicate Bank Error",
+        description: `This bank (${bankFormData.bankName}) is already associated with warehouse ${selectedInspectionForBank.warehouseCode}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Generate new inspection code (increment from total inspections)
+      const newInspectionCode = `SUR-${(inspections.length + 1).toString().padStart(4, '0')}`;
+      
+      // Create new inspection with same warehouse details but new bank
+      const newInspection: Omit<InspectionData, 'id'> = {
+        inspectionCode: newInspectionCode,
+        warehouseCode: selectedInspectionForBank.warehouseCode, // Same warehouse code
+        state: selectedInspectionForBank.state,
+        branch: selectedInspectionForBank.branch,
+        location: selectedInspectionForBank.location,
+        businessType: selectedInspectionForBank.businessType,
+        warehouseStatus: selectedInspectionForBank.warehouseStatus,
+        warehouseName: selectedInspectionForBank.warehouseName,
+        bankState: bankFormData.bankState,
+        bankBranch: bankFormData.bankBranch,
+        bankName: bankFormData.bankName,
+        ifscCode: bankFormData.ifscCode,
+        receiptType: selectedInspectionForBank.receiptType,
+        createdAt: new Date().toISOString()
+      };
+
+      // Save to Firebase
+      const docRef = await addDoc(collection(db, 'inspections'), newInspection);
+      
+      // Update local state
+      const savedInspection: InspectionData = {
+        id: docRef.id,
+        ...newInspection,
+        createdAt: new Date().toLocaleDateString()
+      };
+      
+      // Find the index of the original inspection and insert the new one right after it
+      const originalIndex = inspections.findIndex(insp => insp.id === selectedInspectionForBank.id);
+      const newInspections = [...inspections];
+      newInspections.splice(originalIndex + 1, 0, savedInspection);
+      setInspections(newInspections);
+
+      toast({
+        title: "Success!",
+        description: `New inspection ${newInspectionCode} added with different bank`,
+      });
+
+      // Close modal and reset form
+      setShowAddBankModal(false);
+      setBankFormData({
+        bankState: '',
+        bankBranch: '',
+        bankName: '',
+        ifscCode: ''
+      });
+      setSelectedInspectionForBank(null);
+
+    } catch (error) {
+      console.error('Error adding bank to inspection:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add bank to inspection",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Form validation - check all required fields
+    const requiredFields = [
+      { field: formData.state, name: 'State' },
+      { field: formData.branch, name: 'Branch' },
+      { field: formData.location, name: 'Location' },
+      { field: formData.businessType, name: 'Business Type' },
+      { field: formData.warehouseStatus, name: 'Warehouse Status' },
+      { field: formData.bankState, name: 'Bank State' },
+      { field: formData.bankBranch, name: 'Bank Branch' },
+      { field: formData.bankName, name: 'Bank Name' },
+      { field: formData.ifscCode, name: 'IFSC Code' },
+      { field: formData.receiptType, name: 'Receipt Type' }
+    ];
+
+    // Check warehouse name based on status
+    if (formData.warehouseStatus === 'new') {
+      requiredFields.push({ field: formData.warehouseName, name: 'Warehouse Name' });
+    } else if (formData.warehouseStatus === 'existing') {
+      requiredFields.push({ field: formData.existingWarehouse, name: 'Existing Warehouse' });
+    }
+
+    // Find missing fields
+    const missingFields = requiredFields.filter(item => !item.field || item.field.trim() === '');
+    
+    if (missingFields.length > 0) {
+      toast({
+        title: "Missing Required Fields",
+        description: `Please fill in: ${missingFields.map(f => f.name).join(', ')}`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const { inspectionCode, warehouseCode } = generateCodes();
+      
+      const newInspection: Omit<InspectionData, 'id'> = {
+        inspectionCode,
+        warehouseCode,
+        state: formData.state,
+        branch: formData.branch,
+        location: formData.location,
+        businessType: formData.businessType,
+        warehouseStatus: formData.warehouseStatus,
+        warehouseName: formData.warehouseStatus === 'new' ? formData.warehouseName : formData.existingWarehouse,
+        bankState: formData.bankState,
+        bankBranch: formData.bankBranch,
+        bankName: formData.bankName,
+        ifscCode: formData.ifscCode,
+        receiptType: formData.receiptType,
+        createdAt: new Date().toISOString()
+      };
+
+      // Save to Firebase
+      const docRef = await addDoc(collection(db, 'inspections'), newInspection);
+      
+      // Update local state
+      const savedInspection: InspectionData = {
+        id: docRef.id,
+        ...newInspection,
+        createdAt: new Date().toLocaleDateString()
+      };
+      
+      setInspections(prev => [...prev, savedInspection]);
+
+      // If new warehouse, add to existing warehouses list
+      if (formData.warehouseStatus === 'new' && formData.warehouseName) {
+        setExistingWarehouses(prev => [...prev, formData.warehouseName]);
+      }
+
+      // Reset form
+      setFormData({
+        state: '',
+        branch: '',
+        location: '',
+        businessType: '',
+        warehouseStatus: '',
+        warehouseName: '',
+        existingWarehouse: '',
+        bankState: '',
+        bankBranch: '',
+        bankName: '',
+        ifscCode: '',
+        receiptType: ''
+      });
+
+      toast({
+        title: "Success!",
+        description: `Inspection ${inspectionCode} created successfully`,
+      });
+
+      // Close modal after successful submission
+      setShowAddModal(false);
+
+    } catch (error) {
+      console.error('Error creating inspection:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create inspection",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      // Delete from Firebase database
+      await deleteDoc(doc(db, 'inspections', id));
+      
+      // Update local state
+      setInspections(prev => prev.filter(inspection => inspection.id !== id));
+      
+      toast({
+        title: "Deleted",
+        description: "Inspection deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting inspection:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete inspection",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-8">
+        {/* Header with Back Button and Centered Title */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={() => router.back()}
+              className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+            >
+              ← Dashboard
+            </button>
+          </div>
+          
+          {/* Centered Title with Light Orange Background */}
+          <div className="flex-1 text-center">
+            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+              Inspection Creation
+            </h1>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex space-x-2">
+            <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+              <DialogTrigger asChild>
+                <Button className="bg-green-500 hover:bg-green-600 text-white">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add New Inspection
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center">
+                    <ClipboardCheck className="mr-2 h-5 w-5" />
+                    New Inspection Survey
+                  </DialogTitle>
+                  <DialogDescription>
+                    Fill out the details below to create a new inspection survey.
+                  </DialogDescription>
+                </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Location Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Location Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State <span className="text-red-500">*</span></Label>
+                    <Select value={formData.state} onValueChange={(value) => setFormData(prev => ({ ...prev, state: value }))} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select State" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableStates.filter(state => state && state.trim() !== '').map(state => (
+                          <SelectItem key={state} value={state}>{state}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="branch">Branch <span className="text-red-500">*</span></Label>
+                    <Select value={formData.branch} onValueChange={(value) => setFormData(prev => ({ ...prev, branch: value }))} disabled={!formData.state} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableBranches.filter(branch => branch && branch.trim() !== '').map(branch => (
+                          <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location <span className="text-red-500">*</span></Label>
+                    <Select value={formData.location} onValueChange={(value) => setFormData(prev => ({ ...prev, location: value }))} disabled={!formData.branch} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableLocations.filter(location => location && location.trim() !== '').map(location => (
+                          <SelectItem key={location} value={location}>{location}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Business Details */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Business Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="businessType">Type of Business <span className="text-red-500">*</span></Label>
+                    <Select value={formData.businessType} onValueChange={(value) => setFormData(prev => ({ ...prev, businessType: value }))} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Business Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cm">Collateral Management (CM)</SelectItem>
+                        <SelectItem value="pwh">Professional Warehousing (PWH)</SelectItem>
+                        <SelectItem value="ncdex">NCDEX</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="warehouseStatus">Warehouse Status <span className="text-red-500">*</span></Label>
+                    <Select value={formData.warehouseStatus} onValueChange={(value) => setFormData(prev => ({ ...prev, warehouseStatus: value }))} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="new">New</SelectItem>
+                        <SelectItem value="existing">Existing</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {formData.warehouseStatus === 'new' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="warehouseName">Warehouse Name <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="warehouseName"
+                      value={formData.warehouseName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, warehouseName: e.target.value }))}
+                      placeholder="Enter warehouse name"
+                      required
+                    />
+                  </div>
+                )}
+
+                {formData.warehouseStatus === 'existing' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="existingWarehouse">Select Existing Warehouse <span className="text-red-500">*</span></Label>
+                    <Select value={formData.existingWarehouse} onValueChange={(value) => setFormData(prev => ({ ...prev, existingWarehouse: value }))} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Warehouse" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {existingWarehouses.filter(warehouse => warehouse && warehouse.trim() !== '').map(warehouse => (
+                          <SelectItem key={warehouse} value={warehouse}>{warehouse}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {/* Bank Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Bank Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bankState">Bank State <span className="text-red-500">*</span></Label>
+                    <Select value={formData.bankState} onValueChange={(value) => setFormData(prev => ({ ...prev, bankState: value }))} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select State" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableBankStates.filter(state => state && state.trim() !== '').map(state => (
+                          <SelectItem key={state} value={state}>{state}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bankBranch">Bank Branch <span className="text-red-500">*</span></Label>
+                    <Select value={formData.bankBranch} onValueChange={(value) => setFormData(prev => ({ ...prev, bankBranch: value }))} disabled={!formData.bankState} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableBankBranches.filter(branch => branch && branch.trim() !== '').map(branch => (
+                          <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bankName">Bank Name <span className="text-red-500">*</span></Label>
+                    <Select value={formData.bankName} onValueChange={(value) => setFormData(prev => ({ ...prev, bankName: value }))} disabled={!formData.bankBranch} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Bank" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableBanks.filter(bank => bank.locationName && bank.locationName.trim() !== '').map(bank => (
+                          <SelectItem key={bank.locationName} value={bank.locationName}>{bank.locationName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ifscCode">IFSC Code</Label>
+                    <Input
+                      id="ifscCode"
+                      value={formData.ifscCode}
+                      readOnly
+                      placeholder="Auto-filled"
+                      className="bg-gray-50"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Receipt Type */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Receipt Details</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="receiptType">Receipt Type <span className="text-red-500">*</span></Label>
+                  <Select value={formData.receiptType} onValueChange={(value) => setFormData(prev => ({ ...prev, receiptType: value }))} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Receipt Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="storage">Storage Receipt</SelectItem>
+                      <SelectItem value="warehouse">Warehouse Receipt</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+                <Button type="submit" className="w-full">
+                  Create Inspection
+                </Button>
+              </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        {/* Search & Export Options */}
+        <Card className="border-green-300 mb-8">
+          <CardHeader className="bg-green-50">
+            <CardTitle className="text-green-700">Search & Export Options</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center space-x-2 flex-1 min-w-[300px]">
+                <Search className="w-5 h-5 text-green-600" />
+                <Label htmlFor="searchTerm" className="text-green-600 font-medium whitespace-nowrap">Search:</Label>
+                <Input
+                  id="searchTerm"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Search by State, Branch, Location, Warehouse Name, or Receipt Type..."
+                  className="border-green-300 focus:border-green-500 flex-1"
+                />
+              </div>
+              <Button className="bg-blue-500 hover:bg-blue-600 text-white whitespace-nowrap" onClick={exportToCSV}>
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Inspections Table */}
+        {inspections.length > 0 && (
+          <Card className="border-green-300">
+            <CardHeader className="bg-green-50">
+              <CardTitle className="text-green-700">Created Inspections</CardTitle>
+              <CardDescription className="text-green-600">
+                All created inspection surveys with their details and actions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div 
+                className="overflow-x-auto relative"
+                style={{
+                  backgroundImage: `
+                    radial-gradient(circle at 25% 25%, rgba(34, 197, 94, 0.03) 0%, transparent 50%),
+                    radial-gradient(circle at 75% 75%, rgba(249, 115, 22, 0.03) 0%, transparent 50%),
+                    linear-gradient(135deg, rgba(34, 197, 94, 0.01) 0%, rgba(249, 115, 22, 0.01) 100%)
+                  `,
+                  backgroundSize: '400px 400px, 300px 300px, 100% 100%',
+                  backgroundPosition: '0% 0%, 100% 100%, 0% 0%',
+                  backgroundRepeat: 'no-repeat, no-repeat, no-repeat'
+                }}
+              >
+                <Table className="border-collapse">
+                  <TableHeader>
+                    <TableRow className="bg-orange-50 border-b-2 border-orange-200">
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Inspection Code</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Warehouse Code</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">State</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Branch</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Location</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Business Type</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Warehouse Name</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Bank State</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Bank Branch</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Bank Name</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">IFSC Code</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Receipt Type</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap">Created</TableHead>
+                      <TableHead className="text-orange-700 font-semibold text-center p-2 whitespace-nowrap">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredInspections.map((inspection) => (
+                      <TableRow key={inspection.id} className="hover:bg-green-50 border-b border-gray-200">
+                        <TableCell className="text-green-700 font-bold border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.inspectionCode}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.warehouseCode}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.state}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.branch}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.location}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.businessType.toUpperCase()}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.warehouseName}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.bankState}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.bankBranch}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.bankName}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.ifscCode}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.receiptType}</TableCell>
+                        <TableCell className="text-green-700 border-r border-gray-300 text-center p-2 whitespace-nowrap">{inspection.createdAt}</TableCell>
+                        <TableCell className="text-center p-2">
+                          <div className="flex space-x-2 justify-center">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleAddBankClick(inspection)}
+                              className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                              title="Add Bank"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Add Bank Dialog */}
+        <Dialog open={showAddBankModal} onOpenChange={setShowAddBankModal}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <Plus className="mr-2 h-5 w-5 text-blue-600" />
+                Add Bank to Warehouse: {selectedInspectionForBank?.warehouseCode}
+              </DialogTitle>
+              <DialogDescription>
+                Add a new bank for the existing warehouse. This will create a new inspection with the same warehouse details.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <form onSubmit={handleBankSubmit} className="space-y-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Bank Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bankState">Bank State <span className="text-red-500">*</span></Label>
+                    <Select 
+                      value={bankFormData.bankState} 
+                      onValueChange={(value) => setBankFormData(prev => ({ ...prev, bankState: value }))} 
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select State" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableBankStates.filter(state => state && state.trim() !== '').map(state => (
+                          <SelectItem key={state} value={state}>{state}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bankBranch">Bank Branch <span className="text-red-500">*</span></Label>
+                    <Select 
+                      value={bankFormData.bankBranch} 
+                      onValueChange={(value) => setBankFormData(prev => ({ ...prev, bankBranch: value }))} 
+                      disabled={!bankFormData.bankState} 
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {bankFormBankBranches.filter(branch => branch && branch.trim() !== '').map(branch => (
+                          <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bankName">Bank Name <span className="text-red-500">*</span></Label>
+                    <Select 
+                      value={bankFormData.bankName} 
+                      onValueChange={(value) => setBankFormData(prev => ({ ...prev, bankName: value }))} 
+                      disabled={!bankFormData.bankBranch} 
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Bank" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {bankFormBanks.filter(bank => bank.locationName && bank.locationName.trim() !== '').map(bank => (
+                          <SelectItem key={bank.locationName} value={bank.locationName}>{bank.locationName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ifscCode">IFSC Code</Label>
+                    <Input
+                      id="ifscCode"
+                      value={bankFormData.ifscCode}
+                      readOnly
+                      placeholder="Auto-filled"
+                      className="bg-gray-50"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowAddBankModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-blue-500 hover:bg-blue-600">
+                  Add Bank
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Warehouse Inspection Details Modal */}
+        <Dialog open={showWarehouseInspectionModal} onOpenChange={setShowWarehouseInspectionModal}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <Eye className="mr-2 h-5 w-5 text-green-600" />
+                Warehouse Inspection Details: {selectedWarehouseInspection?.warehouseCode}
+              </DialogTitle>
+              <DialogDescription>
+                View the detailed warehouse inspection form for {selectedWarehouseInspection?.warehouseName}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedWarehouseInspection && (
+              <div className="space-y-6">
+                {/* Status Badge */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium">Status:</span>
+                    {getStatusBadge(selectedWarehouseInspection.status)}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // Navigate to warehouse creation page with this inspection
+                      router.push('/surveys/warehouse-creation');
+                    }}
+                    className="bg-blue-50 text-blue-600 border-blue-300 hover:bg-blue-100"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    View in Warehouse Creation
+                  </Button>
+                </div>
+
+                {/* Basic Information */}
+                <Card className="border-green-300">
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">Basic Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="font-medium">Warehouse Name:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseName}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Warehouse Code:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseCode}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Type of Warehouse:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.typeOfWarehouse}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Date of Inspection:</Label>
+                        <p className="text-gray-700">
+                          {selectedWarehouseInspection.dateOfInspection ? 
+                            new Date(selectedWarehouseInspection.dateOfInspection).toLocaleDateString() : 
+                            'N/A'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Address */}
+                {selectedWarehouseInspection.address && (
+                  <Card className="border-green-300">
+                    <CardHeader className="bg-green-50">
+                      <CardTitle className="text-green-700">Address</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <p className="text-gray-700">{selectedWarehouseInspection.address}</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Bank Details */}
+                <Card className="border-green-300">
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">Bank Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="font-medium">Bank State:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.bankState}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Bank Branch:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.bankBranch}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Bank Name:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.bankName}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">IFSC Code:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.ifscCode}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Warehouse Dimensions */}
+                <Card className="border-green-300">
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">Warehouse Dimensions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label className="font-medium">Length (sq ft):</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseLength}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Breadth (sq ft):</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseBreadth}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Height (sq ft):</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.warehouseHeight}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Capacity (MT):</Label>
+                        <p className="text-gray-700 font-semibold text-green-600">
+                          {selectedWarehouseInspection.warehouseCapacity}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Construction Year:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.constructionYear}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Total Chambers:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.totalChambers}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* OE Details */}
+                <Card className="border-green-300">
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">OE Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="font-medium">Name of OE:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.nameOfOE}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Contact Number:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.contactNumber}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Place:</Label>
+                        <p className="text-gray-700">{selectedWarehouseInspection.place}</p>
+                      </div>
+                      <div>
+                        <Label className="font-medium">Date:</Label>
+                        <p className="text-gray-700">
+                          {selectedWarehouseInspection.oeDate ? 
+                            new Date(selectedWarehouseInspection.oeDate).toLocaleDateString() : 
+                            'N/A'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="flex justify-end">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowWarehouseInspectionModal(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    </DashboardLayout>
+  );
+} 
