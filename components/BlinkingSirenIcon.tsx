@@ -20,7 +20,7 @@ const SIREN_COLORS = {
   },
 };
 
-export const BlinkingSirenIcon: React.FC<BlinkingSirenIconProps> = ({ color = 'red', size = 32, className = '' }) => {
+const BlinkingSirenIcon: React.FC<BlinkingSirenIconProps> = ({ color = 'red', size = 32, className = '' }) => {
   const colors = SIREN_COLORS[color];
   return (
     <span className={`relative inline-block align-middle ${className}`} style={{ width: size, height: size }}>

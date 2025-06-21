@@ -33,6 +33,8 @@ export default function InwardPage() {
   const [insuranceData, setInsuranceData] = useState<any[]>([]);
   const [inwardEntries, setInwardEntries] = useState<any[]>([]);
   const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
+  const { toast } = useToast();
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Form state
   const [baseForm, setBaseForm] = useState({
@@ -894,10 +896,20 @@ export default function InwardPage() {
     { accessorKey: "insuranceManagedBy", header: "Insurance Managed By" },
   ];
 
+  const filteredData = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    if (!term) return inwardData;
+    return inwardData.filter((i: any) =>
+      Object.values(i).some((val: any) =>
+        String(val).toLowerCase().includes(term)
+      )
+    );
+  }, [searchTerm, inwardData]);
+
   return (
     <DashboardLayout>
       {/* Module title and dashboard button row */}
-      <div className="flex items-center justify-between mt-10 mb-10 px-8">
+      <div className="flex items-center justify-between mt-4 mb-10 px-8">
         <Button className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 text-2xl font-semibold shadow-lg rounded-xl flex items-center gap-2" onClick={() => router.push('/dashboard')}>
           <span className="text-2xl">&#8592;</span> Dashboard
         </Button>
@@ -913,7 +925,22 @@ export default function InwardPage() {
       
       {/* Data Table */}
       <div className="px-8">
-        <DataTable columns={columns} data={inwardData} searchKey="inwardId" />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-green-700 text-xl">Inward Entries</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DataTable
+              columns={columns}
+              data={filteredData}
+              isLoading={loading}
+              error={error || undefined}
+              wrapperClassName="border-green-300"
+              headClassName="bg-orange-100 text-orange-600 font-bold"
+              cellClassName="text-green-800"
+            />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Add Inward Modal */}

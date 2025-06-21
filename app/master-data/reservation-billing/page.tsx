@@ -18,7 +18,7 @@ import { DataTable } from '@/components/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import React from 'react';
 import { CSVLink } from 'react-csv';
-import { BlinkingSirenIcon } from '@/components/BlinkingSirenIcon';
+import BlinkingSirenIcon from '@/components/BlinkingSirenIcon';
 
 const indianStates = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", 
@@ -89,6 +89,7 @@ export default function ReservationBillingPage() {
 
   const [addBillingDialog, setAddBillingDialog] = useState<{ open: boolean, row: Reservation | null }>({ open: false, row: null });
   const [addBillingForm, setAddBillingForm] = useState({ billingCycle: '', billingType: '', billingRate: '' });
+  const [showCustomError, setShowCustomError] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -132,6 +133,15 @@ export default function ReservationBillingPage() {
           row.id = doc.id;
           return row;
         });
+        
+        reservationData.sort((a, b) => {
+          const idA = a.reservationId || '';
+          const idB = b.reservationId || '';
+          const numA = parseInt(idA.split('-')[1] || '0');
+          const numB = parseInt(idB.split('-')[1] || '0');
+          return numA - numB;
+        });
+
         setReservations(reservationData);
         
       } catch (err) {
@@ -347,11 +357,9 @@ export default function ReservationBillingPage() {
     if (!addBillingDialog.row) return;
 
     if (addBillingForm.billingCycle === addBillingDialog.row.billingCycle && addBillingForm.billingType === addBillingDialog.row.billingType) {
-      return toast({
-        title: "Validation Error",
-        description: "Billing Cycle and Billing Type cannot be the same as the previous entry.",
-        variant: "destructive",
-      });
+      setShowCustomError(true);
+      setTimeout(() => setShowCustomError(false), 3000);
+      return;
     }
 
     try {
@@ -510,7 +518,17 @@ export default function ReservationBillingPage() {
           </div>
         </div>
 
-        <DataTable columns={reservationColumns} data={filteredReservations} isLoading={loading} error={error} />
+        <CardContent>
+          <DataTable
+            columns={reservationColumns}
+            data={filteredReservations}
+            isLoading={loading}
+            error={error}
+            wrapperClassName="border-green-300"
+            headClassName="bg-orange-100 text-orange-600 font-bold"
+            cellClassName="text-green-800"
+          />
+        </CardContent>
 
         <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
           Reservation + Billing rate content will appear here.
@@ -787,6 +805,12 @@ export default function ReservationBillingPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {showCustomError && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white px-6 py-3 rounded-lg shadow-lg z-[9999]">
+            <p className="text-red-600">Billing Cycle and Billing Type cannot be the same as the previous entry.</p>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

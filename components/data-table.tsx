@@ -26,12 +26,16 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { cn } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading?: boolean;
   error?: string;
+  wrapperClassName?: string;
+  headClassName?: string;
+  cellClassName?: string;
 }
 
 export function DataTable<TData, TValue>({
@@ -39,6 +43,9 @@ export function DataTable<TData, TValue>({
   data,
   isLoading,
   error,
+  wrapperClassName,
+  headClassName,
+  cellClassName,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -78,14 +85,14 @@ export function DataTable<TData, TValue>({
 
   return (
     <div>
-      <div className="rounded-md border">
+      <div className={cn("rounded-md border", wrapperClassName)}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} className={headClassName}>
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -106,7 +113,7 @@ export function DataTable<TData, TValue>({
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className={cellClassName}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}

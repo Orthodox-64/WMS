@@ -259,7 +259,15 @@ export default function InsuranceMasterPage() {
   useEffect(() => {
     const fetchInsurance = async () => {
       const snap = await getDocs(collection(db, 'insurance'));
-      setInsuranceData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const data: any[] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      data.sort((a, b) => {
+        const idA = a.insuranceId || '';
+        const idB = b.insuranceId || '';
+        const numA = parseInt(idA.split('-')[1] || '0');
+        const numB = parseInt(idB.split('-')[1] || '0');
+        return numA - numB;
+      });
+      setInsuranceData(data);
     };
     fetchInsurance();
   }, [showAddModal]);
@@ -440,11 +448,17 @@ export default function InsuranceMasterPage() {
               <CardTitle className="text-green-700"></CardTitle>
             </CardHeader> */}
             <CardContent className="overflow-x-auto p-0">
-              <DataTable columns={columns.map(col => ({
-                accessorKey: col.key,
-                header: col.label,
-                cell: ({ row }: { row: any }) => renderCell(row.original || row, col, banks),
-              }))} data={filteredInsuranceData} />
+              <DataTable
+                columns={columns.map((c) => ({
+                  accessorKey: c.key,
+                  header: c.label,
+                  cell: ({ row }: any) => renderCell(row.original, c, banks),
+                }))}
+                data={filteredInsuranceData}
+                wrapperClassName="border-green-300"
+                headClassName="bg-orange-100 text-orange-600 font-bold"
+                cellClassName="text-green-800"
+              />
             </CardContent>
           </Card>
         )}
