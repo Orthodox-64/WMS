@@ -2,10 +2,10 @@ import * as admin from 'firebase-admin';
 
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(
-{
+//     credential: admin.credential.cert(
+// {
   
-} as any)
+// } as any)
   });
 }
 
