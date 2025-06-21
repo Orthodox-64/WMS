@@ -42,6 +42,20 @@ const masterDataModules = [
     color: "text-orange-500",
     description: "Manage branch and location data"
   },
+  {
+    title: "Reservation + Billing",
+    icon: Building2,
+    href: "/master-data/reservation-billing",
+    color: "text-pink-500",
+    description: "Manage reservation and billing rates"
+  },
+  {
+    title: "Insurance Master",
+    icon: Package,
+    href: "/master-data/insurance-master",
+    color: "text-yellow-500",
+    description: "Manage insurance master rates and details"
+  },
 ];
 
 export default function MasterDataPage() {
