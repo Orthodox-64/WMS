@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Search, Download, Plus, Edit, Trash2 } from "lucide-react";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader as DialogHeaderUI, DialogTitle as DialogTitleUI } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -50,6 +50,8 @@ export default function InsuranceMasterPage() {
     burglaryPolicyAmount: '',
     burglaryPolicyStart: '',
     burglaryPolicyEnd: '',
+    firePolicyCompanyName: '',
+    burglaryPolicyCompanyName: '',
     clientName: '',
     clientId: '',
     bankFundedBy: '',
@@ -77,15 +79,23 @@ export default function InsuranceMasterPage() {
     { key: 'burglaryPolicyAmount', label: 'Burglary Policy Amt.' },
     { key: 'burglaryPolicyStart', label: 'Burglary Policy Start' },
     { key: 'burglaryPolicyEnd', label: 'Burglary Policy End' },
+    { key: 'firePolicyCompanyName', label: 'Fire Policy Company' },
+    { key: 'burglaryPolicyCompanyName', label: 'Burglary Policy Company' },
     { key: 'clientName', label: 'Client Name' },
     { key: 'clientId', label: 'Client Code' },
     { key: 'bankFundedBy', label: 'Bank Funded By' },
     { key: 'actions', label: 'Actions' },
   ];
 
+  const fetchInsurance = useCallback(async () => {
+    const snap = await getDocs(collection(db, 'insurance'));
+    const data = snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    setInsuranceData(data);
+  }, []);
+
   // Fetch all data on modal open
   useEffect(() => {
-    if (!showAddModal) return;
+    if (!showAddModal && !editRow) return;
     const fetchData = async () => {
       // States
       setStates([
@@ -110,7 +120,8 @@ export default function InsuranceMasterPage() {
       setWarehouses(inspectionSnap.docs.map(doc => doc.data()));
     };
     fetchData();
-  }, [showAddModal]);
+    fetchInsurance();
+  }, [showAddModal, editRow, fetchInsurance]);
 
   // Fetch banks on page load
   useEffect(() => {
@@ -207,11 +218,10 @@ export default function InsuranceMasterPage() {
       if (editRow) {
         // Only update fire/burglary policy fields
         const updateFields: any = {};
-        ['firePolicyNumber','firePolicyAmount','firePolicyStart','firePolicyEnd','burglaryPolicyNumber','burglaryPolicyAmount','burglaryPolicyStart','burglaryPolicyEnd'].forEach(key => {
+        ['firePolicyNumber','firePolicyAmount','firePolicyStart','firePolicyEnd','burglaryPolicyNumber','burglaryPolicyAmount','burglaryPolicyStart','burglaryPolicyEnd', 'firePolicyCompanyName', 'burglaryPolicyCompanyName'].forEach(key => {
           updateFields[key] = form[key] === '' || form[key] === null || form[key] === undefined ? '-' : form[key];
         });
         await updateDoc(doc(db, 'insurance', editRow.id), updateFields);
-        setInsuranceData(data => data.map((r: any) => r.id === editRow.id ? { ...r, ...updateFields } : r));
         toast({ title: 'Insurance updated successfully!', variant: 'default' });
       } else {
         // Add new
@@ -228,10 +238,11 @@ export default function InsuranceMasterPage() {
         await addDoc(collection(db, 'insurance'), dataToSave);
         toast({ title: 'Insurance added successfully!', variant: 'default' });
       }
+      fetchInsurance();
       setShowAddModal(false);
       setEditRow(null);
       setForm({
-        state: '', branch: '', location: '', warehouse: '', commodities: [], banks: [], insuranceManagedBy: '', firePolicyNumber: '', firePolicyAmount: '', firePolicyStart: '', firePolicyEnd: '', burglaryPolicyNumber: '', burglaryPolicyAmount: '', burglaryPolicyStart: '', burglaryPolicyEnd: '', clientName: '', clientId: '', bankFundedBy: '',
+        state: '', branch: '', location: '', warehouse: '', commodities: [], banks: [], insuranceManagedBy: '', firePolicyNumber: '', firePolicyAmount: '', firePolicyStart: '', firePolicyEnd: '', burglaryPolicyNumber: '', burglaryPolicyAmount: '', burglaryPolicyStart: '', burglaryPolicyEnd: '', clientName: '', clientId: '', bankFundedBy: '', firePolicyCompanyName: '', burglaryPolicyCompanyName: '',
       });
     } catch (err) {
       toast({ title: 'Error saving insurance', description: String(err), variant: 'destructive' });
@@ -250,26 +261,9 @@ export default function InsuranceMasterPage() {
     if (!showAddModal) {
       setEditRow(null);
       setForm({
-        state: '', branch: '', location: '', warehouse: '', commodities: [], banks: [], insuranceManagedBy: '', firePolicyNumber: '', firePolicyAmount: '', firePolicyStart: '', firePolicyEnd: '', burglaryPolicyNumber: '', burglaryPolicyAmount: '', burglaryPolicyStart: '', burglaryPolicyEnd: '', clientName: '', clientId: '', bankFundedBy: '',
+        state: '', branch: '', location: '', warehouse: '', commodities: [], banks: [], insuranceManagedBy: '', firePolicyNumber: '', firePolicyAmount: '', firePolicyStart: '', firePolicyEnd: '', burglaryPolicyNumber: '', burglaryPolicyAmount: '', burglaryPolicyStart: '', burglaryPolicyEnd: '', clientName: '', clientId: '', bankFundedBy: '', firePolicyCompanyName: '', burglaryPolicyCompanyName: '',
       });
     }
-  }, [showAddModal]);
-
-  // Insurance data state
-  useEffect(() => {
-    const fetchInsurance = async () => {
-      const snap = await getDocs(collection(db, 'insurance'));
-      const data: any[] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      data.sort((a, b) => {
-        const idA = a.insuranceId || '';
-        const idB = b.insuranceId || '';
-        const numA = parseInt(idA.split('-')[1] || '0');
-        const numB = parseInt(idB.split('-')[1] || '0');
-        return numA - numB;
-      });
-      setInsuranceData(data);
-    };
-    fetchInsurance();
   }, [showAddModal]);
 
   // Helper to get bank name from bankId
@@ -298,7 +292,7 @@ export default function InsuranceMasterPage() {
           <button className="p-2 rounded bg-red-100 hover:bg-red-200 text-red-600" onClick={async () => {
             if (window.confirm('Are you sure you want to delete this insurance record?')) {
               await deleteDoc(doc(db, 'insurance', row.id));
-              setInsuranceData(data => data.filter((r: any) => r.id !== row.id));
+              fetchInsurance();
             }
           }}><Trash2 size={18} /></button>
         </div>
@@ -638,6 +632,10 @@ export default function InsuranceMasterPage() {
                       <Label className="text-green-600 font-medium">Fire Policy End Date</Label>
                       <Input type="date" value={form.firePolicyEnd} onChange={e => handleChange('firePolicyEnd', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
                     </div>
+                    <div>
+                      <Label htmlFor="firePolicyCompanyName">Fire Policy Company Name</Label>
+                      <Input id="firePolicyCompanyName" value={form.firePolicyCompanyName} onChange={e => handleChange('firePolicyCompanyName', e.target.value)} />
+                    </div>
                     {/* Burglary Policy */}
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Burglary Policy Number</Label>
@@ -654,6 +652,10 @@ export default function InsuranceMasterPage() {
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Burglary Policy End Date</Label>
                       <Input type="date" value={form.burglaryPolicyEnd} onChange={e => handleChange('burglaryPolicyEnd', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    </div>
+                    <div>
+                      <Label htmlFor="burglaryPolicyCompanyName">Burglary Policy Company Name</Label>
+                      <Input id="burglaryPolicyCompanyName" value={form.burglaryPolicyCompanyName} onChange={e => handleChange('burglaryPolicyCompanyName', e.target.value)} />
                     </div>
                   </>
                 )}
