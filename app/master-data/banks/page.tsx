@@ -34,7 +34,7 @@ interface BankLocation {
 interface BankData {
   id?: string;
   bankId: string;
-  bankName: string;
+  bankName?: string;
   state: string;
   branch: string;
   locations: BankLocation[];
@@ -52,7 +52,6 @@ export default function BankModulePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<BankData>({
     bankId: '',
-    bankName: '',
     state: '',
     branch: '',
     locations: [],
@@ -137,7 +136,6 @@ export default function BankModulePage() {
 
     const searchLower = searchTerm.toLowerCase();
     const filtered = banks.filter(bank =>
-      bank.bankName.toLowerCase().includes(searchLower) ||
       bank.branch.toLowerCase().includes(searchLower) ||
       bank.state.toLowerCase().includes(searchLower) ||
       bank.bankId.toLowerCase().includes(searchLower) ||
@@ -174,7 +172,7 @@ export default function BankModulePage() {
         // Bank without locations
         csvData.push([
           '-',
-          bank.bankName,
+          bank.state,
           bank.state,
           '-',
           '',
@@ -410,7 +408,7 @@ export default function BankModulePage() {
         await updateDoc(doc(db, 'banks', editingId), bankData);
         setSuccessMessage({
           title: "Bank Updated Successfully! 🎉",
-          description: `${formData.bankName} has been updated in the system.`
+          description: `Bank in ${formData.state} has been updated in the system.`
         });
       } else {
         // Add new bank
@@ -420,7 +418,7 @@ export default function BankModulePage() {
         await addDoc(collection(db, 'banks'), newBankData);
         setSuccessMessage({
           title: "New Bank Added Successfully! 🎉",
-          description: `${formData.bankName} has been registered with Bank ID: ${newBankId}. You can now add locations to this bank.`
+          description: `Bank in ${formData.state} has been registered with Bank ID: ${newBankId}. You can now add locations to this bank.`
         });
       }
 
@@ -430,7 +428,6 @@ export default function BankModulePage() {
       setShowAddBankModal(false);
       setFormData({
         bankId: '',
-        bankName: '',
         state: '',
         branch: '',
         locations: [],
@@ -509,6 +506,27 @@ export default function BankModulePage() {
       return;
     }
     
+    // Check if IFSC code already exists (uniqueness validation)
+    const isDuplicateIFSC = banks.some(bank => 
+      bank.locations.some(location => {
+        // Skip the current location if we're editing
+        if (isEditingLocation && editingLocationId && location.locationId === editingLocationId) {
+          return false;
+        }
+        return location.ifscCode.toUpperCase() === ifscCode.toUpperCase();
+      })
+    );
+    
+    if (isDuplicateIFSC) {
+      toast({
+        title: "❌ Duplicate IFSC Code",
+        description: `IFSC code "${ifscCode}" already exists in the system. Each branch must have a unique IFSC code.`,
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
@@ -530,7 +548,7 @@ export default function BankModulePage() {
         };
         successMsg = {
           title: "Branch Updated Successfully! ✅",
-          description: `${locationFormData.branchName} branch has been updated in ${selectedBank.bankName}`
+          description: `${locationFormData.branchName} branch has been updated in ${selectedBank.state}`
         };
       } else {
         // Add new location
@@ -548,7 +566,7 @@ export default function BankModulePage() {
         };
         successMsg = {
           title: "Branch Added Successfully! 📍",
-          description: `${locationFormData.branchName} branch has been added to ${selectedBank.bankName} with Location ID: ${newLocationId}`
+          description: `${locationFormData.branchName} branch has been added to ${selectedBank.state} with Location ID: ${newLocationId}`
         };
       }
       
@@ -600,7 +618,6 @@ export default function BankModulePage() {
     // Reset form for new bank
     setFormData({
       bankId: '',
-      bankName: '',
       state: '',
       branch: '',
       locations: [],
@@ -614,7 +631,7 @@ export default function BankModulePage() {
     setSelectedBank(bank);
     setLocationFormData({
       locationId: '',
-      locationName: bank.bankName,
+      locationName: '',
       branchName: '',
       ifscCode: '',
       address: '',
@@ -650,7 +667,6 @@ export default function BankModulePage() {
     setEditingId(null);
     setFormData({
       bankId: '',
-      bankName: '',
       state: '',
       branch: '', // This will be set when adding branches
       locations: [],
@@ -758,7 +774,7 @@ export default function BankModulePage() {
                   id="searchTerm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by bank name, state, or IFSC..."
+                  placeholder="Search by state, branch name, or IFSC..."
                   className="border-green-300 focus:border-green-500 flex-1"
                 />
                 {searchTerm && (
@@ -834,7 +850,7 @@ export default function BankModulePage() {
                           </TableCell>
                           <TableCell className="text-green-700 font-medium border-r border-gray-300 text-center p-2 whitespace-nowrap flex items-center gap-2">
                             <Building className="w-4 h-4 text-green-600" />
-                            {bank.bankName}
+                            {bank.state} - Bank Entry
                             {bank.locations.length > 0 && (
                               <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium ml-2">
                                 {bank.locations.length} branches
@@ -904,7 +920,7 @@ export default function BankModulePage() {
                                       Confirm Deletion
                                     </AlertDialogTitle>
                                     <AlertDialogDescription className="text-gray-700">
-                                      Are you sure you want to delete <strong>{bank.bankName}</strong> and all its locations? 
+                                      Are you sure you want to delete the bank entry for <strong>{bank.state}</strong> and all its locations? 
                                       This action cannot be undone and will permanently remove all bank data from the system.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
@@ -1004,27 +1020,12 @@ export default function BankModulePage() {
                 {isEditing ? '🔄 Edit Bank' : '✅ Add New Bank'}
               </DialogTitle>
               <DialogDescription className="text-green-600">
-                {isEditing ? 'Update bank information' : 'Enter bank basic information (branches can be added separately)'}
+                {isEditing ? 'Update bank information' : 'Enter state information for the bank (branches can be added separately)'}
               </DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Bank Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="bankName" className="text-green-600 font-medium">
-                    Bank Name <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="bankName"
-                    value={formData.bankName}
-                    onChange={(e) => handleInputChange('bankName', e.target.value)}
-                    className="border-orange-300 focus:border-orange-500 text-orange-700"
-                    placeholder="e.g., State Bank of India"
-                    required
-                  />
-                </div>
-
+              <div className="grid grid-cols-1 gap-4">
                 {/* State Dropdown */}
                 <div className="space-y-2">
                   <Label htmlFor="state" className="text-green-600 font-medium">
@@ -1061,8 +1062,8 @@ export default function BankModulePage() {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h4 className="text-blue-800 font-semibold mb-2">📝 Important Note:</h4>
                 <p className="text-blue-700 text-sm">
-                  After adding the bank, you can add multiple branches with different locations and IFSC codes. 
-                  Each branch will inherit the bank name and state information.
+                  After adding the state, you can add multiple branches with different bank names, locations and IFSC codes. 
+                  Each branch will be associated with the selected state.
                 </p>
               </div>
 
@@ -1099,13 +1100,13 @@ export default function BankModulePage() {
                 {isEditingLocation ? '🔄 Edit Branch' : '📍 Add New Branch'}
               </DialogTitle>
               <DialogDescription className="text-green-600">
-                {isEditingLocation ? 'Editing branch in' : 'Adding branch to'}: <strong>{selectedBank?.bankName}</strong> ({selectedBank?.state})
+                {isEditingLocation ? 'Editing branch in' : 'Adding branch to'}: <strong>{selectedBank?.state}</strong>
               </DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleLocationSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Bank Name (Auto-fetched from parent) */}
+                {/* Bank Name */}
                 <div className="space-y-2">
                   <Label htmlFor="bankName" className="text-green-600 font-medium">
                     Bank Name <span className="text-red-500">*</span>
@@ -1115,10 +1116,10 @@ export default function BankModulePage() {
                     value={locationFormData.locationName}
                     onChange={(e) => handleLocationInputChange('locationName', e.target.value)}
                     className="border-blue-300 focus:border-blue-500 text-blue-700"
-                    placeholder="e.g., Mumbai Central, Pune Camp"
+                    placeholder="e.g., State Bank of India, HDFC Bank"
                     required
                   />
-                  <p className="text-xs text-blue-600">This is auto-fetched from the parent bank</p>
+                  <p className="text-xs text-blue-600">Enter the bank name for this branch</p>
                 </div>
 
                 {/* Branch */}
@@ -1284,7 +1285,7 @@ export default function BankModulePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="font-medium text-green-700">Bank Name:</span>
-                    <p className="text-green-600">{selectedBank?.bankName}</p>
+                    <p className="text-green-600">{selectedBank?.state}</p>
                   </div>
                   <div>
                     <span className="font-medium text-green-700">State:</span>

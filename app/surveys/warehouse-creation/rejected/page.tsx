@@ -81,10 +81,9 @@ export default function RejectedWarehousePage() {
         });
       });
       
-      // Filter for rejected status - you can modify this logic based on your business rules
-      // Status filtering now done in forEach loop above
-        data.status === 'rejected'
-      );
+      // Filter for rejected status - only include inspections that have been rejected
+      // Note: Since we're checking for warehouse inspection data with rejected status,
+      // the filtering is already handled in the forEach loop above
       
       setInspections(inspectionData);
     } catch (error) {
@@ -346,7 +345,10 @@ export default function RejectedWarehousePage() {
           <DialogContent className="max-w-full max-h-[90vh] overflow-y-auto p-0">
             {selectedInspection && (
               <WarehouseInspectionForm 
-                onClose={() => setShowInspectionForm(false)}
+                onClose={() => {
+                  setShowInspectionForm(false);
+                  loadInspections(); // Reload data after closing form
+                }}
                 initialData={convertInspectionToFormData(selectedInspection)}
                 mode="view"
                 onStatusChange={(warehouseCode, newStatus) => {

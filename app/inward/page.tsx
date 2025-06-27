@@ -1674,15 +1674,15 @@ export default function InwardPage() {
               {/* Weight Bridge Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
-                  <Label className="block font-semibold mb-2">Weight Bridge <span className="text-red-500">*</span></Label>
+                  <Label className="block font-semibold mb-2">Weighbridge Name<span className="text-red-500">*</span></Label>
                   <Input 
                     value={form.weightBridge} 
                     onChange={e => setCurrentEntryForm(f => ({ ...f, weightBridge: e.target.value }))} 
-                    placeholder="Enter Weight Bridge"
+                    placeholder="Enter Weighbridge Name"
                   />
                 </div>
                 <div>
-                  <Label className="block font-semibold mb-2">Weight Bridge Slip Number <span className="text-red-500">*</span></Label>
+                  <Label className="block font-semibold mb-2">Weighbridge Slip Number <span className="text-red-500">*</span></Label>
                   <Input 
                     value={form.weightBridgeSlipNumber} 
                     onChange={e => setCurrentEntryForm(f => ({ ...f, weightBridgeSlipNumber: e.target.value }))} 
@@ -1748,7 +1748,7 @@ export default function InwardPage() {
                   />
                 </div>
                 <div>
-                  <Label className="block font-semibold mb-2">Average Weight (Kg)</Label>
+                  <Label className="block font-semibold mb-2">Average Weight (MT)</Label>
                   <Input 
                     value={form.averageWeight} 
                     readOnly 

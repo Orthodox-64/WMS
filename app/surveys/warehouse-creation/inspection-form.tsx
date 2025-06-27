@@ -10,12 +10,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CalendarIcon, Upload, Plus, Trash2 } from 'lucide-react';
+import { CalendarIcon, Upload, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { collection, getDocs, addDoc, query, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
+import InsurancePopup from '@/components/InsurancePopup';
 
 interface WarehouseInspectionFormProps {
   onClose: () => void;
@@ -35,6 +36,7 @@ interface BankData {
   bankName: string;
   state: string;
   locations: {
+    locationName: string;
     branchName: string;
     ifscCode: string;
   }[];
@@ -45,6 +47,55 @@ interface AssociatedBank {
   bankBranch: string;
   bankName: string;
   ifscCode: string;
+}
+
+interface ClientData {
+  id?: string;
+  clientId: string;
+  firmName: string;
+  authorizedPersonName: string;
+  firmType: string;
+  companyAddress: string;
+  contactNumber: string;
+  panNumber: string;
+  gstNumber: string;
+  aadharNumber?: string;
+  email?: string;
+  landline?: string;
+  alternateNumber?: string;
+  panCardImage?: string;
+  aadharCardImage?: string;
+  documentUrls?: string[];
+  createdAt?: string;
+}
+
+interface ChamberData {
+  id: string;
+  length: string;
+  breadth: string;
+  height: string;
+  divisionFactor: string;
+  capacity: string;
+}
+
+interface InsuranceEntry {
+  id: string;
+  insuranceTakenBy: string;
+  insuranceCommodity: string;
+  clientName: string;
+  clientAddress: string;
+  selectedBankName: string;
+  firePolicyCompanyName: string;
+  firePolicyNumber: string;
+  firePolicyAmount: string;
+  firePolicyStartDate: Date | null;
+  firePolicyEndDate: Date | null;
+  burglaryPolicyCompanyName: string;
+  burglaryPolicyNumber: string;
+  burglaryPolicyAmount: string;
+  burglaryPolicyStartDate: Date | null;
+  burglaryPolicyEndDate: Date | null;
+  createdAt: Date;
 }
 
 export default function WarehouseInspectionForm({ 
@@ -115,8 +166,24 @@ export default function WarehouseInspectionForm({
     typeOfInsulation: '',
     temperatureMaintained: '',
     
-    // Insurance
+    // Insurance - supporting multiple insurance entries
+    insuranceEntries: [] as InsuranceEntry[],
+    // Legacy single insurance fields (keeping for backward compatibility)
     insuranceTakenBy: '',
+    insuranceCommodity: '',
+    clientName: '',
+    clientAddress: '',
+    selectedBankName: '',
+    firePolicyCompanyName: '',
+    firePolicyNumber: '',
+    firePolicyAmount: '',
+    firePolicyStartDate: null as Date | null,
+    firePolicyEndDate: null as Date | null,
+    burglaryPolicyCompanyName: '',
+    burglaryPolicyNumber: '',
+    burglaryPolicyAmount: '',
+    burglaryPolicyStartDate: null as Date | null,
+    burglaryPolicyEndDate: null as Date | null,
     insuranceCompany: '',
     insurancePolicyNumber: '',
     assuredSum: '',
@@ -178,48 +245,38 @@ export default function WarehouseInspectionForm({
     attachedFiles: [] as string[],
     
     // Remarks
-    remarks: ''
+    remarks: '',
+    
+    // Chambers
+    chambers: [] as ChamberData[]
   });
 
   // Data states
   const [warehouses, setWarehouses] = useState<WarehouseData[]>([]);
   const [banksData, setBanksData] = useState<BankData[]>([]);
+  const [clientsData, setClientsData] = useState<ClientData[]>([]);
   const [availableBankStates, setAvailableBankStates] = useState<string[]>([]);
   const [availableBankBranches, setAvailableBankBranches] = useState<string[]>([]);
   const [availableBanks, setAvailableBanks] = useState<{name: string, ifsc: string}[]>([]);
+  const [insuranceBanks, setInsuranceBanks] = useState<{name: string, ifsc: string}[]>([]);
   const [associatedBanks, setAssociatedBanks] = useState<AssociatedBank[]>([]);
+
+  // Insurance popup state
+  const [showInsurancePopup, setShowInsurancePopup] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'activate' | 'close' | 'reactivate' | null>(null);
   
-  // Determine if form should be read-only
-  const isReadOnly = formData.status === 'submitted';
+  // Most fields are now editable - only master data fields remain read-only
+  const isReadOnly = false; // Remove general read-only restriction
   
-  // Determine which specific fields should be read-only when viewing from status pages
+  // Determine which specific fields should be read-only (master data only)
   const isViewMode = mode === 'view';
-  const isFormReadOnly = isReadOnly || (isViewMode && formData.status !== 'pending');
+  const isFormReadOnly = false; // Allow editing across all statuses
   
-  // Helper function to check if a field should be read-only
+  // Helper function to check if a field should be read-only (only master data)
   const isFieldReadOnly = (fieldName: string) => {
-    // If in create mode (new form), no fields are read-only
-    if (mode === 'create') {
-      return false;
-    }
-    
-    // For pending status - only specific pre-fetched fields are read-only
-    if (formData.status === 'pending') {
-      const preFetchedFields = [
-        'warehouseName',
-        'warehouseCode', 
-        'inspectionCode',
-        'bankState',
-        'bankBranch', 
-        'bankName',
-        'ifscCode'
-      ];
-      
-      return preFetchedFields.includes(fieldName);
-    }
-    
-    // For ALL other statuses (submitted, activated, rejected, etc.) - ALL fields are read-only
-    return true;
+    // Master data fields that should remain read-only
+    const masterDataFields = ['bankState', 'bankBranch', 'bankName', 'ifscCode'];
+    return masterDataFields.includes(fieldName);
   };
   
   // Custom dropdown states
@@ -228,6 +285,31 @@ export default function WarehouseInspectionForm({
   
   // File upload state
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  
+  // Warehouse name editing state
+  const [isEditingWarehouseName, setIsEditingWarehouseName] = useState(false);
+  const [editableWarehouseName, setEditableWarehouseName] = useState('');
+  
+  // Section collapse state - all sections expanded by default
+  const [collapsedSections, setCollapsedSections] = useState({
+    warehouseDetails: false,
+    bankDetails: false,
+    ownershipDetails: false,
+    physicalCondition: false,
+    coldStorageDetails: false,
+    insuranceDetails: false,
+    securityDetails: false,
+    insideWarehouse: false,
+    planForStocking: false,
+    warehouseUpkeep: false,
+    otherDetails: false,
+    insuranceClaimHistory: false,
+    certification: false,
+    oeDetails: false,
+    attachments: false,
+    remarks: false,
+    chambers: false
+  });
   
   // File upload handler
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -252,17 +334,88 @@ export default function WarehouseInspectionForm({
   useEffect(() => {
     loadWarehouses();
     loadBanksData();
+    loadClientsData();
   }, []);
 
   // Initialize form with existing data if provided (only once)
   useEffect(() => {
+    // Reset collapse state when form is reopened (always run this)
+    setCollapsedSections({
+      warehouseDetails: false,
+      bankDetails: false,
+      ownershipDetails: false,
+      physicalCondition: false,
+      coldStorageDetails: false,
+      insuranceDetails: false,
+      securityDetails: false,
+      insideWarehouse: false,
+      planForStocking: false,
+      warehouseUpkeep: false,
+      otherDetails: false,
+      insuranceClaimHistory: false,
+      certification: false,
+      oeDetails: false,
+      attachments: false,
+      remarks: false,
+      chambers: false
+    });
+
     if (initialData && Object.keys(initialData).length > 0) {
+      console.log('Loading initial data:', initialData); // Debug log
+      console.log('InitialData keys:', Object.keys(initialData)); // Debug log
+      console.log('Has warehouseInspectionData:', !!initialData.warehouseInspectionData); // Debug log
+      console.log('Current formData.insuranceEntries before update:', formData.insuranceEntries); // Debug log
+      
+      // Handle insurance entries - check multiple locations where they might be stored
+      let insuranceEntries = [];
+      
+      // Check top level first
+      if (initialData.insuranceEntries && Array.isArray(initialData.insuranceEntries)) {
+        console.log('Found insurance entries at top level:', initialData.insuranceEntries.length);
+        insuranceEntries = initialData.insuranceEntries;
+      } 
+      // Check inside warehouseInspectionData
+      else if (initialData.warehouseInspectionData?.insuranceEntries && Array.isArray(initialData.warehouseInspectionData.insuranceEntries)) {
+        console.log('Found insurance entries in warehouseInspectionData:', initialData.warehouseInspectionData.insuranceEntries.length);
+        insuranceEntries = initialData.warehouseInspectionData.insuranceEntries;
+      }
+      // Check if warehouseInspectionData itself has the data we need
+      else if (initialData.warehouseInspectionData) {
+        console.log('Checking warehouseInspectionData for insurance entries...');
+        const inspectionData = initialData.warehouseInspectionData;
+        if (inspectionData.insuranceEntries && Array.isArray(inspectionData.insuranceEntries)) {
+          console.log('Found nested insurance entries:', inspectionData.insuranceEntries.length);
+          insuranceEntries = inspectionData.insuranceEntries;
+        }
+      }
+      
+      console.log('Raw insurance entries found:', insuranceEntries); // Debug log
+      
+      // Convert date strings back to Date objects for insurance entries
+      const processedInsuranceEntries = insuranceEntries.map((entry: any) => ({
+        ...entry,
+        firePolicyStartDate: entry.firePolicyStartDate ? new Date(entry.firePolicyStartDate) : null,
+        firePolicyEndDate: entry.firePolicyEndDate ? new Date(entry.firePolicyEndDate) : null,
+        burglaryPolicyStartDate: entry.burglaryPolicyStartDate ? new Date(entry.burglaryPolicyStartDate) : null,
+        burglaryPolicyEndDate: entry.burglaryPolicyEndDate ? new Date(entry.burglaryPolicyEndDate) : null,
+        createdAt: entry.createdAt ? new Date(entry.createdAt) : new Date()
+      }));
+      
+      console.log('Processed insurance entries:', processedInsuranceEntries); // Debug log
+      
       setFormData(prev => ({
         ...prev,
         ...initialData,
         // Preserve attachedFiles if they exist in current state
-        attachedFiles: initialData.attachedFiles || prev.attachedFiles || []
+        attachedFiles: initialData.attachedFiles || prev.attachedFiles || [],
+        // Handle insurance entries from existing data with proper date conversion
+        insuranceEntries: processedInsuranceEntries
       }));
+      
+      console.log('Updated formData.insuranceEntries:', processedInsuranceEntries); // Debug log
+      
+      // Initialize editable warehouse name
+      setEditableWarehouseName(initialData.warehouseName || '');
       
       // If in view mode and we have a warehouse name, fetch associated banks
       if (mode === 'view' && initialData.warehouseName && initialData.warehouseCode) {
@@ -340,6 +493,26 @@ export default function WarehouseInspectionForm({
     }
   }, [formData.warehouseLength, formData.warehouseBreadth, formData.divisionFactor]);
 
+  // Load insurance banks when needed
+  useEffect(() => {
+    if (formData.insuranceTakenBy === 'bank') {
+      const banksInBranch: {name: string, ifsc: string}[] = [];
+      
+      banksData.forEach(bank => {
+        bank.locations.forEach(location => {
+          if (location.branchName && location.ifscCode && location.locationName) {
+            banksInBranch.push({
+              name: `${location.locationName} - ${location.branchName}`,
+              ifsc: location.ifscCode
+            });
+          }
+        });
+      });
+      
+      setInsuranceBanks(banksInBranch);
+    }
+  }, [formData.insuranceTakenBy, banksData]);
+
   const loadWarehouses = async () => {
     try {
       // Load from inspections collection to get existing warehouses
@@ -380,6 +553,22 @@ export default function WarehouseInspectionForm({
       setBanksData(banksData);
     } catch (error) {
       console.error('Error loading banks data:', error);
+    }
+  };
+
+  const loadClientsData = async () => {
+    try {
+      const clientsRef = collection(db, 'clients');
+      const snapshot = await getDocs(clientsRef);
+      
+      const clientsData: ClientData[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ClientData[];
+      
+      setClientsData(clientsData);
+    } catch (error) {
+      console.error('Error loading clients data:', error);
     }
   };
 
@@ -479,6 +668,314 @@ export default function WarehouseInspectionForm({
     }));
   };
 
+  // Chamber management functions
+  const addChamber = () => {
+    const newChamber: ChamberData = {
+      id: Date.now().toString(),
+      length: '',
+      breadth: '',
+      height: '',
+      divisionFactor: '',
+      capacity: ''
+    };
+    setFormData(prev => ({
+      ...prev,
+      chambers: [...prev.chambers, newChamber]
+    }));
+  };
+
+  const removeChamber = (chamberId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      chambers: prev.chambers.filter(chamber => chamber.id !== chamberId)
+    }));
+  };
+
+  const updateChamber = (chamberId: string, field: keyof ChamberData, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      chambers: prev.chambers.map(chamber => {
+        if (chamber.id === chamberId) {
+          const updatedChamber = { ...chamber, [field]: value };
+          
+          // Calculate capacity if length, breadth, and division factor are provided
+          if (field === 'length' || field === 'breadth' || field === 'divisionFactor') {
+            const length = parseFloat(field === 'length' ? value : updatedChamber.length);
+            const breadth = parseFloat(field === 'breadth' ? value : updatedChamber.breadth);
+            const divisionFactor = parseFloat(field === 'divisionFactor' ? value : updatedChamber.divisionFactor);
+            
+            if (!isNaN(length) && !isNaN(breadth) && !isNaN(divisionFactor) && divisionFactor !== 0) {
+              updatedChamber.capacity = ((length * breadth) / divisionFactor).toFixed(2);
+            } else {
+              updatedChamber.capacity = '';
+            }
+          }
+          
+          return updatedChamber;
+        }
+        return chamber;
+      })
+    }));
+  };
+
+  // Insurance management functions
+  const addInsuranceEntry = () => {
+    const newInsuranceId = `insurance_${Date.now()}`;
+    const newInsurance: InsuranceEntry = {
+      id: newInsuranceId,
+      insuranceTakenBy: '',
+      insuranceCommodity: '',
+      clientName: '',
+      clientAddress: '',
+      selectedBankName: '',
+      firePolicyCompanyName: '',
+      firePolicyNumber: '',
+      firePolicyAmount: '',
+      firePolicyStartDate: null,
+      firePolicyEndDate: null,
+      burglaryPolicyCompanyName: '',
+      burglaryPolicyNumber: '',
+      burglaryPolicyAmount: '',
+      burglaryPolicyStartDate: null,
+      burglaryPolicyEndDate: null,
+      createdAt: new Date(),
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      insuranceEntries: [...prev.insuranceEntries, newInsurance]
+    }));
+
+    toast({
+      title: "Insurance Added",
+      description: "New empty insurance section added",
+      variant: "default",
+    });
+  };
+
+  const removeInsuranceEntry = (insuranceId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      insuranceEntries: prev.insuranceEntries.filter(insurance => insurance.id !== insuranceId)
+    }));
+
+    toast({
+      title: "Insurance Removed",
+      description: "Insurance entry has been removed",
+      variant: "default",
+    });
+  };
+
+  // Function to update warehouse name across all inspections with same warehouse code
+  const updateWarehouseNameEverywhere = async (warehouseCode: string, newWarehouseName: string) => {
+    try {
+      const inspectionsRef = collection(db, 'inspections');
+      const q = query(inspectionsRef, where('warehouseCode', '==', warehouseCode));
+      const querySnapshot = await getDocs(q);
+      
+      const updatePromises = querySnapshot.docs.map(async (docSnapshot) => {
+        const docRef = doc(db, 'inspections', docSnapshot.id);
+        const updateData: any = {
+          warehouseName: newWarehouseName,
+          lastUpdated: new Date().toISOString()
+        };
+        
+        // Also update nested warehouseInspectionData if it exists
+        const data = docSnapshot.data();
+        if (data.warehouseInspectionData) {
+          updateData.warehouseInspectionData = {
+            ...data.warehouseInspectionData,
+            warehouseName: newWarehouseName
+          };
+        }
+        
+        return updateDoc(docRef, updateData);
+      });
+      
+      await Promise.all(updatePromises);
+      
+      toast({
+        title: "Warehouse Name Updated",
+        description: `Updated warehouse name in ${querySnapshot.docs.length} inspection(s)`,
+      });
+      
+      console.log(`Updated warehouse name in ${querySnapshot.docs.length} inspections with warehouse code: ${warehouseCode}`);
+    } catch (error) {
+      console.error('Error updating warehouse name:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update warehouse name across all inspections",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handle warehouse name edit
+  const handleWarehouseNameEdit = () => {
+    setEditableWarehouseName(formData.warehouseName);
+    setIsEditingWarehouseName(true);
+  };
+
+  // Handle warehouse name save
+  const handleWarehouseNameSave = async () => {
+    if (editableWarehouseName.trim() && editableWarehouseName !== formData.warehouseName) {
+      // Update current form data
+      setFormData(prev => ({ ...prev, warehouseName: editableWarehouseName.trim() }));
+      
+      // Update all inspections with same warehouse code
+      if (formData.warehouseCode) {
+        await updateWarehouseNameEverywhere(formData.warehouseCode, editableWarehouseName.trim());
+      }
+    }
+    setIsEditingWarehouseName(false);
+  };
+
+  // Handle warehouse name cancel
+  const handleWarehouseNameCancel = () => {
+    setEditableWarehouseName(formData.warehouseName);
+    setIsEditingWarehouseName(false);
+  };
+
+  // Toggle section collapse
+  const toggleSection = (sectionName: keyof typeof collapsedSections) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }));
+  };
+
+  const scrollToField = (fieldName: string) => {
+    console.log('🔍 Attempting to scroll to field:', fieldName);
+    
+    // Create a mapping of field names to user-friendly names and their element IDs
+    const fieldMap: { [key: string]: { label: string; elementId: string } } = {
+      'warehouseName': { label: 'Warehouse Name', elementId: 'warehouseName' },
+      'address': { label: 'Address', elementId: 'address' },
+      'typeOfWarehouse': { label: 'Type of Warehouse', elementId: 'typeOfWarehouse' },
+      'customWarehouseType': { label: 'Custom Warehouse Type', elementId: 'customWarehouseType' },
+      'license': { label: 'License', elementId: 'license' },
+      'licenseNumber': { label: 'License Number', elementId: 'licenseNumber' },
+      'dateOfInspection': { label: 'Date of Inspection', elementId: 'dateOfInspection' },
+      'godownOwnership': { label: 'Godown Ownership', elementId: 'godownOwnership' },
+      'nameOfClient': { label: 'Name of Client', elementId: 'nameOfClient' },
+      'godownOwnerName': { label: 'Godown Owner Name', elementId: 'godownOwnerName' },
+      'godownManagedBy': { label: 'Godown Managed By', elementId: 'godownManagedBy' },
+      'warehouseLength': { label: 'Warehouse Length', elementId: 'warehouseLength' },
+      'warehouseBreadth': { label: 'Warehouse Breadth', elementId: 'warehouseBreadth' },
+      'warehouseHeight': { label: 'Warehouse Height', elementId: 'warehouseHeight' },
+      'divisionFactor': { label: 'Division Factor', elementId: 'divisionFactor' },
+      'constructionYear': { label: 'Construction Year', elementId: 'constructionYear' },
+      'totalChambers': { label: 'Total Number of Chambers', elementId: 'totalChambers' },
+      'latitude': { label: 'Latitude', elementId: 'latitude' },
+      'longitude': { label: 'Longitude', elementId: 'longitude' },
+      'flooring': { label: 'Flooring', elementId: 'flooring' },
+      'shutterDoor': { label: 'Shutter Door', elementId: 'shutterDoor' },
+      'walls': { label: 'Walls', elementId: 'walls' },
+      'roof': { label: 'Roof', elementId: 'roof' },
+      'plinthHeight': { label: 'Plinth Height', elementId: 'plinthHeight' },
+      'anyLeakage': { label: 'Any Leakage', elementId: 'anyLeakage' },
+      'drainageChannels': { label: 'Drainage Channels', elementId: 'drainageChannels' },
+      'electricWiring': { label: 'Electric Wiring', elementId: 'electricWiring' },
+      'compoundWallAvailability': { label: 'Compound Wall Availability', elementId: 'compoundWallAvailability' },
+      'compoundGate': { label: 'Compound Gate', elementId: 'compoundGate' },
+      'isWarehouseClean': { label: 'Is Warehouse Clean', elementId: 'isWarehouseClean' },
+      'waterAvailability': { label: 'Water Availability', elementId: 'waterAvailability' },
+      'securityAvailable': { label: 'Security Available', elementId: 'securityAvailable' },
+      'stackingDone': { label: 'Stacking Done', elementId: 'stackingDone' },
+      'stockCountable': { label: 'Stock Countable', elementId: 'stockCountable' },
+      'otherBanksCargo': { label: 'Other Banks Cargo', elementId: 'otherBanksCargo' },
+      'otherCollateralManager': { label: 'Other Collateral Manager', elementId: 'otherCollateralManager' },
+      'commodity': { label: 'Commodity', elementId: 'commodity' },
+      'quantity': { label: 'Quantity', elementId: 'quantity' },
+      'dividedIntoChambers': { label: 'Divided Into Chambers', elementId: 'dividedIntoChambers' },
+      'usingStackCards': { label: 'Using Stack Cards', elementId: 'usingStackCards' },
+      'maintainingRegisters': { label: 'Maintaining Registers', elementId: 'maintainingRegisters' },
+      'fireFightingEquipments': { label: 'Fire Fighting Equipments', elementId: 'fireFightingEquipments' },
+      'weighbridgeFacility': { label: 'Weighbridge Facility', elementId: 'weighbridgeFacility' },
+      'distanceToPoliceStation': { label: 'Distance to Police Station', elementId: 'distanceToPoliceStation' },
+      'distanceToFireStation': { label: 'Distance to Fire Station', elementId: 'distanceToFireStation' },
+      'riskOfCargoAffected': { label: 'Risk of Cargo Affected', elementId: 'riskOfCargoAffected' },
+      'duringMonsoon': { label: 'During Monsoon', elementId: 'duringMonsoon' },
+      'insuranceClaimHistory': { label: 'Insurance Claim History', elementId: 'insuranceClaimHistory' },
+      'nameOfOE': { label: 'Name of Operational Executive', elementId: 'nameOfOE' },
+      'oeDate': { label: 'OE Date', elementId: 'oeDate' },
+      'contactNumber': { label: 'Contact Number', elementId: 'contactNumber' },
+      'place': { label: 'Place', elementId: 'place' },
+      'typeOfColdStorage': { label: 'Type of Cold Storage', elementId: 'typeOfColdStorage' },
+      'typeOfCoolingSystem': { label: 'Type of Cooling System', elementId: 'typeOfCoolingSystem' },
+      'typeOfInsulation': { label: 'Type of Insulation', elementId: 'typeOfInsulation' },
+      'temperatureMaintained': { label: 'Temperature Maintained', elementId: 'temperatureMaintained' },
+      'warehouseFitCertification': { label: 'Warehouse Fit Certification', elementId: 'warehouseFitCertification' },
+    };
+
+    // Handle chamber fields
+    if (fieldName.startsWith('chamber_')) {
+      const chamberIndex = fieldName.split('_')[1];
+      const element = document.getElementById(`chamber_${chamberIndex}_length`);
+      console.log('🔍 Looking for chamber element:', `chamber_${chamberIndex}_length`, 'Found:', !!element);
+      if (element) {
+        console.log('✅ Scrolling to chamber element');
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.focus();
+        return `Chamber ${parseInt(chamberIndex) + 1} details`;
+      }
+      return `Chamber ${parseInt(chamberIndex) + 1} details`;
+    }
+
+    // Get the field info and scroll to it
+    const fieldInfo = fieldMap[fieldName];
+    if (fieldInfo) {
+      console.log('🔍 Looking for element with ID:', fieldInfo.elementId);
+      const element = document.getElementById(fieldInfo.elementId);
+      console.log('🔍 Element found:', !!element, element ? element.tagName : 'null');
+      
+      if (element) {
+        console.log('✅ Scrolling to element:', fieldInfo.elementId);
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Focus on the element if it's an input/select
+        if (element.tagName === 'INPUT' || element.tagName === 'SELECT' || element.tagName === 'TEXTAREA') {
+          setTimeout(() => {
+            console.log('🎯 Focusing element:', fieldInfo.elementId);
+            element.focus();
+          }, 500);
+        }
+        return fieldInfo.label;
+      } else {
+        console.log('❌ Element not found, trying alternative selectors...');
+        // Try alternative selectors if direct ID doesn't work
+        const alternativeSelectors = [
+          `input[name="${fieldName}"]`,
+          `select[name="${fieldName}"]`,
+          `textarea[name="${fieldName}"]`,
+          `[data-field="${fieldName}"]`,
+          `label[for="${fieldName}"]`
+        ];
+        
+        for (const selector of alternativeSelectors) {
+          const altElement = document.querySelector(selector);
+          console.log('🔍 Trying selector:', selector, 'Found:', !!altElement);
+          if (altElement) {
+            console.log('✅ Found element with alternative selector:', selector);
+            altElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (altElement.tagName === 'INPUT' || altElement.tagName === 'SELECT' || altElement.tagName === 'TEXTAREA') {
+              setTimeout(() => {
+                console.log('🎯 Focusing alternative element:', selector);
+                (altElement as HTMLElement).focus();
+              }, 500);
+            }
+            return fieldInfo.label;
+          }
+        }
+      }
+      
+      return fieldInfo.label;
+    }
+
+    console.log('❌ No mapping found for field:', fieldName);
+    // Fallback: convert camelCase to readable format
+    return fieldName.replace(/([A-Z])/g, ' $1').toLowerCase();
+  };
+
   const validateForm = () => {
     const baseRequiredFields = [
       'warehouseName', 'address', 'typeOfWarehouse', 'license', 'dateOfInspection',
@@ -487,7 +984,7 @@ export default function WarehouseInspectionForm({
       'constructionYear', 'totalChambers', 'latitude', 'longitude', 'flooring', 
       'shutterDoor', 'walls', 'roof', 'plinthHeight', 'anyLeakage', 
       'drainageChannels', 'electricWiring', 'compoundWallAvailability', 
-      'compoundGate', 'isWarehouseClean', 'waterAvailability', 'insuranceTakenBy',
+      'compoundGate', 'isWarehouseClean', 'waterAvailability',
       'securityAvailable', 'stackingDone', 'stockCountable',
       'otherBanksCargo', 'otherCollateralManager', 'commodity', 'quantity',
       'dividedIntoChambers', 'usingStackCards', 'maintainingRegisters',
@@ -496,42 +993,166 @@ export default function WarehouseInspectionForm({
       'insuranceClaimHistory', 'nameOfOE', 'oeDate', 'contactNumber', 'place'
     ];
 
-    // Add insurance fields only if insurance is NOT taken by bank
+    // Insurance fields are no longer mandatory - can be added later
     const requiredFields = [...baseRequiredFields];
-    if (formData.insuranceTakenBy && formData.insuranceTakenBy !== 'bank') {
-      requiredFields.push(
-        'insuranceCompany', 'insurancePolicyNumber', 'assuredSum', 
-        'validityOfInsurance', 'originalVerified'
-      );
-    }
 
     const missingFields: string[] = [];
+    const missingFieldsRaw: string[] = [];
 
     requiredFields.forEach(field => {
       if (!formData[field as keyof typeof formData]) {
+        missingFieldsRaw.push(field);
         missingFields.push(field.replace(/([A-Z])/g, ' $1').toLowerCase());
       }
     });
 
     // Check conditional fields
     if (formData.typeOfWarehouse === 'others' && !formData.customWarehouseType) {
+      missingFieldsRaw.push('customWarehouseType');
       missingFields.push('custom warehouse type');
     }
     if (formData.license === 'yes' && !formData.licenseNumber) {
+      missingFieldsRaw.push('licenseNumber');
       missingFields.push('license number');
     }
     if (formData.typeOfWarehouse === 'cold storage') {
-      if (!formData.typeOfColdStorage) missingFields.push('type of cold storage');
-      if (!formData.typeOfCoolingSystem) missingFields.push('type of cooling system');
-      if (!formData.typeOfInsulation) missingFields.push('type of insulation');
-      if (!formData.temperatureMaintained) missingFields.push('temperature maintained');
+      if (!formData.typeOfColdStorage) {
+        missingFieldsRaw.push('typeOfColdStorage');
+        missingFields.push('type of cold storage');
+      }
+      if (!formData.typeOfCoolingSystem) {
+        missingFieldsRaw.push('typeOfCoolingSystem');
+        missingFields.push('type of cooling system');
+      }
+      if (!formData.typeOfInsulation) {
+        missingFieldsRaw.push('typeOfInsulation');
+        missingFields.push('type of insulation');
+      }
+      if (!formData.temperatureMaintained) {
+        missingFieldsRaw.push('temperatureMaintained');
+        missingFields.push('temperature maintained');
+      }
     }
 
     if (!formData.warehouseFitCertification) {
+      missingFieldsRaw.push('warehouseFitCertification');
       missingFields.push('warehouse fit certification');
     }
 
+    // If there are missing fields, scroll to the first one and get its user-friendly name
+    if (missingFieldsRaw.length > 0) {
+      const firstMissingField = missingFieldsRaw[0];
+      const friendlyName = scrollToField(firstMissingField);
+      // Replace the first item in missingFields with the user-friendly name from scrollToField
+      if (missingFields.length > 0) {
+        missingFields[0] = friendlyName;
+      }
+    }
+
     return missingFields;
+  };
+
+  // Save/Update function that can be called to sync changes
+  const saveFormData = async (updateStatus = false, newStatus = formData.status) => {
+    try {
+      // Clean the form data to avoid invalid date issues
+      const cleanFormData = { ...formData };
+      
+      // Fix any invalid dates in main form data
+      Object.keys(cleanFormData).forEach(key => {
+        const value = (cleanFormData as any)[key];
+        if (value instanceof Date) {
+          if (isNaN(value.getTime())) {
+            (cleanFormData as any)[key] = null; // Replace invalid dates with null
+          } else {
+            (cleanFormData as any)[key] = value.toISOString(); // Convert valid dates to ISO string
+          }
+        }
+      });
+
+      // Clean dates in insurance entries
+      if (cleanFormData.insuranceEntries && Array.isArray(cleanFormData.insuranceEntries)) {
+        cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map((entry: any) => {
+          const cleanedEntry = { ...entry };
+          
+          // Clean insurance entry dates
+          ['firePolicyStartDate', 'firePolicyEndDate', 'burglaryPolicyStartDate', 'burglaryPolicyEndDate', 'createdAt'].forEach(dateField => {
+            const dateValue = cleanedEntry[dateField];
+            
+            // Handle various date formats and invalid dates
+            if (dateValue === null || dateValue === undefined || dateValue === '') {
+              cleanedEntry[dateField] = null;
+            } else if (dateValue instanceof Date) {
+              if (isNaN(dateValue.getTime())) {
+                console.warn(`Invalid date found in ${dateField}:`, dateValue);
+                cleanedEntry[dateField] = null;
+              } else {
+                cleanedEntry[dateField] = dateValue.toISOString();
+              }
+            } else if (typeof dateValue === 'string') {
+              // Try to parse string dates
+              const parsedDate = new Date(dateValue);
+              if (isNaN(parsedDate.getTime())) {
+                console.warn(`Invalid date string found in ${dateField}:`, dateValue);
+                cleanedEntry[dateField] = null;
+              } else {
+                cleanedEntry[dateField] = parsedDate.toISOString();
+              }
+            } else {
+              // Unknown date format, set to null
+              console.warn(`Unknown date format in ${dateField}:`, dateValue);
+              cleanedEntry[dateField] = null;
+            }
+          });
+          
+          return cleanedEntry;
+        });
+      }
+
+      const updateData = {
+        ...cleanFormData,
+        status: newStatus,
+        lastUpdated: new Date().toISOString(),
+        insuranceEntries: formData.insuranceEntries || [],
+        ...(updateStatus && { [`${newStatus}At`]: new Date().toISOString() })
+      };
+
+      // Update the inspection record in the inspections collection
+      if (formData.inspectionCode) {
+        const inspectionsRef = collection(db, 'inspections');
+        const q = query(inspectionsRef, where('inspectionCode', '==', formData.inspectionCode));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
+          
+          console.log('Saving insurance entries:', formData.insuranceEntries); // Debug log
+          
+          // Debug log the insurance entries before cleaning
+          console.log('Raw insurance entries before cleaning:', JSON.stringify(formData.insuranceEntries, null, 2));
+          
+          await updateDoc(docRef, {
+            // Update all editable fields
+            inspectionCode: formData.inspectionCode,
+            warehouseCode: formData.warehouseCode,
+            warehouseName: formData.warehouseName,
+            status: newStatus,
+            lastUpdated: new Date().toISOString(),
+            warehouseInspectionData: updateData,
+            // Explicitly include insurance entries at top level too
+            insuranceEntries: cleanFormData.insuranceEntries || [],
+            ...(updateStatus && { [`${newStatus}At`]: new Date().toISOString() })
+          });
+
+          return true; // Success
+        }
+      }
+
+      return false; // Not found
+    } catch (error) {
+      console.error('Error saving form data:', error);
+      throw error;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -544,11 +1165,14 @@ export default function WarehouseInspectionForm({
     
     const missingFields = validateForm();
     if (missingFields.length > 0) {
-      toast({
-        title: "Missing Required Fields",
-        description: `Please fill in: ${missingFields.join(', ')}`,
-        variant: "destructive",
-      });
+      // Give the scroll animation time to complete before showing toast
+      setTimeout(() => {
+        toast({
+          title: "Missing Required Fields",
+          description: `Please complete the highlighted field: ${missingFields[0]}${missingFields.length > 1 ? ` and ${missingFields.length - 1} other field(s)` : ''}`,
+          variant: "destructive",
+        });
+      }, 300);
       return;
     }
 
@@ -570,9 +1194,13 @@ export default function WarehouseInspectionForm({
         const querySnapshot = await getDocs(q);
         
         if (!querySnapshot.empty) {
-          // Update the existing inspection record
+          // Update the existing inspection record with all changed fields
           const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
           await updateDoc(docRef, {
+            // Update all editable fields from the form
+            inspectionCode: formData.inspectionCode,
+            warehouseCode: formData.warehouseCode,
+            warehouseName: formData.warehouseName,
             status: 'submitted',
             warehouseInspectionData: submissionData,
             submittedAt: new Date().toISOString(),
@@ -609,9 +1237,281 @@ export default function WarehouseInspectionForm({
     }
   };
 
+  // Validate insurance fields for activation
+  const validateInsuranceForActivation = () => {
+    const missingInsuranceFields: string[] = [];
+
+    // Insurance Taken By is required for activation
+    if (!formData.insuranceTakenBy) {
+      missingInsuranceFields.push('Insurance Taken By');
+    }
+
+    // If insurance is taken by someone other than bank, validate policy details
+    if (formData.insuranceTakenBy && formData.insuranceTakenBy !== 'bank') {
+      // Fire policy validation
+      if (!formData.firePolicyCompanyName) missingInsuranceFields.push('Fire Policy Company Name');
+      if (!formData.firePolicyNumber) missingInsuranceFields.push('Fire Policy Number');
+      if (!formData.firePolicyAmount) missingInsuranceFields.push('Fire Policy Amount');
+      if (!formData.firePolicyStartDate) missingInsuranceFields.push('Fire Policy Start Date');
+      if (!formData.firePolicyEndDate) missingInsuranceFields.push('Fire Policy End Date');
+
+      // Burglary policy validation
+      if (!formData.burglaryPolicyCompanyName) missingInsuranceFields.push('Burglary Policy Company Name');
+      if (!formData.burglaryPolicyNumber) missingInsuranceFields.push('Burglary Policy Number');
+      if (!formData.burglaryPolicyAmount) missingInsuranceFields.push('Burglary Policy Amount');
+      if (!formData.burglaryPolicyStartDate) missingInsuranceFields.push('Burglary Policy Start Date');
+      if (!formData.burglaryPolicyEndDate) missingInsuranceFields.push('Burglary Policy End Date');
+
+      // Client specific validation
+      if (formData.insuranceTakenBy === 'client') {
+        if (!formData.clientName) missingInsuranceFields.push('Client Name');
+        if (!formData.clientAddress) missingInsuranceFields.push('Client Address');
+      }
+
+      // Bank specific validation
+      if (formData.insuranceTakenBy === 'bank' && !formData.selectedBankName) {
+        missingInsuranceFields.push('Bank Name');
+      }
+    }
+
+    return missingInsuranceFields;
+  };
+
+  // Handle insurance popup save
+  const handleInsuranceSave = async (insuranceData: any) => {
+    try {
+      // Update form data with insurance information
+      const updatedFormData = {
+        ...formData,
+        insuranceTakenBy: insuranceData.insuranceTakenBy,
+        insuranceCommodity: insuranceData.insuranceCommodity,
+        clientName: insuranceData.clientName,
+        clientAddress: insuranceData.clientAddress,
+        selectedBankName: insuranceData.selectedBankName,
+        firePolicyCompanyName: insuranceData.firePolicyCompanyName,
+        firePolicyNumber: insuranceData.firePolicyNumber,
+        firePolicyAmount: insuranceData.firePolicyAmount,
+        firePolicyStartDate: insuranceData.firePolicyStartDate,
+        firePolicyEndDate: insuranceData.firePolicyEndDate,
+        burglaryPolicyCompanyName: insuranceData.burglaryPolicyCompanyName,
+        burglaryPolicyNumber: insuranceData.burglaryPolicyNumber,
+        burglaryPolicyAmount: insuranceData.burglaryPolicyAmount,
+        burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate,
+        burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate,
+      };
+
+      // Update form data state
+      setFormData(updatedFormData);
+
+      // Proceed with the pending action
+      if (pendingAction) {
+        await executeStatusAction(pendingAction, updatedFormData);
+      }
+
+      setShowInsurancePopup(false);
+      setPendingAction(null);
+    } catch (error) {
+      console.error('Error saving insurance data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save insurance data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Execute the actual status change
+  const executeStatusAction = async (action: 'activate' | 'close' | 'reactivate', updatedData?: any) => {
+    try {
+      const dataToSave = updatedData || formData;
+      let newStatus = '';
+      let actionMessage = '';
+
+      switch (action) {
+        case 'activate':
+          newStatus = 'activated';
+          actionMessage = 'Activated successfully';
+          break;
+        case 'close':
+          newStatus = 'closed';
+          actionMessage = 'Closed successfully';
+          break;
+        case 'reactivate':
+          newStatus = 'activated';
+          actionMessage = 'Reactivated successfully';
+          break;
+      }
+
+      // Update the status in Firebase
+      let documentFound = false;
+      
+      // First try with inspectionCode if available
+      if (dataToSave.inspectionCode) {
+        const inspectionsRef = collection(db, 'inspections');
+        const q = query(inspectionsRef, where('inspectionCode', '==', dataToSave.inspectionCode));
+        const querySnapshot = await getDocs(q);
+      
+        if (!querySnapshot.empty) {
+          const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
+        
+                  // Clean the form data to avoid invalid date issues
+        const cleanFormData = { ...dataToSave };
+        
+        // Fix any invalid dates
+        Object.keys(cleanFormData).forEach(key => {
+          if (cleanFormData[key] instanceof Date) {
+            if (isNaN(cleanFormData[key].getTime())) {
+              cleanFormData[key] = null; // Replace invalid dates with null
+            } else {
+              cleanFormData[key] = cleanFormData[key].toISOString(); // Convert valid dates to ISO string
+            }
+          }
+        });
+
+        // Also fix dates in insurance entries
+        if (cleanFormData.insuranceEntries && Array.isArray(cleanFormData.insuranceEntries)) {
+          cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map(entry => {
+            const cleanEntry = { ...entry };
+            Object.keys(cleanEntry).forEach(key => {
+              if (cleanEntry[key] instanceof Date) {
+                if (isNaN(cleanEntry[key].getTime())) {
+                  cleanEntry[key] = null;
+                } else {
+                  cleanEntry[key] = cleanEntry[key].toISOString();
+                }
+              }
+            });
+            return cleanEntry;
+          });
+        }
+
+          await updateDoc(docRef, {
+            // Update core inspection fields that might have changed
+            inspectionCode: dataToSave.inspectionCode,
+            warehouseCode: dataToSave.warehouseCode,
+            warehouseName: dataToSave.warehouseName,
+            status: newStatus,
+            lastUpdated: new Date().toISOString(),
+            [`${newStatus}At`]: new Date().toISOString(),
+            warehouseInspectionData: {
+              ...cleanFormData,
+              status: newStatus,
+              lastUpdated: new Date().toISOString()
+            }
+          });
+          
+          documentFound = true;
+        }
+      }
+      
+      // If not found by inspectionCode, try by warehouseCode
+      if (!documentFound && dataToSave.warehouseCode) {
+        const inspectionsRef = collection(db, 'inspections');
+        const q = query(inspectionsRef, where('warehouseCode', '==', dataToSave.warehouseCode), where('status', '==', 'submitted'));
+        const querySnapshot = await getDocs(q);
+      
+        if (!querySnapshot.empty) {
+          const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
+        
+                  // Clean the form data to avoid invalid date issues
+        const cleanFormData2 = { ...dataToSave };
+        
+        // Fix any invalid dates
+        Object.keys(cleanFormData2).forEach(key => {
+          if (cleanFormData2[key] instanceof Date) {
+            if (isNaN(cleanFormData2[key].getTime())) {
+              cleanFormData2[key] = null; // Replace invalid dates with null
+            } else {
+              cleanFormData2[key] = cleanFormData2[key].toISOString(); // Convert valid dates to ISO string
+            }
+          }
+        });
+
+        // Also fix dates in insurance entries
+        if (cleanFormData2.insuranceEntries && Array.isArray(cleanFormData2.insuranceEntries)) {
+          cleanFormData2.insuranceEntries = cleanFormData2.insuranceEntries.map(entry => {
+            const cleanEntry = { ...entry };
+            Object.keys(cleanEntry).forEach(key => {
+              if (cleanEntry[key] instanceof Date) {
+                if (isNaN(cleanEntry[key].getTime())) {
+                  cleanEntry[key] = null;
+                } else {
+                  cleanEntry[key] = cleanEntry[key].toISOString();
+                }
+              }
+            });
+            return cleanEntry;
+          });
+        }
+
+          await updateDoc(docRef, {
+            // Update core inspection fields that might have changed
+            inspectionCode: dataToSave.inspectionCode,
+            warehouseCode: dataToSave.warehouseCode,
+            warehouseName: dataToSave.warehouseName,
+            status: newStatus,
+            lastUpdated: new Date().toISOString(),
+            [`${newStatus}At`]: new Date().toISOString(),
+            warehouseInspectionData: {
+              ...cleanFormData2,
+              status: newStatus,
+              lastUpdated: new Date().toISOString()
+            }
+          });
+          
+          documentFound = true;
+        }
+      }
+      
+      if (!documentFound) {
+        toast({
+          title: "Error",
+          description: "Could not find inspection record to update",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Update local state
+      setFormData(prev => ({ 
+        ...prev, 
+        status: newStatus,
+        showActivationButtons: false
+      }));
+
+      // Notify parent component
+      if (onStatusChange && dataToSave.warehouseCode) {
+        onStatusChange(dataToSave.warehouseCode, newStatus);
+      }
+
+      toast({
+        title: "Status Updated",
+        description: actionMessage,
+      });
+
+      // Close form after delay
+      setTimeout(() => onClose(), 1000);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update status",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Handle status change actions
   const handleStatusAction = async (action: 'edit' | 'activate' | 'resubmit' | 'reject' | 'close' | 'reactivate' | 'submit') => {
     try {
+      // For activate, close, and reactivate actions, show insurance popup
+      if (action === 'activate' || action === 'close' || action === 'reactivate') {
+        setPendingAction(action);
+        setShowInsurancePopup(true);
+        return;
+      }
+
+      // For other actions, proceed normally
       let newStatus = '';
       let actionMessage = '';
 
@@ -620,10 +1520,6 @@ export default function WarehouseInspectionForm({
           newStatus = 'pending';
           actionMessage = 'Moved to pending for editing';
           break;
-        case 'activate':
-          newStatus = 'activated';
-          actionMessage = 'Activated successfully';
-          break;
         case 'resubmit':
           newStatus = 'resubmitted';
           actionMessage = 'Moved to resubmitted';
@@ -631,14 +1527,6 @@ export default function WarehouseInspectionForm({
         case 'reject':
           newStatus = 'rejected';
           actionMessage = 'Rejected';
-          break;
-        case 'close':
-          newStatus = 'closed';
-          actionMessage = 'Closed successfully';
-          break;
-        case 'reactivate':
-          newStatus = 'reactivate';
-          actionMessage = 'Moved to reactivation';
           break;
         case 'submit':
           newStatus = 'submitted';
@@ -659,21 +1547,42 @@ export default function WarehouseInspectionForm({
                   if (!querySnapshot.empty) {
             const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
           
-          // Clean the form data to avoid invalid date issues
-          const cleanFormData = { ...formData };
-          
-          // Fix any invalid dates
-          Object.keys(cleanFormData).forEach(key => {
-            if (cleanFormData[key] instanceof Date) {
-              if (isNaN(cleanFormData[key].getTime())) {
-                cleanFormData[key] = null; // Replace invalid dates with null
-              } else {
-                cleanFormData[key] = cleanFormData[key].toISOString(); // Convert valid dates to ISO string
-              }
+                  // Clean the form data to avoid invalid date issues
+        const cleanFormData = { ...formData };
+        
+        // Fix any invalid dates
+        Object.keys(cleanFormData).forEach(key => {
+          if (cleanFormData[key] instanceof Date) {
+            if (isNaN(cleanFormData[key].getTime())) {
+              cleanFormData[key] = null; // Replace invalid dates with null
+            } else {
+              cleanFormData[key] = cleanFormData[key].toISOString(); // Convert valid dates to ISO string
             }
+          }
+        });
+
+        // Also fix dates in insurance entries
+        if (cleanFormData.insuranceEntries && Array.isArray(cleanFormData.insuranceEntries)) {
+          cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map(entry => {
+            const cleanEntry = { ...entry };
+            Object.keys(cleanEntry).forEach(key => {
+              if (cleanEntry[key] instanceof Date) {
+                if (isNaN(cleanEntry[key].getTime())) {
+                  cleanEntry[key] = null;
+                } else {
+                  cleanEntry[key] = cleanEntry[key].toISOString();
+                }
+              }
+            });
+            return cleanEntry;
           });
+        }
 
           await updateDoc(docRef, {
+            // Update core inspection fields that might have changed
+            inspectionCode: formData.inspectionCode,
+            warehouseCode: formData.warehouseCode,
+            warehouseName: formData.warehouseName,
             status: newStatus,
             lastUpdated: new Date().toISOString(),
             [`${newStatus}At`]: new Date().toISOString(),
@@ -697,21 +1606,42 @@ export default function WarehouseInspectionForm({
                   if (!querySnapshot.empty) {
             const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
           
-          // Clean the form data to avoid invalid date issues
-          const cleanFormData2 = { ...formData };
-          
-          // Fix any invalid dates
-          Object.keys(cleanFormData2).forEach(key => {
-            if (cleanFormData2[key] instanceof Date) {
-              if (isNaN(cleanFormData2[key].getTime())) {
-                cleanFormData2[key] = null; // Replace invalid dates with null
-              } else {
-                cleanFormData2[key] = cleanFormData2[key].toISOString(); // Convert valid dates to ISO string
-              }
+                  // Clean the form data to avoid invalid date issues
+        const cleanFormData2 = { ...formData };
+        
+        // Fix any invalid dates
+        Object.keys(cleanFormData2).forEach(key => {
+          if (cleanFormData2[key] instanceof Date) {
+            if (isNaN(cleanFormData2[key].getTime())) {
+              cleanFormData2[key] = null; // Replace invalid dates with null
+            } else {
+              cleanFormData2[key] = cleanFormData2[key].toISOString(); // Convert valid dates to ISO string
             }
+          }
+        });
+
+        // Also fix dates in insurance entries
+        if (cleanFormData2.insuranceEntries && Array.isArray(cleanFormData2.insuranceEntries)) {
+          cleanFormData2.insuranceEntries = cleanFormData2.insuranceEntries.map(entry => {
+            const cleanEntry = { ...entry };
+            Object.keys(cleanEntry).forEach(key => {
+              if (cleanEntry[key] instanceof Date) {
+                if (isNaN(cleanEntry[key].getTime())) {
+                  cleanEntry[key] = null;
+                } else {
+                  cleanEntry[key] = cleanEntry[key].toISOString();
+                }
+              }
+            });
+            return cleanEntry;
           });
+        }
 
           await updateDoc(docRef, {
+            // Update core inspection fields that might have changed
+            inspectionCode: formData.inspectionCode,
+            warehouseCode: formData.warehouseCode,
+            warehouseName: formData.warehouseName,
             status: newStatus,
             lastUpdated: new Date().toISOString(),
             [`${newStatus}At`]: new Date().toISOString(),
@@ -766,6 +1696,37 @@ export default function WarehouseInspectionForm({
     }
   };
 
+  // Collapsible Card Header Component
+  const CollapsibleCardHeader = ({ 
+    title, 
+    sectionName, 
+    className = "bg-green-50"
+  }: { 
+    title: string; 
+    sectionName: keyof typeof collapsedSections;
+    className?: string;
+  }) => {
+    const isCollapsed = collapsedSections[sectionName];
+    
+    return (
+      <CardHeader 
+        className={`${className} cursor-pointer select-none transition-colors hover:bg-green-100`}
+        onClick={() => toggleSection(sectionName)}
+      >
+        <CardTitle className="text-green-700 flex items-center justify-between">
+          <span>{title}</span>
+          <div className="transition-transform duration-200">
+            {isCollapsed ? (
+              <ChevronRight className="h-5 w-5" />
+            ) : (
+              <ChevronDown className="h-5 w-5" />
+            )}
+          </div>
+        </CardTitle>
+      </CardHeader>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-white p-6">
       {/* Company Header */}
@@ -776,7 +1737,8 @@ export default function WarehouseInspectionForm({
             alt="Company Logo"
             width={100}
             height={100}
-            className="rounded-full"
+            className="rounded-full w-25 h-25 max-w-[100px] max-h-[100px] object-cover"
+            style={{ width: '100px', height: '100px' }}
           />
         </div>
         <h1 className="text-3xl font-bold text-orange-600">
@@ -887,32 +1849,87 @@ export default function WarehouseInspectionForm({
         `}</style>
         {/* Basic Warehouse Details */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Warehouse Details</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CollapsibleCardHeader 
+            title="Warehouse Details" 
+            sectionName="warehouseDetails" 
+          />
+          {!collapsedSections.warehouseDetails && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="warehouseName">Warehouse Name <span className="text-red-500">*</span></Label>
-                <Select 
-  className="select-orange"
-                  value={formData.warehouseName} 
-                  onValueChange={isFieldReadOnly('warehouseName') ? undefined : handleWarehouseSelect} 
-                  disabled={isFieldReadOnly('warehouseName')}
-                  className="text-orange-600"
-                  required
-                >
-                  <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
-                    <SelectValue placeholder="Select Warehouse" className="text-orange-600" style={{ color: "#ea580c" }} />
-                  </SelectTrigger>
-                  <SelectContent className="text-orange-600" style={{ color: "#ea580c" }}>
-                    {warehouses.map(warehouse => (
-                      <SelectItem key={warehouse.id} value={warehouse.warehouseName}>
-                        {warehouse.warehouseName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                
+                {/* For new inspections - show warehouse select dropdown */}
+                {mode === 'create' && !formData.warehouseName && (
+                  <Select 
+                    value={formData.warehouseName} 
+                    onValueChange={handleWarehouseSelect} 
+                    className="text-orange-600"
+                    required
+                  >
+                    <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
+                      <SelectValue placeholder="Select Warehouse" className="text-orange-600" style={{ color: "#ea580c" }} />
+                    </SelectTrigger>
+                    <SelectContent className="text-orange-600" style={{ color: "#ea580c" }}>
+                      {warehouses.map(warehouse => (
+                        <SelectItem key={warehouse.id} value={warehouse.warehouseName}>
+                          {warehouse.warehouseName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {/* For existing inspections - show editable warehouse name */}
+                {(mode !== 'create' || formData.warehouseName) && (
+                  <div className="flex gap-2">
+                    {isEditingWarehouseName ? (
+                      <div className="flex-1 flex gap-2">
+                        <Input
+                          value={editableWarehouseName}
+                          onChange={(e) => setEditableWarehouseName(e.target.value)}
+                          className="text-orange-600"
+                          placeholder="Enter warehouse name"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleWarehouseNameSave}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={handleWarehouseNameCancel}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex gap-2">
+                        <Input
+                          value={formData.warehouseName}
+                          readOnly
+                          className="bg-gray-50 text-orange-600"
+                        />
+                        {formData.status !== 'pending' && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={handleWarehouseNameEdit}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -921,8 +1938,10 @@ export default function WarehouseInspectionForm({
                   id="warehouseCode"
                   value={formData.warehouseCode}
                   readOnly
-                  className="bg-gray-50 text-orange-600"
+                  className="bg-red-50 text-red-600 font-medium border-red-200"
+                  title="Warehouse code cannot be changed to maintain system integrity"
                 />
+                <p className="text-xs text-red-500">* Warehouse code is read-only to maintain system integrity</p>
               </div>
             </div>
 
@@ -933,8 +1952,8 @@ export default function WarehouseInspectionForm({
                 <Input
                   id="inspectionCode"
                   value={formData.inspectionCode || ''}
-                  readOnly
-                  className="bg-gray-50 text-orange-600"
+                  onChange={(e) => setFormData(prev => ({ ...prev, inspectionCode: e.target.value }))}
+                  className="text-orange-600"
                 />
               </div>
             )}
@@ -1046,7 +2065,7 @@ export default function WarehouseInspectionForm({
                     disabled={isFieldReadOnly('dateOfInspection')}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.dateOfInspection && !isNaN(formData.dateOfInspection.getTime()) ? format(formData.dateOfInspection, "PPP") : "Pick a date"}
+                                            {formData.dateOfInspection && formData.dateOfInspection instanceof Date && !isNaN(formData.dateOfInspection.getTime()) ? format(formData.dateOfInspection, "PPP") : "Pick a date"}
                   </Button>
                 </PopoverTrigger>
                 {!isFieldReadOnly('dateOfInspection') && (
@@ -1063,14 +2082,17 @@ export default function WarehouseInspectionForm({
               </Popover>
             </div>
           </CardContent>
+          )}
         </Card>
 
         {/* Bank Details */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Bank Details</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CollapsibleCardHeader 
+            title="Bank Details" 
+            sectionName="bankDetails" 
+          />
+          {!collapsedSections.bankDetails && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
                 {/* Bank Details Form - Show selected bank details */}
                 <div className="mb-6 p-4 border border-green-200 rounded-lg bg-green-50">
                   <Label className="text-sm font-medium text-green-700 mb-3 block">
@@ -1134,14 +2156,17 @@ export default function WarehouseInspectionForm({
 
 
           </CardContent>
+          )}
         </Card>
 
         {/* Ownership & Warehouse Details */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Ownership & Warehouse Details</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CollapsibleCardHeader 
+            title="Ownership & Warehouse Details" 
+            sectionName="ownershipDetails" 
+          />
+          {!collapsedSections.ownershipDetails && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="godownOwnership">Godown Ownership <span className="text-red-500">*</span></Label>
@@ -1304,12 +2329,22 @@ export default function WarehouseInspectionForm({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="totalChambers">Total Number of Chambers <span className="text-red-500">*</span></Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="totalChambers">Total Number of Chambers <span className="text-red-500">*</span></Label>
+                  <Button
+                    type="button"
+                    onClick={addChamber}
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Chamber
+                  </Button>
+                </div>
                 <Input
                   id="totalChambers"
                   value={formData.totalChambers}
                   onChange={(e) => setFormData(prev => ({ ...prev, totalChambers: e.target.value }))}
-                  className="text-orange-600"
                   className="text-orange-600"
                   required
                 />
@@ -1324,7 +2359,6 @@ export default function WarehouseInspectionForm({
                   value={formData.latitude}
                   onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
                   className="text-orange-600"
-                  className="text-orange-600"
                   required
                 />
               </div>
@@ -1338,20 +2372,106 @@ export default function WarehouseInspectionForm({
                   value={formData.longitude}
                   onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
                   className="text-orange-600"
-                  className="text-orange-600"
                   required
                 />
               </div>
             </div>
+
+            {/* Chamber Details */}
+            {formData.chambers.length > 0 && (
+              <div className="space-y-4">
+                <Label className="text-lg font-semibold text-green-700">Chamber Details</Label>
+                {formData.chambers.map((chamber, index) => (
+                  <Card key={chamber.id} className="border-orange-200">
+                    <CardHeader className="bg-orange-50 pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-orange-700 text-base">Chamber {index + 1}</CardTitle>
+                        <Button
+                          type="button"
+                          onClick={() => removeChamber(chamber.id)}
+                          size="sm"
+                          variant="destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="space-y-2">
+                          <Label>Length (sq ft) <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={chamber.length}
+                            onChange={(e) => updateChamber(chamber.id, 'length', e.target.value)}
+                            className="text-orange-600"
+                            placeholder="Enter length"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Breadth (sq ft) <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={chamber.breadth}
+                            onChange={(e) => updateChamber(chamber.id, 'breadth', e.target.value)}
+                            className="text-orange-600"
+                            placeholder="Enter breadth"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Height (sq ft) <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={chamber.height}
+                            onChange={(e) => updateChamber(chamber.id, 'height', e.target.value)}
+                            className="text-orange-600"
+                            placeholder="Enter height"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Division Factor <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={chamber.divisionFactor}
+                            onChange={(e) => updateChamber(chamber.id, 'divisionFactor', e.target.value)}
+                            className="text-orange-600"
+                            placeholder="Enter division factor"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Capacity (Calculated)</Label>
+                          <Input
+                            value={chamber.capacity}
+                            readOnly
+                            className="bg-gray-100 text-gray-700"
+                            placeholder="Auto-calculated"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+          )}
+                  </Card>
+                ))}
+              </div>
+            )}
           </CardContent>
+          )}
         </Card>
 
         {/* Physical Condition of Warehouse */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Physical Condition of Warehouse</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CollapsibleCardHeader 
+            title="Physical Condition of Warehouse" 
+            sectionName="physicalCondition" 
+          />
+          {!collapsedSections.physicalCondition && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="flooring">Flooring <span className="text-red-500">*</span></Label>
@@ -1671,15 +2791,18 @@ export default function WarehouseInspectionForm({
               </div>
             )}
           </CardContent>
+          )}
         </Card>
 
         {/* Cold Storage Section (conditional) */}
         {formData.typeOfWarehouse === 'cold storage' && (
           <Card className="border-green-300">
-            <CardHeader className="bg-green-50">
-              <CardTitle className="text-green-700">Cold Storage Details</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
+            <CollapsibleCardHeader 
+            title="Cold Storage Details" 
+            sectionName="coldStorageDetails" 
+          />
+          {!collapsedSections.coldStorageDetails && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="typeOfColdStorage">Type of Cold Storage <span className="text-red-500">*</span></Label>
@@ -1736,119 +2859,718 @@ export default function WarehouseInspectionForm({
                 </div>
               </div>
             </CardContent>
+            )}
           </Card>
         )}
 
         {/* Insurance of Stock */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Insurance of Stock</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CollapsibleCardHeader 
+            title="Insurance of Stock" 
+            sectionName="insuranceDetails" 
+          />
+          {!collapsedSections.insuranceDetails && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="insuranceTakenBy">Insurance Taken By <span className="text-red-500">*</span></Label>
+                <Label htmlFor="insuranceTakenBy">Insurance Taken By</Label>
                 <Select 
-  className="select-orange"
+                  className="select-orange"
                   value={formData.insuranceTakenBy} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, insuranceTakenBy: value }))}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, insuranceTakenBy: value, clientName: '', clientAddress: '', selectedBankName: '' }))}
                   className="text-orange-600"
-                  required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
                     <SelectValue placeholder="Select" className="text-orange-600" style={{ color: "#ea580c" }} />
                   </SelectTrigger>
                   <SelectContent className="text-orange-600" style={{ color: "#ea580c" }}>
                     <SelectItem value="warehouse owner" className="text-orange-600" style={{ color: "#ea580c" }}>Warehouse Owner</SelectItem>
-                    <SelectItem value="borrower" className="text-orange-600" style={{ color: "#ea580c" }}>Borrower</SelectItem>
+                    <SelectItem value="client" className="text-orange-600" style={{ color: "#ea580c" }}>Client</SelectItem>
                     <SelectItem value="bank" className="text-orange-600" style={{ color: "#ea580c" }}>Bank</SelectItem>
                     <SelectItem value="agrogreen" className="text-orange-600" style={{ color: "#ea580c" }}>Agrogreen</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {formData.insuranceTakenBy !== 'bank' && (
+              <div className="space-y-2">
+                <Label htmlFor="insuranceCommodity">Commodity</Label>
+                <Input
+                  id="insuranceCommodity"
+                  value={formData.insuranceCommodity}
+                  onChange={(e) => setFormData(prev => ({ ...prev, insuranceCommodity: e.target.value }))}
+                  className="text-orange-600"
+                  placeholder="Enter commodity name"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              {/* Client Name and Address dropdowns for Client selection */}
+              {formData.insuranceTakenBy === 'client' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="clientName">Client Name <span className="text-red-500">*</span></Label>
+                    <Select 
+                      value={formData.clientName} 
+                      onValueChange={(value) => {
+                        const selectedClient = clientsData.find(client => client.firmName === value);
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          clientName: value,
+                          clientAddress: selectedClient?.companyAddress || ''
+                        }));
+                      }}
+                      required
+                    >
+                      <SelectTrigger className="text-orange-600">
+                        <SelectValue placeholder="Select Client" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientsData.map(client => (
+                          <SelectItem key={client.id} value={client.firmName}>
+                            {client.firmName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="clientAddress">Client Address <span className="text-red-500">*</span></Label>
+                    <Select 
+                      value={formData.clientAddress} 
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, clientAddress: value }))}
+                      required
+                    >
+                      <SelectTrigger className="text-orange-600">
+                        <SelectValue placeholder="Select Address" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientsData
+                          .filter(client => formData.clientName ? client.firmName === formData.clientName : true)
+                          .map(client => (
+                            <SelectItem key={client.id} value={client.companyAddress}>
+                              {client.companyAddress}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+
+              {/* Bank Name dropdown for Bank selection */}
+              {formData.insuranceTakenBy === 'bank' && (
                 <div className="space-y-2">
-                  <Label htmlFor="insuranceCompany">Insurance Company <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="insuranceCompany"
-                    value={formData.insuranceCompany}
-                    onChange={(e) => setFormData(prev => ({ ...prev, insuranceCompany: e.target.value }))}
-                    className="text-orange-600"
+                  <Label htmlFor="selectedBankName">Bank Name <span className="text-red-500">*</span></Label>
+                  <Select 
+                    value={formData.selectedBankName} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, selectedBankName: value }))}
                     required
-                  />
+                  >
+                    <SelectTrigger className="text-orange-600">
+                      <SelectValue placeholder="Select Bank" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {insuranceBanks.map((bank, index) => (
+                        <SelectItem key={index} value={bank.name}>
+                          {bank.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </div>
 
-            {formData.insuranceTakenBy !== 'bank' && (
+            {/* Fire Policy Section - Show for all except bank */}
+            {formData.insuranceTakenBy && formData.insuranceTakenBy !== '' && formData.insuranceTakenBy !== 'bank' && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="insurancePolicyNumber">Insurance Policy Number <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="insurancePolicyNumber"
-                      value={formData.insurancePolicyNumber}
-                      onChange={(e) => setFormData(prev => ({ ...prev, insurancePolicyNumber: e.target.value }))}
-                      className="text-orange-600"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="assuredSum">Assured Sum <span className="text-red-500">*</span></Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="text-lg font-medium text-green-700 mb-4">Fire Policy Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="firePolicyCompanyName">Fire Policy Company Name</Label>
                       <Input
-                        id="assuredSum"
-                        type="number"
-                        className="pl-10 text-orange-600"
-                        value={formData.assuredSum}
-                        onChange={(e) => setFormData(prev => ({ ...prev, assuredSum: e.target.value }))}
-                        required
+                        id="firePolicyCompanyName"
+                        value={formData.firePolicyCompanyName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, firePolicyCompanyName: e.target.value }))}
+                        className="text-orange-600"
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="firePolicyNumber">Fire Policy Number</Label>
+                      <Input
+                        id="firePolicyNumber"
+                        value={formData.firePolicyNumber}
+                        onChange={(e) => setFormData(prev => ({ ...prev, firePolicyNumber: e.target.value }))}
+                        className="text-orange-600"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="firePolicyAmount">Fire Policy Amount</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                        <Input
+                          id="firePolicyAmount"
+                          type="number"
+                          className="pl-10 text-orange-600"
+                          value={formData.firePolicyAmount}
+                          onChange={(e) => setFormData(prev => ({ ...prev, firePolicyAmount: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Fire Policy Start Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.firePolicyStartDate && formData.firePolicyStartDate instanceof Date && !isNaN(formData.firePolicyStartDate.getTime()) ? format(formData.firePolicyStartDate, "PPP") : "Pick start date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.firePolicyStartDate || undefined}
+                            onSelect={(date) => setFormData(prev => ({ ...prev, firePolicyStartDate: date || null }))}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Fire Policy End Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.firePolicyEndDate && formData.firePolicyEndDate instanceof Date && !isNaN(formData.firePolicyEndDate.getTime()) ? format(formData.firePolicyEndDate, "PPP") : "Pick end date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.firePolicyEndDate || undefined}
+                            onSelect={(date) => setFormData(prev => ({ ...prev, firePolicyEndDate: date || null }))}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Validity of Insurance <span className="text-red-500">*</span></Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {formData.validityOfInsurance && !isNaN(formData.validityOfInsurance.getTime()) ? format(formData.validityOfInsurance, "PPP") : "Pick a date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={formData.validityOfInsurance || undefined}
-                          onSelect={(date) => setFormData(prev => ({ ...prev, validityOfInsurance: date || null }))}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="text-lg font-medium text-green-700 mb-4">Burglary Policy Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="burglaryPolicyCompanyName">Burglary Policy Company Name</Label>
+                      <Input
+                        id="burglaryPolicyCompanyName"
+                        value={formData.burglaryPolicyCompanyName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, burglaryPolicyCompanyName: e.target.value }))}
+                        className="text-orange-600"
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="originalVerified">Original Verified <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="originalVerified"
-                      value={formData.originalVerified}
-                      onChange={(e) => setFormData(prev => ({ ...prev, originalVerified: e.target.value }))}
-                      className="text-orange-600"
-                      required
-                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="burglaryPolicyNumber">Burglary Policy Number</Label>
+                      <Input
+                        id="burglaryPolicyNumber"
+                        value={formData.burglaryPolicyNumber}
+                        onChange={(e) => setFormData(prev => ({ ...prev, burglaryPolicyNumber: e.target.value }))}
+                        className="text-orange-600"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="burglaryPolicyAmount">Burglary Policy Amount</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                        <Input
+                          id="burglaryPolicyAmount"
+                          type="number"
+                          className="pl-10 text-orange-600"
+                          value={formData.burglaryPolicyAmount}
+                          onChange={(e) => setFormData(prev => ({ ...prev, burglaryPolicyAmount: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Burglary Policy Start Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.burglaryPolicyStartDate && formData.burglaryPolicyStartDate instanceof Date && !isNaN(formData.burglaryPolicyStartDate.getTime()) ? format(formData.burglaryPolicyStartDate, "PPP") : "Pick start date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.burglaryPolicyStartDate || undefined}
+                            onSelect={(date) => setFormData(prev => ({ ...prev, burglaryPolicyStartDate: date || null }))}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Burglary Policy End Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.burglaryPolicyEndDate && formData.burglaryPolicyEndDate instanceof Date && !isNaN(formData.burglaryPolicyEndDate.getTime()) ? format(formData.burglaryPolicyEndDate, "PPP") : "Pick end date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.burglaryPolicyEndDate || undefined}
+                            onSelect={(date) => setFormData(prev => ({ ...prev, burglaryPolicyEndDate: date || null }))}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
                 </div>
               </>
             )}
+
+            {/* Add Another Insurance Button - Only show for activated warehouses */}
+            {formData.status === 'activated' && (
+              <div className="border-t pt-4 mt-4">
+                <Button
+                  type="button"
+                  onClick={addInsuranceEntry}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Another Insurance
+                </Button>
+              </div>
+            )}
+
+            {/* Insurance Sections - Show existing insurance for all statuses, allow editing only for activated */}
+            {formData.insuranceEntries && formData.insuranceEntries.length > 0 && formData.insuranceEntries.map((insurance, index) => (
+              <div key={insurance.id} className="border-t pt-4 mt-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-medium text-green-700">Additional Insurance #{index + 1}</h4>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeInsuranceEntry(insurance.id)}
+                    className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Remove
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Insurance Taken By</Label>
+                    <Select 
+                      value={insurance.insuranceTakenBy} 
+                      onValueChange={(value) => {
+                        const updatedEntries = formData.insuranceEntries.map(entry =>
+                          entry.id === insurance.id 
+                            ? { ...entry, insuranceTakenBy: value, clientName: '', clientAddress: '', selectedBankName: '' }
+                            : entry
+                        );
+                        setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                      }}
+                    >
+                      <SelectTrigger className="text-orange-600">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="warehouse owner">Warehouse Owner</SelectItem>
+                        <SelectItem value="client">Client</SelectItem>
+                        <SelectItem value="bank">Bank</SelectItem>
+                        <SelectItem value="agrogreen">Agrogreen</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Commodity</Label>
+                    <Input
+                      value={insurance.insuranceCommodity}
+                      onChange={(e) => {
+                        const updatedEntries = formData.insuranceEntries.map(entry =>
+                          entry.id === insurance.id 
+                            ? { ...entry, insuranceCommodity: e.target.value }
+                            : entry
+                        );
+                        setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                      }}
+                      className="text-orange-600"
+                      placeholder="Enter commodity name"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  {/* Client fields for Client selection */}
+                  {insurance.insuranceTakenBy === 'client' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Client Name</Label>
+                        <Select 
+                          value={insurance.clientName} 
+                          onValueChange={(value) => {
+                            const selectedClient = clientsData.find(client => client.firmName === value);
+                            const updatedEntries = formData.insuranceEntries.map(entry =>
+                              entry.id === insurance.id 
+                                ? { 
+                                    ...entry, 
+                                    clientName: value,
+                                    clientAddress: selectedClient?.companyAddress || ''
+                                  }
+                                : entry
+                            );
+                            setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                          }}
+                        >
+                          <SelectTrigger className="text-orange-600">
+                            <SelectValue placeholder="Select Client" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clientsData.map(client => (
+                              <SelectItem key={client.id} value={client.firmName}>
+                                {client.firmName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Client Address</Label>
+                        <Select 
+                          value={insurance.clientAddress} 
+                          onValueChange={(value) => {
+                            const updatedEntries = formData.insuranceEntries.map(entry =>
+                              entry.id === insurance.id 
+                                ? { ...entry, clientAddress: value }
+                                : entry
+                            );
+                            setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                          }}
+                        >
+                          <SelectTrigger className="text-orange-600">
+                            <SelectValue placeholder="Select Address" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clientsData
+                              .filter(client => insurance.clientName ? client.firmName === insurance.clientName : true)
+                              .map(client => (
+                                <SelectItem key={client.id} value={client.companyAddress}>
+                                  {client.companyAddress}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Bank field for Bank selection */}
+                  {insurance.insuranceTakenBy === 'bank' && (
+                    <div className="space-y-2">
+                      <Label>Bank Name</Label>
+                      <Select 
+                        value={insurance.selectedBankName} 
+                        onValueChange={(value) => {
+                          const updatedEntries = formData.insuranceEntries.map(entry =>
+                            entry.id === insurance.id 
+                              ? { ...entry, selectedBankName: value }
+                              : entry
+                          );
+                          setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                        }}
+                      >
+                        <SelectTrigger className="text-orange-600">
+                          <SelectValue placeholder="Select Bank" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {insuranceBanks.map((bank, bankIndex) => (
+                            <SelectItem key={bankIndex} value={bank.name}>
+                              {bank.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Fire Policy Section - Show for all except bank */}
+                {insurance.insuranceTakenBy && insurance.insuranceTakenBy !== '' && insurance.insuranceTakenBy !== 'bank' && (
+                  <>
+                    <div className="border-t pt-4 mt-4">
+                      <h5 className="text-md font-medium text-green-700 mb-4">Fire Policy Details</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Fire Policy Company Name</Label>
+                          <Input
+                            value={insurance.firePolicyCompanyName}
+                            onChange={(e) => {
+                              const updatedEntries = formData.insuranceEntries.map(entry =>
+                                entry.id === insurance.id 
+                                  ? { ...entry, firePolicyCompanyName: e.target.value }
+                                  : entry
+                              );
+                              setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                            }}
+                            className="text-orange-600"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Fire Policy Number</Label>
+                          <Input
+                            value={insurance.firePolicyNumber}
+                            onChange={(e) => {
+                              const updatedEntries = formData.insuranceEntries.map(entry =>
+                                entry.id === insurance.id 
+                                  ? { ...entry, firePolicyNumber: e.target.value }
+                                  : entry
+                              );
+                              setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                            }}
+                            className="text-orange-600"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Fire Policy Amount</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                            <Input
+                              type="number"
+                              className="pl-10 text-orange-600"
+                              value={insurance.firePolicyAmount}
+                              onChange={(e) => {
+                                const updatedEntries = formData.insuranceEntries.map(entry =>
+                                  entry.id === insurance.id 
+                                    ? { ...entry, firePolicyAmount: e.target.value }
+                                    : entry
+                                );
+                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Fire Policy Start Date</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {insurance.firePolicyStartDate && insurance.firePolicyStartDate instanceof Date && !isNaN(insurance.firePolicyStartDate.getTime()) ? format(insurance.firePolicyStartDate, "PPP") : "Pick start date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={insurance.firePolicyStartDate || undefined}
+                                onSelect={(date) => {
+                                  const updatedEntries = formData.insuranceEntries.map(entry =>
+                                    entry.id === insurance.id 
+                                      ? { ...entry, firePolicyStartDate: date || null }
+                                      : entry
+                                  );
+                                  setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Fire Policy End Date</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {insurance.firePolicyEndDate && insurance.firePolicyEndDate instanceof Date && !isNaN(insurance.firePolicyEndDate.getTime()) ? format(insurance.firePolicyEndDate, "PPP") : "Pick end date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={insurance.firePolicyEndDate || undefined}
+                                onSelect={(date) => {
+                                  const updatedEntries = formData.insuranceEntries.map(entry =>
+                                    entry.id === insurance.id 
+                                      ? { ...entry, firePolicyEndDate: date || null }
+                                      : entry
+                                  );
+                                  setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4 mt-4">
+                      <h5 className="text-md font-medium text-green-700 mb-4">Burglary Policy Details</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Burglary Policy Company Name</Label>
+                          <Input
+                            value={insurance.burglaryPolicyCompanyName}
+                            onChange={(e) => {
+                              const updatedEntries = formData.insuranceEntries.map(entry =>
+                                entry.id === insurance.id 
+                                  ? { ...entry, burglaryPolicyCompanyName: e.target.value }
+                                  : entry
+                              );
+                              setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                            }}
+                            className="text-orange-600"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Burglary Policy Number</Label>
+                          <Input
+                            value={insurance.burglaryPolicyNumber}
+                            onChange={(e) => {
+                              const updatedEntries = formData.insuranceEntries.map(entry =>
+                                entry.id === insurance.id 
+                                  ? { ...entry, burglaryPolicyNumber: e.target.value }
+                                  : entry
+                              );
+                              setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                            }}
+                            className="text-orange-600"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Burglary Policy Amount</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                            <Input
+                              type="number"
+                              className="pl-10 text-orange-600"
+                              value={insurance.burglaryPolicyAmount}
+                              onChange={(e) => {
+                                const updatedEntries = formData.insuranceEntries.map(entry =>
+                                  entry.id === insurance.id 
+                                    ? { ...entry, burglaryPolicyAmount: e.target.value }
+                                    : entry
+                                );
+                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Burglary Policy Start Date</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {insurance.burglaryPolicyStartDate && insurance.burglaryPolicyStartDate instanceof Date && !isNaN(insurance.burglaryPolicyStartDate.getTime()) ? format(insurance.burglaryPolicyStartDate, "PPP") : "Pick start date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={insurance.burglaryPolicyStartDate || undefined}
+                                onSelect={(date) => {
+                                  const updatedEntries = formData.insuranceEntries.map(entry =>
+                                    entry.id === insurance.id 
+                                      ? { ...entry, burglaryPolicyStartDate: date || null }
+                                      : entry
+                                  );
+                                  setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Burglary Policy End Date</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {insurance.burglaryPolicyEndDate && insurance.burglaryPolicyEndDate instanceof Date && !isNaN(insurance.burglaryPolicyEndDate.getTime()) ? format(insurance.burglaryPolicyEndDate, "PPP") : "Pick end date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={insurance.burglaryPolicyEndDate || undefined}
+                                onSelect={(date) => {
+                                  const updatedEntries = formData.insuranceEntries.map(entry =>
+                                    entry.id === insurance.id 
+                                      ? { ...entry, burglaryPolicyEndDate: date || null }
+                                      : entry
+                                  );
+                                  setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </CardContent>
+          )}
         </Card>
 
         {/* Security at Warehouse */}
@@ -1915,6 +3637,7 @@ export default function WarehouseInspectionForm({
                   <SelectContent className="text-orange-600" style={{ color: "#ea580c" }}>
                     <SelectItem value="day" className="text-orange-600" style={{ color: "#ea580c" }}>Day</SelectItem>
                     <SelectItem value="night" className="text-orange-600" style={{ color: "#ea580c" }}>Night</SelectItem>
+                    <SelectItem value="both" className="text-orange-600" style={{ color: "#ea580c" }}>Both</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2163,10 +3886,12 @@ export default function WarehouseInspectionForm({
 
         {/* Warehouse Upkeep */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Warehouse Upkeep</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CollapsibleCardHeader 
+            title="Warehouse Upkeep" 
+            sectionName="warehouseUpkeep" 
+          />
+          {!collapsedSections.warehouseUpkeep && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="dividedIntoChambers">Whether Warehouse is Divided into Chambers or Partitions <span className="text-red-500">*</span></Label>
@@ -2288,7 +4013,7 @@ export default function WarehouseInspectionForm({
                           className="w-full justify-start text-left font-normal"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {formData.expiryDate && !isNaN(formData.expiryDate.getTime()) ? format(formData.expiryDate, "PPP") : "Pick a date"}
+                          {formData.expiryDate && formData.expiryDate instanceof Date && !isNaN(formData.expiryDate.getTime()) ? format(formData.expiryDate, "PPP") : "Pick a date"}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0">
@@ -2392,14 +4117,17 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
           </CardContent>
+          )}
         </Card>
 
         {/* Other Details */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Other Details</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CollapsibleCardHeader 
+            title="Other Details" 
+            sectionName="otherDetails" 
+          />
+          {!collapsedSections.otherDetails && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="riskOfCargoAffected">Any Risk of Cargo Getting Affected <span className="text-red-500">*</span></Label>
@@ -2462,6 +4190,7 @@ export default function WarehouseInspectionForm({
               </div>
             )}
           </CardContent>
+          )}
         </Card>
 
         {/* Insurance Claim History */}
@@ -2509,12 +4238,12 @@ export default function WarehouseInspectionForm({
         {/* OE Details */}
         <Card className="border-green-300">
           <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">OE Details</CardTitle>
+            <CardTitle className="text-green-700">Operational Executive Details</CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="nameOfOE">Name of OE <span className="text-red-500">*</span></Label>
+                <Label htmlFor="nameOfOE">Name of Operational Executive <span className="text-red-500">*</span></Label>
                 <Input
                   id="nameOfOE"
                   value={formData.nameOfOE}
@@ -2534,7 +4263,7 @@ export default function WarehouseInspectionForm({
                       className="w-full justify-start text-left font-normal"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formData.oeDate && !isNaN(formData.oeDate.getTime()) ? format(formData.oeDate, "PPP") : "Pick a date"}
+                                              {formData.oeDate && formData.oeDate instanceof Date && !isNaN(formData.oeDate.getTime()) ? format(formData.oeDate, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -2653,10 +4382,12 @@ export default function WarehouseInspectionForm({
 
         {/* Remarks */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Remarks</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CollapsibleCardHeader 
+            title="Remarks" 
+            sectionName="remarks" 
+          />
+          {!collapsedSections.remarks && (
+            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
             <div className="space-y-2">
               <Label htmlFor="remarks">Additional Notes/Comments</Label>
               <Textarea
@@ -2670,6 +4401,7 @@ export default function WarehouseInspectionForm({
               />
             </div>
           </CardContent>
+          )}
         </Card>
 
         {/* Certification */}
@@ -2698,6 +4430,29 @@ export default function WarehouseInspectionForm({
           </Button>
           
           <div className="flex space-x-4">
+            {/* Save button - always available for editing */}
+            <Button 
+              type="button" 
+              className="bg-blue-500 hover:bg-blue-600 action-button"
+              onClick={async () => {
+                try {
+                  await saveFormData();
+                  toast({
+                    title: "Saved",
+                    description: "Changes saved successfully",
+                  });
+                } catch (error) {
+                  toast({
+                    title: "Error",
+                    description: "Failed to save changes",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              Save Changes
+            </Button>
+            
             {/* PENDING or editing state */}
             {(formData.status === 'pending' || mode === 'edit') && (
               <Button type="submit" className="bg-green-500 hover:bg-green-600 action-button">
@@ -2806,6 +4561,34 @@ export default function WarehouseInspectionForm({
           </div>
         </div>
       </form>
+
+      {/* Insurance Popup */}
+      <InsurancePopup
+        isOpen={showInsurancePopup}
+        onClose={() => {
+          setShowInsurancePopup(false);
+          setPendingAction(null);
+        }}
+        onSave={handleInsuranceSave}
+        initialData={{
+          insuranceTakenBy: formData.insuranceTakenBy,
+          insuranceCommodity: formData.insuranceCommodity,
+          clientName: formData.clientName,
+          clientAddress: formData.clientAddress,
+          selectedBankName: formData.selectedBankName,
+          firePolicyCompanyName: formData.firePolicyCompanyName,
+          firePolicyNumber: formData.firePolicyNumber,
+          firePolicyAmount: formData.firePolicyAmount,
+          firePolicyStartDate: formData.firePolicyStartDate,
+          firePolicyEndDate: formData.firePolicyEndDate,
+          burglaryPolicyCompanyName: formData.burglaryPolicyCompanyName,
+          burglaryPolicyNumber: formData.burglaryPolicyNumber,
+          burglaryPolicyAmount: formData.burglaryPolicyAmount,
+          burglaryPolicyStartDate: formData.burglaryPolicyStartDate,
+          burglaryPolicyEndDate: formData.burglaryPolicyEndDate,
+        }}
+        action={pendingAction || 'activate'}
+      />
     </div>
   );
 } 

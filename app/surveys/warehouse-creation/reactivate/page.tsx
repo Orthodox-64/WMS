@@ -392,7 +392,10 @@ export default function ReactivateWarehousePage() {
           <DialogContent className="max-w-full max-h-[90vh] overflow-y-auto p-0">
             {selectedInspection && (
               <WarehouseInspectionForm 
-                onClose={() => setShowInspectionForm(false)}
+                onClose={() => {
+                  setShowInspectionForm(false);
+                  loadInspections(); // Reload data after closing form
+                }}
                 initialData={convertInspectionToFormData(selectedInspection)}
                 mode="view"
                 onStatusChange={(warehouseCode, newStatus) => {

@@ -46,7 +46,7 @@ export default function SurveysPage() {
           {/* Centered Title with Light Orange Background */}
           <div className="flex-1 text-center">
             <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
-              UH Surveys
+              Survey
             </h1>
           </div>
           

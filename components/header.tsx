@@ -43,13 +43,14 @@ export default function Header() {
   return (
     <header className="border-b border-border h-20 px-4 flex items-center justify-between bg-green-600 z-10 w-full relative">
       <div className="flex items-center gap-3 bg-white rounded-lg px-2 py-1">
-        <Image 
-          src="/AGlogo.webp" 
-          alt="AgroGreen Logo" 
-          width={80} 
-          height={40}
-          className="max-h-10 w-auto object-contain"
-        />
+        <div className="w-20 h-10 relative">
+          <Image 
+            src="/AGlogo.webp" 
+            alt="AgroGreen Logo" 
+            fill
+            className="object-contain"
+          />
+        </div>
         
         <Button
           variant="secondary"

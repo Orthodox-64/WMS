@@ -4,7 +4,7 @@ import DashboardLayout from '@/components/dashboard-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -17,6 +17,278 @@ import {
   Eye
 } from "lucide-react";
 import WarehouseInspectionForm from '../inspection-form';
+
+// Wrapper component to handle async data loading
+function WarehouseInspectionFormWrapper({ 
+  inspection, 
+  onClose, 
+  onStatusChange 
+}: {
+  inspection: InspectionData;
+  onClose: () => void;
+  onStatusChange: () => void;
+}) {
+  const [formData, setFormData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadFormData = async () => {
+      try {
+        const data = await convertInspectionToFormData(inspection);
+        setFormData(data);
+      } catch (error) {
+        console.error('Error loading form data:', error);
+        setFormData({});
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadFormData();
+  }, [inspection]);
+
+  const findAllInsuranceForWarehouse = async (warehouseCode: string, warehouseName: string) => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'inspections'));
+      const allInsuranceEntries = [];
+      let matchingInspections = 0;
+      
+      console.log(`🔍 Searching for insurance entries using warehouse code: ${warehouseCode}`);
+      
+      querySnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        // Check warehouse code from warehouseInspectionData (if available) or fallback to top-level
+        const inspectionWarehouseCode = data.warehouseInspectionData?.warehouseCode || data.warehouseCode;
+        
+        // Match by warehouse code (primary) or warehouse name (fallback)
+        if (inspectionWarehouseCode === warehouseCode || 
+            data.warehouseInspectionData?.warehouseName === warehouseName ||
+            data.warehouseName === warehouseName) {
+          matchingInspections++;
+          console.log(`📋 Found inspection ${data.inspectionCode} with matching warehouse code: ${inspectionWarehouseCode}`);
+          console.log(`📊 Inspection data keys:`, Object.keys(data));
+          
+          // Check multiple possible locations for insurance data
+          let insuranceData = null;
+          
+          // 1. Check top-level insuranceEntries
+          if (data.insuranceEntries && Array.isArray(data.insuranceEntries)) {
+            console.log(`✅ Found top-level insurance entries in inspection ${data.inspectionCode}:`, data.insuranceEntries.length);
+            console.log(`📝 Top-level insurance data:`, data.insuranceEntries);
+            insuranceData = data.insuranceEntries;
+          }
+          // 2. Check nested warehouseInspectionData.insuranceEntries
+          else if (data.warehouseInspectionData && data.warehouseInspectionData.insuranceEntries && Array.isArray(data.warehouseInspectionData.insuranceEntries)) {
+            console.log(`✅ Found nested insurance entries in inspection ${data.inspectionCode}:`, data.warehouseInspectionData.insuranceEntries.length);
+            console.log(`📝 Nested insurance data:`, data.warehouseInspectionData.insuranceEntries);
+            insuranceData = data.warehouseInspectionData.insuranceEntries;
+          }
+          // 3. Check if there's insurance data in the main form data (legacy format)
+          else if (data.warehouseInspectionData && data.warehouseInspectionData.firePolicyNumber) {
+            console.log(`✅ Found legacy insurance format in inspection ${data.inspectionCode}`);
+            console.log(`📝 Legacy insurance data:`, {
+              firePolicyNumber: data.warehouseInspectionData.firePolicyNumber,
+              clientName: data.warehouseInspectionData.clientName
+            });
+            // Convert legacy format to new format
+            insuranceData = [{
+              id: `legacy_${Date.now()}`,
+              insuranceTakenBy: data.warehouseInspectionData.insuranceTakenBy || '',
+              insuranceCommodity: data.warehouseInspectionData.insuranceCommodity || '',
+              clientName: data.warehouseInspectionData.clientName || '',
+              clientAddress: data.warehouseInspectionData.clientAddress || '',
+              selectedBankName: data.warehouseInspectionData.selectedBankName || '',
+              firePolicyCompanyName: data.warehouseInspectionData.firePolicyCompanyName || '',
+              firePolicyNumber: data.warehouseInspectionData.firePolicyNumber || '',
+              firePolicyAmount: data.warehouseInspectionData.firePolicyAmount || '',
+              firePolicyStartDate: data.warehouseInspectionData.firePolicyStartDate || null,
+              firePolicyEndDate: data.warehouseInspectionData.firePolicyEndDate || null,
+              burglaryPolicyCompanyName: data.warehouseInspectionData.burglaryPolicyCompanyName || '',
+              burglaryPolicyNumber: data.warehouseInspectionData.burglaryPolicyNumber || '',
+              burglaryPolicyAmount: data.warehouseInspectionData.burglaryPolicyAmount || '',
+              burglaryPolicyStartDate: data.warehouseInspectionData.burglaryPolicyStartDate || null,
+              burglaryPolicyEndDate: data.warehouseInspectionData.burglaryPolicyEndDate || null,
+              createdAt: new Date(data.createdAt || Date.now())
+            }];
+          }
+          else {
+            console.log(`❌ No insurance data found in inspection ${data.inspectionCode}`);
+          }
+          
+          // Add found insurance data
+          if (insuranceData && insuranceData.length > 0) {
+            allInsuranceEntries.push(...insuranceData);
+          }
+        }
+      });
+      
+      // Remove duplicates based on policy numbers and client name
+      const uniqueInsurance = allInsuranceEntries.filter((entry, index, self) => {
+        return index === self.findIndex(e => {
+          // Consider entries duplicate if they have same policy numbers OR same client name with similar policies
+          const samePolicyNumbers = e.firePolicyNumber === entry.firePolicyNumber && 
+                                   e.burglaryPolicyNumber === entry.burglaryPolicyNumber;
+          const sameClient = e.clientName === entry.clientName && e.clientName !== '';
+          
+          return samePolicyNumbers || sameClient;
+        });
+              });
+        
+        console.log(`🏗️ Processed ${matchingInspections} inspections for warehouse ${warehouseName}`);
+        console.log(`📦 Found ${allInsuranceEntries.length} total insurance entries, ${uniqueInsurance.length} unique entries for warehouse ${warehouseName}`);
+        console.log(`📄 Unique insurance entries:`, uniqueInsurance);
+        return uniqueInsurance;
+    } catch (error) {
+      console.error('Error finding insurance entries:', error);
+      return [];
+    }
+  };
+
+  const findExistingWarehouseFormData = async (warehouseCode: string, warehouseName: string) => {
+    try {
+      // Search for any filled warehouse inspection for the same warehouse code
+      const querySnapshot = await getDocs(collection(db, 'inspections'));
+      
+      console.log(`🔍 Searching for existing warehouse form data using warehouse code: ${warehouseCode}`);
+      
+      for (const doc of querySnapshot.docs) {
+        const data = doc.data();
+        // Check warehouse code from warehouseInspectionData (if available) or fallback to top-level
+        const inspectionWarehouseCode = data.warehouseInspectionData?.warehouseCode || data.warehouseCode;
+        
+        // Check if this is the same warehouse (by code primary, name fallback) and has filled form data
+        if ((inspectionWarehouseCode === warehouseCode || 
+             data.warehouseInspectionData?.warehouseName === warehouseName ||
+             data.warehouseName === warehouseName) &&
+            data.warehouseInspectionData && 
+            Object.keys(data.warehouseInspectionData).length > 5) {
+          
+          // Found existing filled data, return it excluding bank details
+          const existingData = { ...data.warehouseInspectionData };
+          
+          // Remove bank-specific fields to keep only warehouse details
+          delete existingData.bankState;
+          delete existingData.bankBranch;
+          delete existingData.bankName;
+          delete existingData.ifscCode;
+          
+          // Also check for insurance entries from all inspections of this warehouse
+          const allInsuranceEntries = await findAllInsuranceForWarehouse(warehouseCode, warehouseName);
+          if (allInsuranceEntries.length > 0) {
+            existingData.insuranceEntries = allInsuranceEntries;
+          }
+          
+          console.log(`Found existing warehouse data for ${warehouseName}:`, existingData);
+          return existingData;
+        }
+      }
+      
+      console.log(`No existing filled data found for warehouse: ${warehouseName}`);
+      return {};
+    } catch (error) {
+      console.error('Error finding existing warehouse data:', error);
+      return {};
+    }
+  };
+
+  const convertInspectionToFormData = async (inspection: InspectionData) => {
+    // Get the saved warehouse inspection data from the inspection record
+    const warehouseData = inspection.warehouseInspectionData || {};
+    
+    // Check if this inspection has no filled form data and try to fetch from existing warehouse data
+    let existingWarehouseData = {};
+    if (!warehouseData.warehouseName || Object.keys(warehouseData).length <= 5) {
+      // This appears to be a fresh inspection, try to find existing filled data for same warehouse
+      existingWarehouseData = await findExistingWarehouseFormData(inspection.warehouseCode, inspection.warehouseName);
+    }
+    
+    // Always fetch and merge insurance entries from all inspections of this warehouse
+    const allInsuranceEntries = await findAllInsuranceForWarehouse(inspection.warehouseCode, inspection.warehouseName);
+    
+    // Merge existing warehouse data but prioritize bank details from current inspection
+    const mergedData = { ...existingWarehouseData, ...warehouseData };
+    
+    // Ensure insurance entries include all warehouse insurance data
+    if (allInsuranceEntries.length > 0) {
+      mergedData.insuranceEntries = allInsuranceEntries;
+    }
+    
+    // Return the saved form data with fallbacks to inspection data
+    return {
+      // Use merged warehouse inspection data if available, otherwise fallback to inspection data
+      ...mergedData,
+      
+      // Override with inspection-specific data
+      warehouseName: inspection.warehouseName || mergedData.warehouseName || '',
+      warehouseCode: inspection.warehouseCode || mergedData.warehouseCode || '',
+      status: 'pending', // Always pending for this page
+      
+      // Bank details from current inspection (these are the specific bank for this inspection)
+      bankState: inspection.bankState || '',
+      bankBranch: inspection.bankBranch || '',
+      bankName: inspection.bankName || '',
+      ifscCode: inspection.ifscCode || '',
+      
+      // Location details from current inspection
+      state: inspection.state || mergedData.state || '',
+      branch: inspection.branch || mergedData.branch || '',
+      location: inspection.location || mergedData.location || '',
+      businessType: inspection.businessType || mergedData.businessType || '',
+      receiptType: inspection.receiptType || mergedData.receiptType || '',
+      
+      // Include creation info
+      createdAt: inspection.createdAt || mergedData.createdAt || '',
+      inspectionCode: inspection.inspectionCode || inspection.id || '',
+      
+      // Ensure arrays and objects have defaults
+      nameOfBank: mergedData.nameOfBank || [],
+      attachedFiles: mergedData.attachedFiles || [],
+      insuranceEntries: mergedData.insuranceEntries || [],
+      
+      // Ensure boolean defaults
+      warehouseFitCertification: mergedData.warehouseFitCertification || false,
+      
+      // Ensure date fields are properly handled - convert strings to Date objects with validation
+      dateOfInspection: mergedData.dateOfInspection ? 
+        (() => {
+          const date = new Date(mergedData.dateOfInspection);
+          return isNaN(date.getTime()) ? null : date;
+        })() : null,
+      validityOfInsurance: mergedData.validityOfInsurance ? 
+        (() => {
+          const date = new Date(mergedData.validityOfInsurance);
+          return isNaN(date.getTime()) ? null : date;
+        })() : null,
+      expiryDate: mergedData.expiryDate ? 
+        (() => {
+          const date = new Date(mergedData.expiryDate);
+          return isNaN(date.getTime()) ? null : date;
+        })() : null,
+      oeDate: mergedData.oeDate ? 
+        (() => {
+          const date = new Date(mergedData.oeDate);
+          return isNaN(date.getTime()) ? null : date;
+        })() : null
+    };
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-lg">Loading form data...</div>
+      </div>
+    );
+  }
+
+  return (
+    <WarehouseInspectionForm 
+      onClose={onClose}
+      initialData={formData}
+      mode="view"
+      onStatusChange={onStatusChange}
+    />
+  );
+}
 
 // Interface for inspection data
 interface InspectionData {
@@ -140,55 +412,9 @@ export default function PendingWarehousePage() {
     });
   };
 
-  const handleViewDetails = (inspection: InspectionData) => {
+  const handleViewDetails = async (inspection: InspectionData) => {
     setSelectedInspection(inspection);
     setShowInspectionForm(true);
-  };
-
-  const convertInspectionToFormData = (inspection: InspectionData) => {
-    // Get the saved warehouse inspection data from the inspection record
-    const warehouseData = inspection.warehouseInspectionData || {};
-    
-    // Return the saved form data with fallbacks to inspection data
-    return {
-      // Use saved warehouse inspection data if available, otherwise fallback to inspection data
-      ...warehouseData,
-      
-      // Override with inspection-specific data
-      warehouseName: inspection.warehouseName || warehouseData.warehouseName || '',
-      warehouseCode: inspection.warehouseCode || warehouseData.warehouseCode || '',
-      status: 'pending', // Always pending for this page
-      
-      // Bank details from inspection (these are the specific bank for this inspection)
-      bankState: inspection.bankState || warehouseData.bankState || '',
-      bankBranch: inspection.bankBranch || warehouseData.bankBranch || '',
-      bankName: inspection.bankName || warehouseData.bankName || '',
-      ifscCode: inspection.ifscCode || warehouseData.ifscCode || '',
-      
-      // Location details from inspection
-      state: inspection.state || warehouseData.state || '',
-      branch: inspection.branch || warehouseData.branch || '',
-      location: inspection.location || warehouseData.location || '',
-      businessType: inspection.businessType || warehouseData.businessType || '',
-      receiptType: inspection.receiptType || warehouseData.receiptType || '',
-      
-      // Include creation info
-      createdAt: inspection.createdAt || warehouseData.createdAt || '',
-      inspectionCode: inspection.inspectionCode || inspection.id || '',
-      
-      // Ensure arrays and objects have defaults
-      nameOfBank: warehouseData.nameOfBank || [],
-      attachedFiles: warehouseData.attachedFiles || [],
-      
-      // Ensure boolean defaults
-      warehouseFitCertification: warehouseData.warehouseFitCertification || false,
-      
-      // Ensure date fields are properly handled - convert strings to Date objects
-      dateOfInspection: warehouseData.dateOfInspection ? new Date(warehouseData.dateOfInspection) : null,
-      validityOfInsurance: warehouseData.validityOfInsurance ? new Date(warehouseData.validityOfInsurance) : null,
-      expiryDate: warehouseData.expiryDate ? new Date(warehouseData.expiryDate) : null,
-      oeDate: warehouseData.oeDate ? new Date(warehouseData.oeDate) : null
-    };
   };
 
   return (
@@ -337,14 +563,19 @@ export default function PendingWarehousePage() {
         {/* Warehouse Inspection Form Dialog */}
         <Dialog open={showInspectionForm} onOpenChange={setShowInspectionForm}>
           <DialogContent className="max-w-full max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Warehouse Inspection Form</DialogTitle>
+              <DialogDescription>
+                Fill out the warehouse inspection details and submit for review.
+              </DialogDescription>
+            </DialogHeader>
             {selectedInspection && (
-              <WarehouseInspectionForm 
+              <WarehouseInspectionFormWrapper 
+                inspection={selectedInspection}
                 onClose={() => {
                   setShowInspectionForm(false);
                   loadInspections(); // Reload data after closing form
                 }}
-                initialData={convertInspectionToFormData(selectedInspection)}
-                mode="view"
                 onStatusChange={() => {
                   loadInspections(); // Reload data when status changes
                 }}

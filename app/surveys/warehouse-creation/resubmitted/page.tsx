@@ -4,7 +4,7 @@ import DashboardLayout from '@/components/dashboard-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -413,9 +413,18 @@ export default function ResubmittedWarehousePage() {
         {/* Warehouse Inspection Form Dialog */}
         <Dialog open={showInspectionForm} onOpenChange={setShowInspectionForm}>
           <DialogContent className="max-w-full max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Warehouse Inspection Details</DialogTitle>
+              <DialogDescription>
+                View and manage warehouse inspection details for the selected inspection.
+              </DialogDescription>
+            </DialogHeader>
             {selectedInspection && (
               <WarehouseInspectionForm 
-                onClose={() => setShowInspectionForm(false)}
+                onClose={() => {
+                  setShowInspectionForm(false);
+                  loadInspections(); // Reload data after closing form
+                }}
                 initialData={convertInspectionToFormData(selectedInspection)}
                 mode="view"
                 onStatusChange={(warehouseCode, newStatus) => {
