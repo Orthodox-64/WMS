@@ -116,8 +116,7 @@ export default function ReservationBillingPage() {
           const data = doc.data();
           if (
             data.warehouseName &&
-            !warehouseSet.has(data.warehouseName) &&
-            (data.status === 'activate' || data.status === 'reactivate')
+            !warehouseSet.has(data.warehouseName)
           ) {
             warehouseSet.add(data.warehouseName);
             warehouseArr.push({ warehouseName: data.warehouseName, state: data.state, branch: data.branch, location: data.location });
@@ -173,8 +172,8 @@ export default function ReservationBillingPage() {
     }
 
     if (form.location) {
-      const warehousesInLocation = allWarehouses.filter(wh => wh.location === form.location);
-      setModalWarehouses(warehousesInLocation);
+      console.log('Modal Warehouses:', allWarehouses);
+      setModalWarehouses(allWarehouses);
     } else {
       setModalWarehouses([]);
     }
@@ -269,21 +268,7 @@ export default function ReservationBillingPage() {
       return <span className="text-green-700">{String(d.reservationEnd)}</span>;
     }
     const daysLeft = differenceInCalendarDays(endDate, today);
-    if (daysLeft >= 0 && daysLeft <= 5) {
-      return (
-        <div className="flex items-center gap-2">
-          <span className="text-green-700">{String(d.reservationEnd)}</span>
-          <button
-            className="p-0 m-0 bg-transparent border-none focus:outline-none"
-            title="Alert"
-            onClick={() => setAlertModal({ open: true, type: 'aboutToEnd', row: d })}
-            type="button"
-          >
-            <BlinkingSirenIcon color="red" size={24} />
-          </button>
-        </div>
-      );
-    } else if (daysLeft < 0) {
+    if (daysLeft < 0) {
       const hasBillingInfo = d.billingCycle !== '-' || d.billingType !== '-' || d.billingRate !== '-';
       if (!hasBillingInfo) {
         return (
@@ -509,11 +494,11 @@ export default function ReservationBillingPage() {
           <div className="border p-2 rounded-md bg-gray-50 text-sm max-w-xs">
             <div className="flex items-center space-x-2">
               <span className="h-3 w-3 bg-red-500 rounded-full"></span>
-              <span>- Expires within 5 days</span>
+              <span>- Expired and updated billing details</span>
             </div>
             <div className="flex items-center space-x-2 mt-1">
               <span className="h-3 w-3 bg-blue-500 rounded-full"></span>
-              <span>- Expired and updated billing details</span>
+              <span>- Expired with billing details</span>
             </div>
           </div>
         </div>
@@ -628,28 +613,12 @@ export default function ReservationBillingPage() {
           <DialogContent className="max-w-lg">
             <DialogHeaderUI>
               <DialogTitleUI>
-                {alertModal.type === 'aboutToEnd' && 'Reservation Ending Soon'}
                 {alertModal.type === 'expired' && 'Reservation Expired'}
                 {alertModal.type === 'update' && 'Update Reservation'}
               </DialogTitleUI>
             </DialogHeaderUI>
             {alertModal.row && (
               <>
-                {alertModal.type === 'aboutToEnd' && (
-                  <div className="space-y-4 text-center p-4">
-                    <p>This reservation is ending soon on <strong>{alertModal.row.reservationEnd || '-'}</strong>.</p>
-                    <p>Would you like to extend the reservation period?</p>
-                    <div className="flex flex-col items-center gap-2 pt-2">
-                      <Input type="date" onChange={e => setCalendarDate(e.target.value)} className="w-auto" />
-                      <Button className="w-full bg-green-500 hover:bg-green-600 text-white" disabled={!calendarDate} onClick={async () => {
-                        if (calendarDate) {
-                          await updateReservationField(alertModal.row?.reservationId || '', { reservationEnd: calendarDate });
-                          setAlertModal({ open: false, type: '', row: null });
-                        }
-                      }}>Update End Date</Button>
-                    </div>
-                  </div>
-                )}
                 {alertModal.type === 'expired' && (
                   <div className="space-y-4 p-4">
                     <p className="text-center text-red-600 font-bold">This reservation has expired.</p>

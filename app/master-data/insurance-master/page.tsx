@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, Download, Plus, Edit, Trash2 } from "lucide-react";
-import { useState, useEffect, useCallback } from 'react';
+import { Search, Download, Plus, Edit, Trash2, Minus, Pause } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader as DialogHeaderUI, DialogTitle as DialogTitleUI } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -16,6 +16,7 @@ import { Select as SelectUI, SelectTrigger, SelectContent, SelectItem, SelectVal
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/data-table';
 import Select from 'react-select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function InsuranceMasterPage() {
   const router = useRouter();
@@ -32,6 +33,8 @@ export default function InsuranceMasterPage() {
   const [banks, setBanks] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [insuranceData, setInsuranceData] = useState<any[]>([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
+  const [expandedWarehouses, setExpandedWarehouses] = useState<Set<string>>(new Set());
 
   // Form state
   const [form, setForm] = useState<any>({
@@ -61,37 +64,156 @@ export default function InsuranceMasterPage() {
   // Edit modal state
   const [editRow, setEditRow] = useState<any>(null);
 
-  // Table columns (removed Created At)
+  // Table columns for insurance entries from warehouse inspections
   const columns: { key: string; label: string }[] = [
-    { key: 'insuranceId', label: 'Insurance Code' },
-    { key: 'state', label: 'State' },
-    { key: 'branch', label: 'Branch' },
-    { key: 'location', label: 'Location' },
-    { key: 'warehouse', label: 'Warehouse Name' },
-    { key: 'insuranceManagedBy', label: 'Managed By' },
-    { key: 'banks', label: 'Banks' },
-    { key: 'commodities', label: 'Commodities' },
-    { key: 'firePolicyNumber', label: 'Fire Policy No.' },
-    { key: 'firePolicyAmount', label: 'Fire Policy Amt.' },
-    { key: 'firePolicyStart', label: 'Fire Policy Start' },
-    { key: 'firePolicyEnd', label: 'Fire Policy End' },
-    { key: 'burglaryPolicyNumber', label: 'Burglary Policy No.' },
-    { key: 'burglaryPolicyAmount', label: 'Burglary Policy Amt.' },
-    { key: 'burglaryPolicyStart', label: 'Burglary Policy Start' },
-    { key: 'burglaryPolicyEnd', label: 'Burglary Policy End' },
-    { key: 'firePolicyCompanyName', label: 'Fire Policy Company' },
-    { key: 'burglaryPolicyCompanyName', label: 'Burglary Policy Company' },
+    { key: 'warehouseName', label: 'Warehouse Name' },
+    { key: 'warehouseCode', label: 'Warehouse Code' },
+    { key: 'insuranceTakenBy', label: 'Insurance Taken By' },
+    { key: 'insuranceCommodity', label: 'Commodity' },
+    { key: 'firePolicyCompanyName', label: 'Fire Policy Company Name' },
+    { key: 'firePolicyNumber', label: 'Fire Policy Number' },
+    { key: 'firePolicyAmount', label: 'Fire Policy Amount' },
+    { key: 'firePolicyStartDate', label: 'Fire Policy Start Date' },
+    { key: 'firePolicyEndDate', label: 'Fire Policy End Date' },
+    { key: 'burglaryPolicyCompanyName', label: 'Burglary Policy Company Name' },
+    { key: 'burglaryPolicyNumber', label: 'Burglary Policy Number' },
+    { key: 'burglaryPolicyAmount', label: 'Burglary Policy Amount' },
+    { key: 'burglaryPolicyStartDate', label: 'Burglary Policy Start Date' },
+    { key: 'burglaryPolicyEndDate', label: 'Burglary Policy End Date' },
     { key: 'clientName', label: 'Client Name' },
-    { key: 'clientId', label: 'Client Code' },
-    { key: 'bankFundedBy', label: 'Bank Funded By' },
-    { key: 'actions', label: 'Actions' },
+    { key: 'clientAddress', label: 'Client Address' },
+    { key: 'selectedBankName', label: 'Bank Name' },
+    { key: 'createdAt', label: 'Created At' },
   ];
 
-  const fetchInsurance = useCallback(async () => {
-    const snap = await getDocs(collection(db, 'insurance'));
-    const data = snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-    setInsuranceData(data);
+  // Fetch insurance entries from activated warehouses
+  const fetchWarehouseInsurance = useCallback(async () => {
+    const snap = await getDocs(collection(db, 'inspections'));
+    const insuranceEntries: any[] = [];
+    snap.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.status === 'activated') {
+        // Helper to get state/branch/location robustly
+        const getField = (field: string) =>
+          data[field] || (data.warehouseInspectionData && data.warehouseInspectionData[field]) || '';
+        // 1. Top-level insuranceEntries array
+        if (Array.isArray(data.insuranceEntries) && data.insuranceEntries.length > 0) {
+          data.insuranceEntries.forEach((entry: any, idx: number) => {
+            insuranceEntries.push({
+              ...entry,
+              id: entry.id || `${doc.id}_top_${idx}`,
+              warehouseName: data.warehouseName || '',
+              warehouseCode: data.warehouseCode || '',
+              state: getField('state'),
+              branch: getField('branch'),
+              location: getField('location'),
+            });
+          });
+        }
+        // 2. Nested insuranceEntries in warehouseInspectionData
+        else if (data.warehouseInspectionData && Array.isArray(data.warehouseInspectionData.insuranceEntries) && data.warehouseInspectionData.insuranceEntries.length > 0) {
+          data.warehouseInspectionData.insuranceEntries.forEach((entry: any, idx: number) => {
+            insuranceEntries.push({
+              ...entry,
+              id: entry.id || `${doc.id}_nested_${idx}`,
+              warehouseName: data.warehouseName || '',
+              warehouseCode: data.warehouseCode || '',
+              state: getField('state'),
+              branch: getField('branch'),
+              location: getField('location'),
+            });
+          });
+        }
+        // 3. Legacy: single insurance fields at top-level or in warehouseInspectionData
+        else {
+          const legacy = data.insuranceTakenBy || (data.warehouseInspectionData && data.warehouseInspectionData.insuranceTakenBy);
+          if (legacy) {
+            const entry = {
+              insuranceTakenBy: data.insuranceTakenBy || (data.warehouseInspectionData && data.warehouseInspectionData.insuranceTakenBy) || '',
+              insuranceCommodity: data.insuranceCommodity || (data.warehouseInspectionData && data.warehouseInspectionData.insuranceCommodity) || '',
+              clientName: data.clientName || (data.warehouseInspectionData && data.warehouseInspectionData.clientName) || '',
+              clientAddress: data.clientAddress || (data.warehouseInspectionData && data.warehouseInspectionData.clientAddress) || '',
+              selectedBankName: data.selectedBankName || (data.warehouseInspectionData && data.warehouseInspectionData.selectedBankName) || '',
+              firePolicyCompanyName: data.firePolicyCompanyName || (data.warehouseInspectionData && data.warehouseInspectionData.firePolicyCompanyName) || '',
+              firePolicyNumber: data.firePolicyNumber || (data.warehouseInspectionData && data.warehouseInspectionData.firePolicyNumber) || '',
+              firePolicyAmount: data.firePolicyAmount || (data.warehouseInspectionData && data.warehouseInspectionData.firePolicyAmount) || '',
+              firePolicyStartDate: data.firePolicyStartDate || (data.warehouseInspectionData && data.warehouseInspectionData.firePolicyStartDate) || '',
+              firePolicyEndDate: data.firePolicyEndDate || (data.warehouseInspectionData && data.warehouseInspectionData.firePolicyEndDate) || '',
+              burglaryPolicyCompanyName: data.burglaryPolicyCompanyName || (data.warehouseInspectionData && data.warehouseInspectionData.burglaryPolicyCompanyName) || '',
+              burglaryPolicyNumber: data.burglaryPolicyNumber || (data.warehouseInspectionData && data.warehouseInspectionData.burglaryPolicyNumber) || '',
+              burglaryPolicyAmount: data.burglaryPolicyAmount || (data.warehouseInspectionData && data.warehouseInspectionData.burglaryPolicyAmount) || '',
+              burglaryPolicyStartDate: data.burglaryPolicyStartDate || (data.warehouseInspectionData && data.warehouseInspectionData.burglaryPolicyStartDate) || '',
+              burglaryPolicyEndDate: data.burglaryPolicyEndDate || (data.warehouseInspectionData && data.warehouseInspectionData.burglaryPolicyEndDate) || '',
+              createdAt: data.createdAt || (data.warehouseInspectionData && data.warehouseInspectionData.createdAt) || '',
+              id: `${doc.id}_legacy`,
+              warehouseName: data.warehouseName || '',
+              warehouseCode: data.warehouseCode || '',
+              state: getField('state'),
+              branch: getField('branch'),
+              location: getField('location'),
+            };
+            insuranceEntries.push(entry);
+          }
+        }
+      }
+    });
+    setInsuranceData(insuranceEntries);
   }, []);
+
+  // Fetch banks for display (if needed for bank name mapping)
+  useEffect(() => {
+    const fetchBanks = async () => {
+      const bankSnap = await getDocs(collection(db, 'banks'));
+      setBanks(bankSnap.docs.map(doc => doc.data()));
+    };
+    fetchBanks();
+    fetchWarehouseInsurance();
+  }, [fetchWarehouseInsurance]);
+
+  // Table cell rendering
+  function renderCell(row: any, col: { key: string; label: string }) {
+    let value = row[col.key];
+    if (col.key.toLowerCase().includes('date') && value) {
+      try {
+        const date = typeof value === 'string' ? new Date(value) : value;
+        value = date instanceof Date && !isNaN(date.getTime()) ? date.toLocaleDateString() : value;
+      } catch {}
+    }
+    if (value === undefined || value === null || value === '') {
+      return <span className="text-gray-400">-</span>;
+    }
+    return <span className="text-green-700">{value}</span>;
+  }
+
+  // Get unique warehouses for the filter dropdown
+  const warehouseOptions = useMemo(() => {
+    const seen = new Set();
+    return insuranceData
+      .map(entry => ({
+        value: entry.warehouseCode || entry.warehouseName,
+        label: `${entry.warehouseName || ''} (${entry.warehouseCode || ''})`,
+      }))
+      .filter(option => {
+        if (seen.has(option.value)) return false;
+        seen.add(option.value);
+        return true;
+      });
+  }, [insuranceData]);
+
+  // Filtered insurance data based on search term and selected warehouse
+  const filteredInsuranceData = insuranceData.filter((row: any) => {
+    const search = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      !search ||
+      (row.warehouseName && row.warehouseName.toLowerCase().includes(search)) ||
+      (row.insuranceTakenBy && row.insuranceTakenBy.toLowerCase().includes(search)) ||
+      (row.insuranceCommodity && row.insuranceCommodity.toLowerCase().includes(search));
+    const matchesWarehouse =
+      !selectedWarehouse ||
+      row.warehouseCode === selectedWarehouse ||
+      row.warehouseName === selectedWarehouse;
+    return matchesSearch && matchesWarehouse;
+  });
 
   // Fetch all data on modal open
   useEffect(() => {
@@ -107,11 +229,6 @@ export default function InsuranceMasterPage() {
       // Commodities
       const commoditySnap = await getDocs(collection(db, 'commodities'));
       setCommodities(commoditySnap.docs.map(doc => doc.data()));
-      // Banks
-      const bankSnap = await getDocs(collection(db, 'banks'));
-      const bankArr = bankSnap.docs.map(doc => doc.data());
-      console.log('Fetched banks:', bankArr);
-      setBanks(bankArr);
       // Clients
       const clientSnap = await getDocs(collection(db, 'clients'));
       setClients(clientSnap.docs.map(doc => doc.data()));
@@ -120,18 +237,8 @@ export default function InsuranceMasterPage() {
       setWarehouses(inspectionSnap.docs.map(doc => doc.data()));
     };
     fetchData();
-    fetchInsurance();
-  }, [showAddModal, editRow, fetchInsurance]);
-
-  // Fetch banks on page load
-  useEffect(() => {
-    const fetchBanks = async () => {
-      const bankSnap = await getDocs(collection(db, 'banks'));
-      const bankArr = bankSnap.docs.map(doc => doc.data());
-      setBanks(bankArr);
-    };
-    fetchBanks();
-  }, []);
+    fetchWarehouseInsurance();
+  }, [showAddModal, editRow, fetchWarehouseInsurance]);
 
   // Dependent dropdowns
   useEffect(() => {
@@ -238,7 +345,7 @@ export default function InsuranceMasterPage() {
         await addDoc(collection(db, 'insurance'), dataToSave);
         toast({ title: 'Insurance added successfully!', variant: 'default' });
       }
-      fetchInsurance();
+      fetchWarehouseInsurance();
       setShowAddModal(false);
       setEditRow(null);
       setForm({
@@ -273,49 +380,6 @@ export default function InsuranceMasterPage() {
     return bank && bank.bankName ? bank.bankName : bankId;
   }
 
-  // Render table rows
-  function renderCell(row: any, col: { key: string; label: string }, banks: any[]) {
-    const value = row[col.key];
-    if (col.key === 'actions') {
-      return (
-        <div className="flex gap-2 justify-center">
-          <button
-            className="p-2 rounded bg-orange-100 hover:bg-orange-200 text-orange-600"
-            onClick={() => {
-              setEditRow(row);
-              setForm({ ...row });
-              setShowAddModal(true);
-            }}
-          >
-            <Edit size={18} />
-          </button>
-          <button className="p-2 rounded bg-red-100 hover:bg-red-200 text-red-600" onClick={async () => {
-            if (window.confirm('Are you sure you want to delete this insurance record?')) {
-              await deleteDoc(doc(db, 'insurance', row.id));
-              fetchInsurance();
-            }
-          }}><Trash2 size={18} /></button>
-        </div>
-      );
-    }
-    if (col.key === 'bankFundedBy' && value && value !== '-') {
-      return <span className="text-green-700">{getBankNameFromId(value, banks)}</span>;
-    }
-    if (col.key === 'banks' && Array.isArray(value) && value[0] !== '-') {
-      // Deduplicate bank names
-      const names = value.map((v: string) => getBankNameFromId(v, banks));
-      const uniqueNames = Array.from(new Set(names));
-      return <span className="text-green-700">{uniqueNames.join(', ')}</span>;
-    }
-    if (col.key === 'commodities' && Array.isArray(value) && value[0] !== '-') {
-      return <span className="text-green-700">{value.join(', ')}</span>;
-    }
-    if (value === '-' || value === undefined) {
-      return <span className="text-gray-400">-</span>;
-    }
-    return <span className="text-green-700">{value}</span>;
-  }
-
   useEffect(() => {
     if (banks.length > 0) {
       console.log('Banks:', banks);
@@ -327,18 +391,6 @@ export default function InsuranceMasterPage() {
       console.log('Bank Location Options:', bankLocationOptions);
     }
   }, [bankLocationOptions]);
-
-  // 1. Filtered insurance data based on search term
-  const filteredInsuranceData = insuranceData.filter((row: any) => {
-    const search = searchTerm.trim().toLowerCase();
-    if (!search) return true;
-    return (
-      (row.state && row.state.toLowerCase().includes(search)) ||
-      (row.branch && row.branch.toLowerCase().includes(search)) ||
-      (row.location && row.location.toLowerCase().includes(search)) ||
-      (row.warehouse && row.warehouse.toLowerCase().includes(search))
-    );
-  });
 
   // 2. CSV Export logic
   function downloadCSV() {
@@ -375,6 +427,33 @@ export default function InsuranceMasterPage() {
     URL.revokeObjectURL(url);
   }
 
+  // Group insurance entries by warehouseCode
+  const groupedByWarehouse = useMemo(() => {
+    const map: Record<string, { warehouseName: string; warehouseCode: string; insurances: any[] }> = {};
+    insuranceData.forEach(entry => {
+      const code = entry.warehouseCode || "-";
+      if (!map[code]) {
+        map[code] = {
+          warehouseName: entry.warehouseName || "-",
+          warehouseCode: code,
+          insurances: [],
+        };
+      }
+      map[code].insurances.push(entry);
+    });
+    return Object.values(map);
+  }, [insuranceData]);
+
+  // Toggle expand/collapse for a warehouse
+  const toggleWarehouseExpansion = (warehouseCode: string) => {
+    setExpandedWarehouses(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(warehouseCode)) newSet.delete(warehouseCode);
+      else newSet.add(warehouseCode);
+      return newSet;
+    });
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -393,11 +472,6 @@ export default function InsuranceMasterPage() {
               Insurance Master
             </h1>
           </div>
-          {/* Add New Insurance Button */}
-          <Button className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 shadow-lg" onClick={() => setShowAddModal(true)}>
-            <Plus className="w-5 h-5 mr-2" />
-            Add New Insurance
-          </Button>
         </div>
 
         {/* Search & Export Section */}
@@ -414,7 +488,7 @@ export default function InsuranceMasterPage() {
                   id="searchTerm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by State, Warehouse Name, Client Name, and Location"
+                  placeholder="Search by State, Branch, Location, Warehouse Code, or Name"
                   className="border-green-300 focus:border-green-500 flex-1"
                 />
               </div>
@@ -438,21 +512,94 @@ export default function InsuranceMasterPage() {
           </Card>
         ) : (
           <Card className="border-green-300 shadow-lg rounded-xl overflow-hidden">
-            {/* <CardHeader className="bg-green-50 rounded-t-xl sticky top-0 z-10">
-              <CardTitle className="text-green-700"></CardTitle>
-            </CardHeader> */}
             <CardContent className="overflow-x-auto p-0">
-              <DataTable
-                columns={columns.map((c) => ({
-                  accessorKey: c.key,
-                  header: c.label,
-                  cell: ({ row }: any) => renderCell(row.original, c, banks),
-                }))}
-                data={filteredInsuranceData}
-                wrapperClassName="border-green-300"
-                headClassName="bg-orange-100 text-orange-600 font-bold"
-                cellClassName="text-green-800"
-              />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="bg-orange-100 text-orange-600 font-bold">State</TableHead>
+                    <TableHead className="bg-orange-100 text-orange-600 font-bold">Branch</TableHead>
+                    <TableHead className="bg-orange-100 text-orange-600 font-bold">Location</TableHead>
+                    <TableHead className="bg-orange-100 text-orange-600 font-bold">Warehouse Code</TableHead>
+                    <TableHead className="bg-orange-100 text-orange-600 font-bold">Warehouse Name</TableHead>
+                    <TableHead className="bg-orange-100 text-orange-600 font-bold sticky right-0 z-10">Expand</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groupedByWarehouse.map(wh => {
+                    const first = wh.insurances[0] || {};
+                    return (
+                      <>
+                        <TableRow key={wh.warehouseCode} className="border-b border-green-200">
+                          <TableCell className="text-green-700">{first.state || '-'}</TableCell>
+                          <TableCell className="text-green-700">{first.branch || '-'}</TableCell>
+                          <TableCell className="text-green-700">{first.location || '-'}</TableCell>
+                          <TableCell className="text-green-700">{wh.warehouseCode}</TableCell>
+                          <TableCell className="text-green-700 font-medium">{wh.warehouseName}</TableCell>
+                          <TableCell className="sticky right-0 bg-white z-10">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-orange-300 text-orange-600 hover:bg-orange-50 p-1"
+                              onClick={() => toggleWarehouseExpansion(wh.warehouseCode)}
+                              title={expandedWarehouses.has(wh.warehouseCode) ? 'Collapse' : 'Expand'}
+                            >
+                              {expandedWarehouses.has(wh.warehouseCode) ? <Minus className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {expandedWarehouses.has(wh.warehouseCode) && (
+                          <TableRow>
+                            <TableCell colSpan={6} className="bg-green-50 p-0">
+                              <div className="p-4">
+                                <h4 className="text-orange-700 font-semibold mb-2">Insurances</h4>
+                                <Table className="border border-green-200 rounded-lg">
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="text-green-700">Fire Policy Company</TableHead>
+                                      <TableHead className="text-green-700">Fire Policy Number</TableHead>
+                                      <TableHead className="text-green-700">Fire Policy Amount</TableHead>
+                                      <TableHead className="text-green-700">Fire Policy Start</TableHead>
+                                      <TableHead className="text-green-700">Fire Policy End</TableHead>
+                                      <TableHead className="text-green-700">Burglary Policy Company</TableHead>
+                                      <TableHead className="text-green-700">Burglary Policy Number</TableHead>
+                                      <TableHead className="text-green-700">Burglary Policy Amount</TableHead>
+                                      <TableHead className="text-green-700">Burglary Policy Start</TableHead>
+                                      <TableHead className="text-green-700">Burglary Policy End</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {wh.insurances.map((ins, idx) => (
+                                      <TableRow key={ins.id || idx} className="border-b border-green-100">
+                                        <TableCell>{ins.firePolicyCompanyName || '-'}</TableCell>
+                                        <TableCell>{ins.firePolicyNumber || '-'}</TableCell>
+                                        <TableCell>{ins.firePolicyAmount || '-'}</TableCell>
+                                        <TableCell>{ins.firePolicyStartDate ? (typeof ins.firePolicyStartDate === 'string' ? new Date(ins.firePolicyStartDate).toLocaleDateString() : ins.firePolicyStartDate.toLocaleDateString()) : '-'}</TableCell>
+                                        <TableCell>{ins.firePolicyEndDate ? (typeof ins.firePolicyEndDate === 'string' ? new Date(ins.firePolicyEndDate).toLocaleDateString() : ins.firePolicyEndDate.toLocaleDateString()) : '-'}</TableCell>
+                                        <TableCell>{ins.burglaryPolicyCompanyName || '-'}</TableCell>
+                                        <TableCell>{ins.burglaryPolicyNumber || '-'}</TableCell>
+                                        <TableCell>{ins.burglaryPolicyAmount || '-'}</TableCell>
+                                        <TableCell>{ins.burglaryPolicyStartDate ? (typeof ins.burglaryPolicyStartDate === 'string' ? new Date(ins.burglaryPolicyStartDate).toLocaleDateString() : ins.burglaryPolicyStartDate.toLocaleDateString()) : '-'}</TableCell>
+                                        <TableCell>{ins.burglaryPolicyEndDate ? (typeof ins.burglaryPolicyEndDate === 'string' ? new Date(ins.burglaryPolicyEndDate).toLocaleDateString() : ins.burglaryPolicyEndDate.toLocaleDateString()) : '-'}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    );
+                  })}
+                  {groupedByWarehouse.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-gray-500 py-8 border-r border-gray-300">
+                        No activated warehouses with insurance entries found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         )}

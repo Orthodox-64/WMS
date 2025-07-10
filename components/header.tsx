@@ -43,12 +43,13 @@ export default function Header() {
   return (
     <header className="border-b border-border h-20 px-4 flex items-center justify-between bg-green-600 z-10 w-full relative">
       <div className="flex items-center gap-3 bg-white rounded-lg px-2 py-1">
-        <div className="w-20 h-10 relative">
+        <div className="w-36 h-10 relative">
           <Image 
             src="/AGlogo.webp" 
             alt="AgroGreen Logo" 
             fill
             className="object-contain"
+            priority
           />
         </div>
         

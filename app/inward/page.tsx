@@ -4,7 +4,7 @@ import DashboardLayout from '@/components/dashboard-layout';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, Download, Plus, Edit, Trash2 } from "lucide-react";
+import { Search, Download, Plus, Edit, Trash2, Eye, Printer } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { DataTable } from '@/components/data-table';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import React from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function InwardPage() {
   const router = useRouter();
@@ -35,11 +37,76 @@ export default function InwardPage() {
   const [insuranceData, setInsuranceData] = useState<any[]>([]);
   const [inwardEntries, setInwardEntries] = useState<any[]>([]);
   const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
+  const [insuranceEntries, setInsuranceEntries] = useState<any[]>([]);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingRow, setEditingRow] = useState<any>(null);
+  const [showSRForm, setShowSRForm] = useState(false);
+  const [selectedRowForSR, setSelectedRowForSR] = useState<any>(null);
+  const [inspectionInsuranceData, setInspectionInsuranceData] = useState<any[]>([]);
+  const [hologramNumber, setHologramNumber] = useState('');
+  const [isFormApproved, setIsFormApproved] = useState(false);
+  const [srGenerationDate, setSrGenerationDate] = useState('');
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [dataVersion, setDataVersion] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [fileAttachment, setFileAttachment] = useState<File | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+
+  // Function to get receipt type from inspection collection
+  const getReceiptTypeFromInspection = async (warehouseName: string): Promise<string> => {
+    try {
+      console.log('Fetching receipt type for warehouse:', warehouseName);
+      
+      if (!warehouseName || warehouseName.trim() === '') {
+        console.log('No warehouse name provided, returning N/A');
+        return 'N/A';
+      }
+
+      const inspectionsCollection = collection(db, 'inspections');
+      
+      // First try exact match
+      let q = query(inspectionsCollection, where('warehouseName', '==', warehouseName));
+      let querySnapshot = await getDocs(q);
+      
+      console.log('Exact match query result for warehouse', warehouseName, ':', querySnapshot.size, 'documents found');
+      
+      // If no exact match, try case-insensitive search by fetching all and filtering
+      if (querySnapshot.empty) {
+        console.log('No exact match found, trying case-insensitive search...');
+        const allInspections = await getDocs(inspectionsCollection);
+        console.log('Total inspections in collection:', allInspections.docs.length);
+        
+        // Log all available warehouse names for debugging
+        const allWarehouseNames = allInspections.docs.map(doc => doc.data().warehouseName).filter(Boolean);
+        console.log('Available warehouse names in inspections:', allWarehouseNames);
+        
+        const matchingInspection = allInspections.docs.find(doc => {
+          const data = doc.data();
+          return data.warehouseName && 
+                 data.warehouseName.toLowerCase().trim() === warehouseName.toLowerCase().trim();
+        });
+        
+        if (matchingInspection) {
+          const inspectionData = matchingInspection.data();
+          console.log('Case-insensitive match found for warehouse', warehouseName, ':', inspectionData);
+          console.log('Receipt type found:', inspectionData.receiptType);
+          return inspectionData.receiptType || 'N/A';
+        }
+      } else {
+        const inspectionData = querySnapshot.docs[0].data();
+        console.log('Exact match found for warehouse', warehouseName, ':', inspectionData);
+        console.log('Receipt type found:', inspectionData.receiptType);
+        return inspectionData.receiptType || 'N/A';
+      }
+      
+      console.log('No inspection found for warehouse:', warehouseName);
+      return 'N/A';
+    } catch (error) {
+      console.error('Error fetching receipt type for warehouse', warehouseName, ':', error);
+      return 'N/A';
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -48,7 +115,23 @@ export default function InwardPage() {
       // Fetch inward data for the table
       const inwardCollection = collection(db, 'inward');
       const inwardSnap = await getDocs(inwardCollection);
-      setInwardData(inwardSnap.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+      console.log('Total inward entries found:', inwardSnap.docs.length);
+      
+      const inwardDataWithReceiptType = await Promise.all(
+        inwardSnap.docs.map(async (doc) => {
+          const data = doc.data();
+          console.log('Processing inward entry:', data.inwardId, 'for warehouse:', data.warehouseName);
+          
+          // Fetch receipt type from inspection collection
+          const receiptType = await getReceiptTypeFromInspection(data.warehouseName);
+          console.log('Receipt type for inward', data.inwardId, ':', receiptType);
+          
+          return { ...data, id: doc.id, receiptType };
+        })
+      );
+      
+      console.log('Final inward data with receipt types:', inwardDataWithReceiptType);
+      setInwardData(inwardDataWithReceiptType);
 
       // States from branches
       const branchSnap = await getDocs(collection(db, 'branches'));
@@ -65,14 +148,56 @@ export default function InwardPage() {
       const warehouseMap = new Map();
       inspectionsSnap.docs.forEach(doc => {
         const data = doc.data();
-        if (data.warehouseName && (data.status === 'activate' || data.status === 'reactivate')) {
+        if (data.warehouseName && data.status === 'activated') {
           // Use warehouse name as key to ensure uniqueness
           if (!warehouseMap.has(data.warehouseName)) {
-            warehouseMap.set(data.warehouseName, data);
+            // Extract insurance data from the inspection
+            let insuranceEntries: any[] = [];
+            
+            // Check multiple possible locations for insurance data
+            if (data.insuranceEntries && Array.isArray(data.insuranceEntries)) {
+              console.log('Found top-level insurance entries for warehouse:', data.warehouseName, data.insuranceEntries.length);
+              insuranceEntries = data.insuranceEntries;
+            } else if (data.warehouseInspectionData?.insuranceEntries && Array.isArray(data.warehouseInspectionData.insuranceEntries)) {
+              console.log('Found nested insurance entries for warehouse:', data.warehouseName, data.warehouseInspectionData.insuranceEntries.length);
+              insuranceEntries = data.warehouseInspectionData.insuranceEntries;
+            } else if (data.warehouseInspectionData) {
+              // Legacy format - convert to new format
+              const legacyData = data.warehouseInspectionData;
+              if (legacyData.firePolicyNumber || legacyData.burglaryPolicyNumber) {
+                console.log('Found legacy insurance format for warehouse:', data.warehouseName);
+                insuranceEntries = [{
+                  id: `legacy_${Date.now()}`,
+                  insuranceTakenBy: legacyData.insuranceTakenBy || '',
+                  insuranceCommodity: legacyData.insuranceCommodity || '',
+                  clientName: legacyData.clientName || '',
+                  clientAddress: legacyData.clientAddress || '',
+                  selectedBankName: legacyData.selectedBankName || '',
+                  firePolicyCompanyName: legacyData.firePolicyCompanyName || '',
+                  firePolicyNumber: legacyData.firePolicyNumber || '',
+                  firePolicyAmount: legacyData.firePolicyAmount || '',
+                  firePolicyStartDate: legacyData.firePolicyStartDate || null,
+                  firePolicyEndDate: legacyData.firePolicyEndDate || null,
+                  burglaryPolicyCompanyName: legacyData.burglaryPolicyCompanyName || '',
+                  burglaryPolicyNumber: legacyData.burglaryPolicyNumber || '',
+                  burglaryPolicyAmount: legacyData.burglaryPolicyAmount || '',
+                  burglaryPolicyStartDate: legacyData.burglaryPolicyStartDate || null,
+                  burglaryPolicyEndDate: legacyData.burglaryPolicyEndDate || null,
+                  createdAt: new Date(legacyData.createdAt || Date.now())
+                }];
+              }
+            }
+            
+            // Store warehouse data with insurance entries
+            warehouseMap.set(data.warehouseName, {
+              ...data,
+              insuranceEntries: insuranceEntries
+            });
           }
         }
       });
       setWarehouses(Array.from(warehouseMap.values()));
+      console.log('Warehouses loaded with insurance data:', Array.from(warehouseMap.values()));
       
       // Reservations
       const reservationSnap = await getDocs(collection(db, 'reservation'));
@@ -222,22 +347,24 @@ export default function InwardPage() {
   const filteredLocations = filteredBranches.find((b: any) => b.branch === form.branch)?.locations || [];
   // Filter warehouses by location - ensure unique warehouses
   const filteredWarehouses = useMemo(() => {
-    return warehouses.filter((w: any) => 
-      w.location === form.location && 
-      w.state === form.state && 
-      w.branch === form.branch
+    const fw = warehouses.filter((w: any) => 
+      w.location?.trim().toLowerCase() === form.location.trim().toLowerCase()
     );
-  }, [warehouses, form.location, form.state, form.branch]);
+    console.log('Filtered Warehouses:', fw, 'Form:', form);
+    return fw;
+  }, [warehouses, form.location]);
 
   // Auto-fill warehouse code/address and business type
   useEffect(() => {
     if (form.warehouseName) {
       const wh = filteredWarehouses.find((w: any) => w.warehouseName === form.warehouseName);
       if (wh) {
+        // Prefer address from warehouseInspectionData if available
+        const address = wh.warehouseInspectionData?.address || wh.warehouseAddress || '';
         setBaseForm(f => ({ 
           ...f, 
           warehouseCode: wh.warehouseCode || '', 
-          warehouseAddress: wh.warehouseAddress || '',
+          warehouseAddress: address,
           businessType: wh.businessType || ''
         }));
         
@@ -311,15 +438,23 @@ export default function InwardPage() {
     // eslint-disable-next-line
   }, [form.warehouseName, reservations]);
 
-  // Auto-fill client ID
+  // Auto-fill client ID and address
   useEffect(() => {
     if (form.client) {
       const selectedClient = clients.find(c => c.firmName === form.client);
       if (selectedClient) {
-        setBaseForm(f => ({ ...f, clientCode: selectedClient.clientId }));
+        setBaseForm(f => ({ 
+          ...f, 
+          clientCode: selectedClient.clientId,
+          clientAddress: selectedClient.companyAddress || ''
+        }));
       }
     } else {
-      setBaseForm(f => ({ ...f, clientCode: '' }));
+      setBaseForm(f => ({ 
+        ...f, 
+        clientCode: '',
+        clientAddress: ''
+      }));
     }
   }, [form.client, clients]);
 
@@ -346,11 +481,15 @@ export default function InwardPage() {
 
   // Handle commodity selection
   const handleCommodityChange = (commodityName: string) => {
+    const selectedCommodity = commodities.find((c: any) => c.commodityName === commodityName);
+    console.log('Selected commodity:', selectedCommodity);
+    console.log('Commodity rate:', selectedCommodity?.rate);
+    
     setBaseForm(f => ({ 
       ...f, 
       commodity: commodityName,
       varietyName: '',
-      marketRate: ''
+      marketRate: selectedCommodity?.rate ? selectedCommodity.rate.toString() : ''
     }));
     
     // Fetch insurance data based on current selections
@@ -363,30 +502,28 @@ export default function InwardPage() {
       return;
     }
 
-    const matchingInsurance = insuranceData.find((insurance: any) => 
-      insurance.state === form.state &&
-      insurance.branch === form.branch &&
-      insurance.location === form.location &&
-      insurance.warehouse === form.warehouseName &&
-      insurance.commodities && 
-      insurance.commodities.includes(commodityName)
+    // Find matching insurance entries from the inspection module
+    const matchingInsuranceEntries = insuranceEntries.filter((insurance: any) => 
+      insurance.insuranceCommodity === commodityName
     );
 
-    if (matchingInsurance) {
+    if (matchingInsuranceEntries.length > 0) {
+      // Use the first matching insurance entry for backward compatibility
+      const firstInsurance = matchingInsuranceEntries[0];
       setBaseForm(f => ({
         ...f,
-        insuranceManagedBy: matchingInsurance.insuranceManagedBy || '',
-        firePolicyNumber: matchingInsurance.firePolicyNumber || '',
-        firePolicyAmount: matchingInsurance.firePolicyAmount || '',
-        firePolicyStart: matchingInsurance.firePolicyStart || '',
-        firePolicyEnd: matchingInsurance.firePolicyEnd || '',
-        burglaryPolicyNumber: matchingInsurance.burglaryPolicyNumber || '',
-        burglaryPolicyAmount: matchingInsurance.burglaryPolicyAmount || '',
-        burglaryPolicyStart: matchingInsurance.burglaryPolicyStart || '',
-        burglaryPolicyEnd: matchingInsurance.burglaryPolicyEnd || '',
-        firePolicyCompanyName: matchingInsurance.firePolicyCompanyName || '',
-        burglaryPolicyCompanyName: matchingInsurance.burglaryPolicyCompanyName || '',
-        bankFundedBy: matchingInsurance.bankFundedBy || '',
+        insuranceManagedBy: firstInsurance.insuranceTakenBy || '',
+        firePolicyNumber: firstInsurance.firePolicyNumber || '',
+        firePolicyAmount: firstInsurance.firePolicyAmount || '',
+        firePolicyStart: firstInsurance.firePolicyStartDate || '',
+        firePolicyEnd: firstInsurance.firePolicyEndDate || '',
+        burglaryPolicyNumber: firstInsurance.burglaryPolicyNumber || '',
+        burglaryPolicyAmount: firstInsurance.burglaryPolicyAmount || '',
+        burglaryPolicyStart: firstInsurance.burglaryPolicyStartDate || '',
+        burglaryPolicyEnd: firstInsurance.burglaryPolicyEndDate || '',
+        firePolicyCompanyName: firstInsurance.firePolicyCompanyName || '',
+        burglaryPolicyCompanyName: firstInsurance.burglaryPolicyCompanyName || '',
+        bankFundedBy: firstInsurance.selectedBankName || '',
       }));
     } else {
       // Clear insurance fields if no matching insurance found
@@ -416,7 +553,8 @@ export default function InwardPage() {
     setBaseForm(f => ({ 
       ...f, 
       varietyName: varietyName,
-      marketRate: variety?.rate ? `${variety.rate} Rs/MT` : ''
+      // Keep existing marketRate if already set from commodity, otherwise use variety rate
+      marketRate: f.marketRate || (variety?.rate ? `${variety.rate} ` : '')
     }));
 
     const particulars = variety?.particulars || [];
@@ -471,7 +609,7 @@ export default function InwardPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!fileAttachment) {
+    if (!fileAttachment && !isEditMode) {
       alert('Please attach a file.');
       return;
     }
@@ -498,9 +636,14 @@ export default function InwardPage() {
     
     setIsUploading(true);
     let uploadedFileUrl = '';
+    
     try {
-      const uploadResult = await uploadToCloudinary(fileAttachment);
-      uploadedFileUrl = uploadResult.secure_url;
+      if (fileAttachment) {
+        const uploadResult = await uploadToCloudinary(fileAttachment);
+        uploadedFileUrl = uploadResult.secure_url;
+      } else if (isEditMode && editingRow) {
+        uploadedFileUrl = editingRow.attachmentUrl || '';
+      }
     } catch (error) {
       console.error('Failed to upload file:', error);
       alert('File upload failed. Please try again.');
@@ -514,9 +657,14 @@ export default function InwardPage() {
       allEntries.push({ id: Date.now(), ...baseForm, ...currentEntryForm, entryNumber: inwardEntries.length + 1 });
     }
     
-    if (allEntries.length === 0) {
+    if (allEntries.length === 0 && !isEditMode) {
       alert('Please add at least one inward entry before saving.');
       return;
+    }
+
+    // For edit mode, use the current form data
+    if (isEditMode) {
+      allEntries = [{ id: Date.now(), ...baseForm, ...currentEntryForm, entryNumber: 1 }];
     }
 
     // Final validation loop for all entries
@@ -543,34 +691,76 @@ export default function InwardPage() {
     // Save to Firebase
     try {
       const inwardCollection = collection(db, 'inward');
-      for (const entry of allEntries) {
-        const inwardId = await generateInwardId();
-        const { id, labResultsValidation, ...entryData } = entry; // remove client-side id and validation state
+      
+      if (isEditMode && editingRow) {
+        // Update existing document
+        const q = query(inwardCollection, where('inwardId', '==', editingRow.inwardId));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+          const { id, labResultsValidation, ...entryData } = allEntries[0]; // remove client-side id and validation state
 
-        // Replace empty string fields with a hyphen
-        const sanitizedData = Object.fromEntries(
-          Object.entries(entryData).map(([key, value]) => [
-            key,
-            typeof value === 'string' && value === '' ? '-' : value,
-          ])
-        );
+          // Replace empty string fields with a hyphen
+          const sanitizedData = Object.fromEntries(
+            Object.entries(entryData).map(([key, value]) => [
+              key,
+              typeof value === 'string' && value === '' ? '-' : value,
+            ])
+          );
 
-        await addDoc(inwardCollection, {
-          ...sanitizedData,
-          attachmentUrl: uploadedFileUrl,
-          inwardId,
-          createdAt: new Date().toISOString(),
-          labResults: entry.labResults || [], // Ensure labResults is saved as an array
+          await updateDoc(docRef, {
+            ...sanitizedData,
+            attachmentUrl: uploadedFileUrl,
+            updatedAt: new Date().toISOString(),
+            labResults: allEntries[0].labResults || [],
+          });
+          
+          toast({
+            title: "Success",
+            description: "Inward entry updated successfully.",
+            variant: "default",
+          });
+        }
+      } else {
+        // Create new documents
+        for (const entry of allEntries) {
+          const inwardId = await generateInwardId();
+          const { id, labResultsValidation, ...entryData } = entry; // remove client-side id and validation state
+
+          // Replace empty string fields with a hyphen
+          const sanitizedData = Object.fromEntries(
+            Object.entries(entryData).map(([key, value]) => [
+              key,
+              typeof value === 'string' && value === '' ? '-' : value,
+            ])
+          );
+
+          await addDoc(inwardCollection, {
+            ...sanitizedData,
+            attachmentUrl: uploadedFileUrl,
+            inwardId,
+            createdAt: new Date().toISOString(),
+            labResults: entry.labResults || [],
+          });
+        }
+        
+        toast({
+          title: "Success",
+          description: `Successfully saved ${allEntries.length} inward entries.`,
+          variant: "default",
         });
       }
       
-      alert(`Successfully saved ${allEntries.length} inward entries.`);
-      setShowAddModal(false);
-      resetForm();
+      handleModalClose();
       setDataVersion(v => v + 1);
     } catch (error) {
       console.error('Error saving inward entries to Firebase:', error);
-      alert('Error saving inward entries to Firebase. Please try again.');
+      toast({
+        title: "Error",
+        description: "Error saving inward entries to Firebase. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -649,11 +839,11 @@ export default function InwardPage() {
     setFileAttachment(null);
   };
 
-  const handleModalChange = (open: boolean) => {
-    setShowAddModal(open);
-    if (!open) {
-      resetForm();
-    }
+  const handleModalClose = () => {
+    setShowAddModal(false);
+    setIsEditMode(false);
+    setEditingRow(null);
+    resetForm();
   };
 
   // Calculate net weight when gross or tare weight changes
@@ -853,6 +1043,7 @@ export default function InwardPage() {
     { accessorKey: "warehouseName", header: "Warehouse Name" },
     { accessorKey: "warehouseCode", header: "Warehouse Code" },
     { accessorKey: "warehouseAddress", header: "Warehouse Address" },
+    { accessorKey: "receiptType", header: "Receipt Type" },
     { accessorKey: "client", header: "Client" },
     { accessorKey: "clientCode", header: "Client Code" },
     { accessorKey: "clientAddress", header: "Client Address" },
@@ -910,6 +1101,39 @@ export default function InwardPage() {
     // Insurance details
     { accessorKey: "insuranceManagedBy", header: "Insurance Managed By" },
     { accessorKey: "bankFundedBy", header: "Bank Funded By" },
+    // Action column
+    {
+      accessorKey: "actions",
+      header: "Actions",
+      cell: ({ row }: any) => (
+        <div className="flex space-x-2">
+          <Button
+            onClick={() => handleEdit(row.original)}
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={() => handleDelete(row.original)}
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={() => handleViewSR(row.original)}
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-green-600 hover:text-green-800 hover:bg-green-50"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   const filteredData = useMemo(() => {
@@ -931,7 +1155,8 @@ export default function InwardPage() {
         item.branch?.toLowerCase().includes(lowerCaseSearchTerm) ||
         item.location?.toLowerCase().includes(lowerCaseSearchTerm) ||
         item.warehouseName?.toLowerCase().includes(lowerCaseSearchTerm) ||
-        item.client?.toLowerCase().includes(lowerCaseSearchTerm)
+        item.client?.toLowerCase().includes(lowerCaseSearchTerm) ||
+        item.receiptType?.toLowerCase().includes(lowerCaseSearchTerm)
       );
     });
   }, [searchTerm, inwardData]);
@@ -1050,6 +1275,489 @@ export default function InwardPage() {
     });
   };
 
+  // Handle edit button click
+  const handleEdit = (row: any) => {
+    setIsEditMode(true);
+    setEditingRow(row);
+    
+    // Populate form with row data
+    setBaseForm({
+      state: row.state || '',
+      branch: row.branch || '',
+      location: row.location || '',
+      warehouseName: row.warehouseName || '',
+      warehouseCode: row.warehouseCode || '',
+      warehouseAddress: row.warehouseAddress || '',
+      businessType: row.businessType || '',
+      client: row.client || '',
+      clientCode: row.clientCode || '',
+      clientAddress: row.clientAddress || '',
+      dateOfInward: row.dateOfInward || '',
+      cadNumber: row.cadNumber || '',
+      attachmentUrl: row.attachmentUrl || '',
+      commodity: row.commodity || '',
+      varietyName: row.varietyName || '',
+      marketRate: row.marketRate || '',
+      totalBags: row.totalBags || '',
+      totalQuantity: row.totalQuantity || '',
+      totalValue: row.totalValue || '',
+      bankName: row.bankName || '',
+      bankBranch: row.bankBranch || '',
+      bankState: row.bankState || '',
+      ifscCode: row.ifscCode || '',
+      bankReceipt: row.bankReceipt || '',
+      billingStatus: row.billingStatus || '',
+      reservationRate: row.reservationRate || '',
+      reservationQty: row.reservationQty || '',
+      reservationStart: row.reservationStart || '',
+      reservationEnd: row.reservationEnd || '',
+      billingCycle: row.billingCycle || '',
+      billingType: row.billingType || '',
+      billingRate: row.billingRate || '',
+      insuranceManagedBy: row.insuranceManagedBy || '',
+      firePolicyNumber: row.firePolicyNumber || '',
+      firePolicyAmount: row.firePolicyAmount || '',
+      firePolicyStart: row.firePolicyStart || '',
+      firePolicyEnd: row.firePolicyEnd || '',
+      burglaryPolicyNumber: row.burglaryPolicyNumber || '',
+      burglaryPolicyAmount: row.burglaryPolicyAmount || '',
+      burglaryPolicyStart: row.burglaryPolicyStart || '',
+      burglaryPolicyEnd: row.burglaryPolicyEnd || '',
+      firePolicyCompanyName: row.firePolicyCompanyName || '',
+      burglaryPolicyCompanyName: row.burglaryPolicyCompanyName || '',
+      firePolicyBalance: row.firePolicyBalance || '',
+      burglaryPolicyBalance: row.burglaryPolicyBalance || '',
+      bankFundedBy: row.bankFundedBy || '',
+    });
+
+    // Populate current entry form with row data
+    setCurrentEntryForm({
+      vehicleNumber: row.vehicleNumber || '',
+      getpassNumber: row.getpassNumber || '',
+      weightBridge: row.weightBridge || '',
+      weightBridgeSlipNumber: row.weightBridgeSlipNumber || '',
+      grossWeight: row.grossWeight || '',
+      tareWeight: row.tareWeight || '',
+      netWeight: row.netWeight || '',
+      averageWeight: row.averageWeight || '',
+      totalBags: row.totalBags || '',
+      totalQuantity: row.totalQuantity || '',
+      dateOfSampling: row.dateOfSampling || '',
+      dateOfTesting: row.dateOfTesting || '',
+      labResults: row.labResults || [],
+      labResultsValidation: row.labResultsValidation || [],
+      stacks: row.stacks || [{ stackNumber: '', numberOfBags: '' }],
+    });
+
+    // Fetch insurance entries if warehouse is selected
+    if (row.warehouseName) {
+      const selectedWarehouse = warehouses.find(w => w.warehouseName === row.warehouseName);
+      if (selectedWarehouse) {
+        const inspectionInsuranceEntries = selectedWarehouse.insuranceEntries || [];
+        setInsuranceEntries(inspectionInsuranceEntries);
+      }
+    }
+
+    setShowAddModal(true);
+  };
+
+  // Handle delete button click
+  const handleDelete = async (row: any) => {
+    if (confirm('Are you sure you want to delete this inward entry? This action cannot be undone.')) {
+      try {
+        // Delete from Firebase
+        const inwardCollection = collection(db, 'inward');
+        const q = query(inwardCollection, where('inwardId', '==', row.inwardId));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+          await deleteDoc(docRef);
+          
+          toast({
+            title: "Success",
+            description: "Inward entry deleted successfully.",
+            variant: "default",
+          });
+          
+          // Refresh data
+          setDataVersion(v => v + 1);
+        }
+      } catch (error) {
+        console.error('Error deleting inward entry:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete inward entry. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  // Handle view SR button click
+  const handleViewSR = async (row: any) => {
+    setSelectedRowForSR(row);
+    setShowSRForm(true);
+    // Reset form state
+    setHologramNumber('');
+    setIsFormApproved(false);
+    setSrGenerationDate('');
+    
+    // Fetch insurance data from inspection collection
+    try {
+      const inspectionsCollection = collection(db, 'inspections');
+      const q = query(inspectionsCollection, where('warehouseName', '==', row.warehouseName));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const inspectionData = querySnapshot.docs[0].data();
+        let insuranceEntries: any[] = [];
+        
+        // Check multiple possible locations for insurance data
+        if (inspectionData.insuranceEntries && Array.isArray(inspectionData.insuranceEntries)) {
+          console.log('Found top-level insurance entries:', inspectionData.insuranceEntries.length);
+          insuranceEntries = inspectionData.insuranceEntries;
+        } else if (inspectionData.warehouseInspectionData?.insuranceEntries && Array.isArray(inspectionData.warehouseInspectionData.insuranceEntries)) {
+          console.log('Found nested insurance entries:', inspectionData.warehouseInspectionData.insuranceEntries.length);
+          insuranceEntries = inspectionData.warehouseInspectionData.insuranceEntries;
+        } else if (inspectionData.warehouseInspectionData) {
+          // Legacy format - convert to new format
+          const legacyData = inspectionData.warehouseInspectionData;
+          if (legacyData.firePolicyNumber || legacyData.burglaryPolicyNumber) {
+            console.log('Found legacy insurance format, converting to new format');
+            insuranceEntries = [{
+              id: `legacy_${Date.now()}`,
+              insuranceTakenBy: legacyData.insuranceTakenBy || '',
+              insuranceCommodity: legacyData.insuranceCommodity || '',
+              clientName: legacyData.clientName || '',
+              clientAddress: legacyData.clientAddress || '',
+              selectedBankName: legacyData.selectedBankName || '',
+              firePolicyCompanyName: legacyData.firePolicyCompanyName || '',
+              firePolicyNumber: legacyData.firePolicyNumber || '',
+              firePolicyAmount: legacyData.firePolicyAmount || '',
+              firePolicyStartDate: legacyData.firePolicyStartDate || null,
+              firePolicyEndDate: legacyData.firePolicyEndDate || null,
+              burglaryPolicyCompanyName: legacyData.burglaryPolicyCompanyName || '',
+              burglaryPolicyNumber: legacyData.burglaryPolicyNumber || '',
+              burglaryPolicyAmount: legacyData.burglaryPolicyAmount || '',
+              burglaryPolicyStartDate: legacyData.burglaryPolicyStartDate || null,
+              burglaryPolicyEndDate: legacyData.burglaryPolicyEndDate || null,
+              createdAt: new Date(legacyData.createdAt || Date.now())
+            }];
+          }
+        }
+        
+        console.log('Insurance entries fetched from inspection:', insuranceEntries);
+        setInspectionInsuranceData(insuranceEntries);
+      } else {
+        console.log('No inspection found for warehouse:', row.warehouseName);
+        setInspectionInsuranceData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching insurance data from inspection:', error);
+      setInspectionInsuranceData([]);
+    }
+  };
+
+  // SR/WR View Modal
+  const handleApproveSR = (sr: any) => {
+    // Validate hologram number
+    if (!hologramNumber.trim()) {
+      toast({
+        title: "Hologram Number Required",
+        description: "Please enter the hologram number before proceeding.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Set approval state and generation date
+    setIsFormApproved(true);
+    setSrGenerationDate(new Date().toLocaleDateString());
+    
+    toast({
+      title: "Approved Successfully",
+      description: "The receipt has been approved and is now ready for printing.",
+      variant: "default",
+    });
+  };
+
+  const handleRejectSR = (sr: any) => {
+    // Implement reject logic
+    console.log('Reject SR:', sr);
+    setShowSRForm(false);
+  };
+
+  const handleResubmitSR = (sr: any) => {
+    // Implement resubmit logic
+    console.log('Resubmit SR:', sr);
+    setShowSRForm(false);
+  };
+
+  const isInsuranceExpired = (sr: any) => {
+    // Check if any insurance policy is expired
+    const today = new Date();
+    
+    // Check inspection insurance data first
+    for (const insurance of inspectionInsuranceData) {
+      const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : null;
+      const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : null;
+      
+      if (fireEndDate && fireEndDate < today) {
+        return true;
+      }
+      if (burglaryEndDate && burglaryEndDate < today) {
+        return true;
+      }
+    }
+    
+    // Fallback to inward data if no inspection insurance found
+    const fireEndDate = sr.firePolicyEnd ? new Date(sr.firePolicyEnd) : null;
+    const burglaryEndDate = sr.burglaryPolicyEnd ? new Date(sr.burglaryPolicyEnd) : null;
+    
+    if (fireEndDate && fireEndDate < today) {
+      return true;
+    }
+    if (burglaryEndDate && burglaryEndDate < today) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Generate a unique SR No based on inwardId and date
+  const generateSRNo = (row: any) => {
+    if (!row) return '';
+    const date = row.dateOfInward ? row.dateOfInward.replace(/-/g, '') : '';
+    return `SR-${row.inwardId || 'XXX'}-${date}`;
+  };
+
+  // Static print-friendly receipt component
+  const inputBoxStyle: React.CSSProperties = {
+    border: '1px solid #1aad4b',
+    borderRadius: 8,
+    padding: '0 12px',
+    height: 40,
+    lineHeight: '40px',
+    marginBottom: 6,
+    fontSize: 16,
+    color: '#17803c',
+    background: '#f8fff5',
+    width: '100%',
+    boxSizing: 'border-box',
+    fontFamily: 'inherit',
+    fontWeight: 600,
+    textAlign: 'center',
+  };
+
+  const labelStyle = {
+    fontWeight: 500,
+    color: '#17803c',
+    marginBottom: 2,
+    fontSize: 13,
+    letterSpacing: 0.2,
+  };
+
+  const sectionStyle = {
+    background: '#eafbe7',
+    borderRadius: 10,
+    padding: '14px 18px',
+    marginBottom: 14,
+    boxShadow: '0 1px 4px #e0f2e9',
+  };
+
+  const dividerStyle = {
+    border: 'none',
+    borderTop: '2px solid #1aad4b',
+    margin: '18px 0',
+  };
+
+  const StaticReceipt = React.forwardRef<HTMLDivElement, { data: any, insurance: any[], hologramNumber: string, srGenerationDate: string }>(
+    ({ data, insurance, hologramNumber, srGenerationDate }, ref) => (
+      <div ref={ref} style={{ width: 700, padding: 32, fontFamily: 'Arial, sans-serif', color: '#222', background: '#fff', borderRadius: 16, boxShadow: '0 2px 12px #e0f2e9' }}>
+        <div style={{ background: '#1aad4b', color: '#fff', borderRadius: 12, padding: '18px 0', textAlign: 'center', marginBottom: 24, fontSize: 28, fontWeight: 700, letterSpacing: 1 }}>Stock/Warehouse Receipt</div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={labelStyle}>CAD No</div>
+            <div style={inputBoxStyle}>{data.cadNumber || ''}</div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={labelStyle}>SR No</div>
+            <div style={inputBoxStyle}>{data.srNo || `SR-${data.inwardId || 'XXX'}-${data.dateOfInward ? data.dateOfInward.replace(/-/g, '') : ''}`}</div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={labelStyle}>SR Generation Date</div>
+            <div style={inputBoxStyle}>{srGenerationDate || ''}</div>
+          </div>
+        </div>
+        <div style={sectionStyle}>
+          <div style={{ marginBottom: 8 }}>
+            <div style={labelStyle}>Stock Inward Date</div>
+            <div style={inputBoxStyle}>{data.dateOfInward || ''}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <div style={labelStyle}>Bank Details</div>
+              <div style={inputBoxStyle}>{data.bankName}</div>
+              <div style={inputBoxStyle}>{data.bankBranch}</div>
+              <div style={inputBoxStyle}>{data.ifscCode}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={labelStyle}>Warehouse Details</div>
+              <div style={inputBoxStyle}>{data.warehouseName}</div>
+              <div style={inputBoxStyle}>{data.warehouseCode}</div>
+              <div style={inputBoxStyle}>{data.warehouseAddress}</div>
+            </div>
+          </div>
+        </div>
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <div style={labelStyle}>Client Details</div>
+              <div style={inputBoxStyle}>{data.client}</div>
+              <div style={inputBoxStyle}>{data.clientCode}</div>
+              <div style={inputBoxStyle}>{data.clientAddress}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={labelStyle}>Commodity Details</div>
+              <div style={inputBoxStyle}>{data.commodity}</div>
+              <div style={inputBoxStyle}>{data.varietyName}</div>
+            </div>
+          </div>
+        </div>
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <div style={labelStyle}>No. of Bags</div>
+              <div style={inputBoxStyle}>{data.totalBags}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={labelStyle}>Total Quantity (MT)</div>
+              <div style={inputBoxStyle}>{data.totalQuantity}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+            <div style={{ flex: 1 }}>
+              <div style={labelStyle}>Validity Start Date</div>
+              <div style={inputBoxStyle}>{data.dateOfInward || ''}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={labelStyle}>Validity End Date (Insurance End)</div>
+              <div style={inputBoxStyle}></div>
+            </div>
+          </div>
+        </div>
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Hologram No</div>
+          <div style={inputBoxStyle}>{hologramNumber}</div>
+        </div>
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Insurance Details (from Inspection)</div>
+          {insurance.length > 0 ? insurance.map((ins, idx) => (
+            <div key={ins.id || idx} style={{ border: '1px solid #b2e2c7', borderRadius: 6, padding: 10, margin: 6, background: '#fff' }}>
+              <div style={{ fontWeight: 600, color: '#17803c', marginBottom: 4 }}>Entry {idx + 1}</div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Insurance Taken By</div>
+                  <div style={inputBoxStyle}>{ins.insuranceTakenBy}</div>
+                  <div style={labelStyle}>Commodity</div>
+                  <div style={inputBoxStyle}>{ins.insuranceCommodity}</div>
+                  {ins.insuranceTakenBy === 'client' && <><div style={labelStyle}>Client Name</div><div style={inputBoxStyle}>{ins.clientName}</div><div style={labelStyle}>Client Address</div><div style={inputBoxStyle}>{ins.clientAddress}</div></>}
+                  {ins.insuranceTakenBy === 'bank' && <><div style={labelStyle}>Bank Name</div><div style={inputBoxStyle}>{ins.selectedBankName}</div></>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  {ins.insuranceTakenBy && ins.insuranceTakenBy !== 'bank' && <>
+                    <div style={labelStyle}>Fire Policy Company</div>
+                    <div style={inputBoxStyle}>{ins.firePolicyCompanyName}</div>
+                    <div style={labelStyle}>Fire Policy Number</div>
+                    <div style={inputBoxStyle}>{ins.firePolicyNumber}</div>
+                    <div style={labelStyle}>Fire Policy Amount</div>
+                    <div style={inputBoxStyle}>{ins.firePolicyAmount}</div>
+                    <div style={labelStyle}>Fire Policy End Date</div>
+                    <div style={inputBoxStyle}>{ins.firePolicyEndDate && new Date(ins.firePolicyEndDate).toLocaleDateString()}</div>
+                    <div style={labelStyle}>Burglary Policy Company</div>
+                    <div style={inputBoxStyle}>{ins.burglaryPolicyCompanyName}</div>
+                    <div style={labelStyle}>Burglary Policy Number</div>
+                    <div style={inputBoxStyle}>{ins.burglaryPolicyNumber}</div>
+                    <div style={labelStyle}>Burglary Policy Amount</div>
+                    <div style={inputBoxStyle}>{ins.burglaryPolicyAmount}</div>
+                    <div style={labelStyle}>Burglary Policy End Date</div>
+                    <div style={inputBoxStyle}>{ins.burglaryPolicyEndDate && new Date(ins.burglaryPolicyEndDate).toLocaleDateString()}</div>
+                  </>}
+                </div>
+              </div>
+            </div>
+          )) : <span style={{ color: '#888' }}>No insurance data found in inspection</span>}
+        </div>
+        <hr style={dividerStyle} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 24 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: '#17803c' }}>Signature</div>
+            <div style={{ width: 180, height: 32, borderBottom: '2px solid #1aad4b', marginTop: 8 }}></div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <b>Company:</b> {process.env.NEXT_PUBLIC_COMPANY_NAME || 'Company Name'}<br />
+            <span style={{ fontSize: 13, color: '#17803c' }}>{process.env.NEXT_PUBLIC_COMPANY_LOCATION || 'Location'}</span>
+          </div>
+        </div>
+      </div>
+    )
+  );
+
+  // Update generatePDF to use printRef
+  const generatePDF = async () => {
+    try {
+      const element = printRef.current;
+      if (!element) {
+        toast({
+          title: "Error",
+          description: "Could not find the receipt form element.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#fff',
+        width: 700
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const pageHeight = 295;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      const receiptType = selectedRowForSR?.receiptType || 'SR';
+      const filename = `${receiptType}-${selectedRowForSR?.inwardId || 'XXX'}-${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(filename);
+      toast({
+        title: "PDF Generated",
+        description: "The receipt PDF has been downloaded successfully.",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  StaticReceipt.displayName = 'StaticReceipt';
+
   return (
     <DashboardLayout>
       {/* Module title and dashboard button row */}
@@ -1062,7 +1770,12 @@ export default function InwardPage() {
             Inward Module
           </h1>
         </div>
-        <Button className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 text-lg font-semibold shadow-lg rounded-xl" onClick={() => setShowAddModal(true)}>
+        <Button className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 text-lg font-semibold shadow-lg rounded-xl" onClick={() => {
+          setIsEditMode(false);
+          setEditingRow(null);
+          resetForm();
+          setShowAddModal(true);
+        }}>
           + Add Inward
         </Button>
       </div>
@@ -1079,7 +1792,7 @@ export default function InwardPage() {
               <Label htmlFor="search-input" className="font-semibold text-gray-700">Search:</Label>
               <Input
                 id="search-input"
-                placeholder="Search by state, branch, location, warehouse name, or client..."
+                placeholder="Search by state, branch, location, warehouse name, client, or receipt type..."
                 className="w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -1116,11 +1829,13 @@ export default function InwardPage() {
         </Card>
       </div>
 
-      {/* Add Inward Modal */}
-      <Dialog open={showAddModal} onOpenChange={handleModalChange}>
+      {/* Add/Edit Inward Modal */}
+      <Dialog open={showAddModal} onOpenChange={handleModalClose}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-orange-700 text-xl">Add Inward</DialogTitle>
+            <DialogTitle className="text-orange-700 text-xl">
+              {isEditMode ? 'Edit Inward' : 'Add Inward'}
+            </DialogTitle>
           </DialogHeader>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1156,7 +1871,104 @@ export default function InwardPage() {
               </div>
               <div>
                 <Label className="block font-semibold mb-1">Warehouse Name</Label>
-                <Select value={form.warehouseName} onValueChange={v => setBaseForm(f => ({ ...f, warehouseName: v }))} disabled={!form.location}>
+                <Select value={form.warehouseName} onValueChange={async (warehouseName) => {
+                  setBaseForm(f => ({ 
+                    ...f, 
+                    warehouseName: warehouseName,
+                    warehouseCode: '',
+                    warehouseAddress: '',
+                    businessType: '',
+                    // Clear insurance data when warehouse changes
+                    insuranceManagedBy: '',
+                    firePolicyNumber: '',
+                    firePolicyAmount: '',
+                    firePolicyStart: '',
+                    firePolicyEnd: '',
+                    burglaryPolicyNumber: '',
+                    burglaryPolicyAmount: '',
+                    burglaryPolicyStart: '',
+                    burglaryPolicyEnd: '',
+                    firePolicyCompanyName: '',
+                    burglaryPolicyCompanyName: '',
+                    bankFundedBy: '',
+                  }));
+                  
+                  const selectedWarehouse = filteredWarehouses.find((w: any) => w.warehouseName === warehouseName);
+                    if (selectedWarehouse) {
+                      setBaseForm(f => ({
+                        ...f,
+                        warehouseCode: selectedWarehouse.warehouseCode || '',
+                        warehouseAddress: selectedWarehouse.warehouseInspectionData?.address || selectedWarehouse.warehouseAddress || '',
+                        businessType: selectedWarehouse.businessType || '',
+                        // Auto-fill bank information from inspection
+                        bankName: selectedWarehouse.bankName || '',
+                        bankBranch: selectedWarehouse.bankBranch || '',
+                        bankState: selectedWarehouse.bankState || '',
+                        ifscCode: selectedWarehouse.ifscCode || ''
+                      }));
+                      
+                      // Fetch insurance entries from inspection module
+                    let insuranceEntries: any[] = [];
+                    
+                    // First check if insurance data is already loaded with the warehouse
+                    if (selectedWarehouse.insuranceEntries && selectedWarehouse.insuranceEntries.length > 0) {
+                      insuranceEntries = selectedWarehouse.insuranceEntries;
+                      console.log('Insurance entries from loaded warehouse data:', insuranceEntries);
+                    } else {
+                      // If not loaded, fetch from inspection collection
+                      try {
+                        const inspectionsCollection = collection(db, 'inspections');
+                        const q = query(inspectionsCollection, where('warehouseName', '==', warehouseName));
+                        const querySnapshot = await getDocs(q);
+                        
+                        if (!querySnapshot.empty) {
+                          const inspectionData = querySnapshot.docs[0].data();
+                          
+                          // Check multiple possible locations for insurance data
+                          if (inspectionData.insuranceEntries && Array.isArray(inspectionData.insuranceEntries)) {
+                            console.log('Found top-level insurance entries:', inspectionData.insuranceEntries.length);
+                            insuranceEntries = inspectionData.insuranceEntries;
+                          } else if (inspectionData.warehouseInspectionData?.insuranceEntries && Array.isArray(inspectionData.warehouseInspectionData.insuranceEntries)) {
+                            console.log('Found nested insurance entries:', inspectionData.warehouseInspectionData.insuranceEntries.length);
+                            insuranceEntries = inspectionData.warehouseInspectionData.insuranceEntries;
+                          } else if (inspectionData.warehouseInspectionData) {
+                            // Legacy format - convert to new format
+                            const legacyData = inspectionData.warehouseInspectionData;
+                            if (legacyData.firePolicyNumber || legacyData.burglaryPolicyNumber) {
+                              console.log('Found legacy insurance format, converting to new format');
+                              insuranceEntries = [{
+                                id: `legacy_${Date.now()}`,
+                                insuranceTakenBy: legacyData.insuranceTakenBy || '',
+                                insuranceCommodity: legacyData.insuranceCommodity || '',
+                                clientName: legacyData.clientName || '',
+                                clientAddress: legacyData.clientAddress || '',
+                                selectedBankName: legacyData.selectedBankName || '',
+                                firePolicyCompanyName: legacyData.firePolicyCompanyName || '',
+                                firePolicyNumber: legacyData.firePolicyNumber || '',
+                                firePolicyAmount: legacyData.firePolicyAmount || '',
+                                firePolicyStartDate: legacyData.firePolicyStartDate || null,
+                                firePolicyEndDate: legacyData.firePolicyEndDate || null,
+                                burglaryPolicyCompanyName: legacyData.burglaryPolicyCompanyName || '',
+                                burglaryPolicyNumber: legacyData.burglaryPolicyNumber || '',
+                                burglaryPolicyAmount: legacyData.burglaryPolicyAmount || '',
+                                burglaryPolicyStartDate: legacyData.burglaryPolicyStartDate || null,
+                                burglaryPolicyEndDate: legacyData.burglaryPolicyEndDate || null,
+                                createdAt: new Date(legacyData.createdAt || Date.now())
+                              }];
+                            }
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Error fetching insurance data from inspection:', error);
+                      }
+                    }
+                    
+                    setInsuranceEntries(insuranceEntries);
+                    console.log('Insurance entries set for warehouse:', warehouseName, insuranceEntries);
+                  } else {
+                    setInsuranceEntries([]);
+                  }
+                }} disabled={!form.location}>
                   <SelectTrigger><SelectValue placeholder="Select Warehouse" /></SelectTrigger>
                   <SelectContent>
                     {filteredWarehouses.map((w: any) => (
@@ -1225,7 +2037,7 @@ export default function InwardPage() {
             <div className="border-t pt-4">
               <h3 className="text-lg font-semibold mb-4 text-orange-700">Inward Details</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <Label className="block font-semibold mb-1">Date of Inward <span className="text-red-500">*</span></Label>
                   <Input 
@@ -1241,6 +2053,17 @@ export default function InwardPage() {
                     value={form.cadNumber} 
                     onChange={e => setBaseForm(f => ({ ...f, cadNumber: e.target.value }))} 
                     placeholder="Enter CAD Number"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="block font-semibold mb-1">Base Receipt</Label>
+                  <Input 
+                    value={form.bankReceipt} 
+                    onChange={e => setBaseForm(f => ({ ...f, bankReceipt: e.target.value }))} 
+                    placeholder="Enter Base Receipt Number"
                   />
                 </div>
               </div>
@@ -1287,9 +2110,8 @@ export default function InwardPage() {
               <div>
                   <Label className="block font-semibold mb-2">Market Rate (Rs/MT) <span className="text-red-500">*</span></Label>
                 <Input 
-                    type="number"
-                    step="0.01"
-                  value={form.marketRate} 
+                    type="text"
+                    value={form.marketRate} 
                     onChange={e => setBaseForm(f => ({ ...f, marketRate: e.target.value }))} 
                     placeholder="Enter Market Rate"
                   />
@@ -1332,45 +2154,28 @@ export default function InwardPage() {
 
             {/* Bank Information */}
             <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold mb-6 text-orange-700">Bank Information (Optional)</h3>
+              <h3 className="text-lg font-semibold mb-6 text-orange-700">Bank Information (Auto-filled from Inspection)</h3>
               
               <div className="mb-6">
                 <Label className="block font-semibold mb-2">Bank Name</Label>
-                <Select value={form.bankName} onValueChange={handleBankChange}>
-                  <SelectTrigger><SelectValue placeholder="Select Bank" /></SelectTrigger>
-                  <SelectContent>
-                    {banks.map((b: any) => (
-                      <SelectItem key={b.bankName} value={b.bankName}>
-                        {b.bankName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input value={form.bankName} readOnly placeholder="Auto-filled from inspection" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
                   <Label className="block font-semibold mb-2">Bank Branch</Label>
-                  <Input value={form.bankBranch} readOnly placeholder="Auto-filled" />
+                  <Input value={form.bankBranch} readOnly placeholder="Auto-filled from inspection" />
                 </div>
                 <div>
                   <Label className="block font-semibold mb-2">Bank State</Label>
-                  <Input value={form.bankState} readOnly placeholder="Auto-filled" />
+                  <Input value={form.bankState} readOnly placeholder="Auto-filled from inspection" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <Label className="block font-semibold mb-2">IFSC Code</Label>
-                  <Input value={form.ifscCode} readOnly placeholder="Auto-filled" />
-                </div>
-                <div>
-                  <Label className="block font-semibold mb-2">Base Receipt</Label>
-                  <Input 
-                    value={form.bankReceipt} 
-                    onChange={e => setBaseForm(f => ({ ...f, bankReceipt: e.target.value }))} 
-                    placeholder="Enter Base Receipt Number"
-                  />
+                  <Input value={form.ifscCode} readOnly placeholder="Auto-filled from inspection" />
                 </div>
               </div>
             </div>
@@ -1439,96 +2244,118 @@ export default function InwardPage() {
             )}
 
             {/* Insurance Information */}
-            {form.insuranceManagedBy && (
+            {insuranceEntries.length > 0 && (
               <div className="border-t pt-6">
-                <h3 className="text-xl font-semibold mb-6 text-orange-700">Insurance Information</h3>
+                <h3 className="text-xl font-semibold mb-6 text-orange-700">Insurance Information (From Inspection Module)</h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <Label className="block font-semibold mb-1">Insurance Managed By</Label>
-                    <Input value={form.insuranceManagedBy} readOnly placeholder="Auto-filled" />
-                  </div>
+                <div className="space-y-6">
+                  {insuranceEntries.map((insurance, index) => (
+                    <div key={insurance.id || index} className="border border-orange-200 rounded-lg p-6 bg-orange-50">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-medium text-orange-700">Insurance #{index + 1}</h4>
+                        <div className="text-sm text-orange-600 font-medium">
+                          {insurance.insuranceTakenBy} - {insurance.insuranceCommodity}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <Label className="block font-semibold mb-1">Insurance Taken By</Label>
+                          <Input value={insurance.insuranceTakenBy || ''} readOnly placeholder="Auto-filled from inspection" />
+                        </div>
+                        <div>
+                          <Label className="block font-semibold mb-1">Commodity</Label>
+                          <Input value={insurance.insuranceCommodity || ''} readOnly placeholder="Auto-filled from inspection" />
+                        </div>
+                      </div>
+
+                      {insurance.insuranceTakenBy === 'client' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <Label className="block font-semibold mb-1">Client Name</Label>
+                            <Input value={insurance.clientName || ''} readOnly placeholder="Auto-filled from inspection" />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Client Address</Label>
+                            <Input value={insurance.clientAddress || ''} readOnly placeholder="Auto-filled from inspection" />
+                          </div>
+                        </div>
+                      )}
+
+                      {insurance.insuranceTakenBy === 'bank' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <Label className="block font-semibold mb-1">Bank Name</Label>
+                            <Input value={insurance.selectedBankName || ''} readOnly placeholder="Auto-filled from inspection" />
+                          </div>
+                        </div>
+                      )}
+
+                      {insurance.insuranceTakenBy && insurance.insuranceTakenBy !== 'bank' && (
+                        <>
+                          {/* Fire Policy */}
+                          <h5 className="text-md font-semibold text-orange-600 mt-4 mb-2">Fire Policy Details</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                              <Label className="block font-semibold mb-1">Fire Policy Company Name</Label>
+                              <Input value={insurance.firePolicyCompanyName || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                            <div>
+                              <Label className="block font-semibold mb-1">Fire Policy Number</Label>
+                              <Input value={insurance.firePolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                            <div>
+                              <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
+                              <Input value={insurance.firePolicyAmount || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                            <div>
+                              <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
+                              <Input value={insurance.firePolicyStartDate || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                            <div>
+                              <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
+                              <Input value={insurance.firePolicyEndDate || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                          </div>
+
+                          {/* Burglary Policy */}
+                          <h5 className="text-md font-semibold text-orange-600 mt-4 mb-2">Burglary Policy Details</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block font-semibold mb-1">Burglary Policy Company Name</Label>
+                              <Input value={insurance.burglaryPolicyCompanyName || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                            <div>
+                              <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
+                              <Input value={insurance.burglaryPolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                            <div>
+                              <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
+                              <Input value={insurance.burglaryPolicyAmount || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                            <div>
+                              <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
+                              <Input value={insurance.burglaryPolicyStartDate || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                            <div>
+                              <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
+                              <Input value={insurance.burglaryPolicyEndDate || ''} readOnly placeholder="Auto-filled from inspection" />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
-
-                {form.insuranceManagedBy !== 'bank' && (
-                  <>
-                    {/* Fire Policy */}
-                    <h4 className="text-md font-semibold text-orange-600 mt-4 mb-2">Fire Policy Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy Number</Label>
-                        <Input value={form.firePolicyNumber} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
-                        <Input value={form.firePolicyAmount} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
-                        <Input value={form.firePolicyStart} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
-                        <Input value={form.firePolicyEnd} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy Company Name</Label>
-                        <Input value={form.firePolicyCompanyName} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Sum Insurance Balance Amount for Fire</Label>
-                        <Input value={form.firePolicyBalance} readOnly placeholder="Auto-calculated" />
-                      </div>
-                    </div>
-
-                    {/* Burglary Policy */}
-                    <h4 className="text-md font-semibold text-orange-600 mt-4 mb-2">Burglary Policy Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
-                        <Input value={form.burglaryPolicyNumber} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
-                        <Input value={form.burglaryPolicyAmount} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
-                        <Input value={form.burglaryPolicyStart} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
-                        <Input value={form.burglaryPolicyEnd} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy Company Name</Label>
-                        <Input value={form.burglaryPolicyCompanyName} readOnly placeholder="Auto-filled" />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Sum Insurance Balance Amount for Burglary</Label>
-                        <Input value={form.burglaryPolicyBalance} readOnly placeholder="Auto-calculated" />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {form.insuranceManagedBy === 'bank' && form.bankFundedBy && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label className="block font-semibold mb-1">Bank Funded By</Label>
-                      <Input value={form.bankFundedBy} readOnly placeholder="Auto-filled" />
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
-            {form.commodity && !form.insuranceManagedBy && (
+            {form.commodity && insuranceEntries.length === 0 && (
               <div className="border-t pt-4">
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-yellow-800 text-sm">
-                    <strong>Note:</strong> No insurance data found for this commodity at the selected warehouse. 
-                    Please ensure insurance data exists in the Insurance Master section.
+                    <strong>Note:</strong> No insurance data found for this warehouse in the inspection module. 
+                    Please ensure insurance data exists in the Warehouse Inspection section.
                   </p>
                 </div>
               </div>
@@ -1905,7 +2732,7 @@ export default function InwardPage() {
 
             <div className="flex justify-end pt-8">
               <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white font-bold py-3" disabled={isUploading}>
-                {isUploading ? 'Uploading & Saving...' : 'Add Inward Entry'}
+                {isUploading ? 'Uploading & Saving...' : (isEditMode ? 'Update Inward Entry' : 'Submit')}
               </Button>
             </div>
           </form>
@@ -1930,6 +2757,274 @@ export default function InwardPage() {
         </div>
         )}
       </div>
+
+      {/* SR/WR View Modal */}
+      <Dialog open={showSRForm} onOpenChange={setShowSRForm}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-green-700 text-xl">Stock/Warehouse Receipt View</DialogTitle>
+          </DialogHeader>
+          {selectedRowForSR && (
+            <div id="receipt-form" className="space-y-4">
+              {/* CAD No and SR No */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Label className="font-semibold">CAD No</Label>
+                  <Input value={selectedRowForSR.cadNumber || ''} readOnly />
+                </div>
+                <div className="flex-1">
+                  <Label className="font-semibold">SR No</Label>
+                  <Input value={selectedRowForSR.srNo || `SR-${selectedRowForSR.inwardId || 'XXX'}-${selectedRowForSR.dateOfInward ? selectedRowForSR.dateOfInward.replace(/-/g, '') : ''}`} readOnly />
+                </div>
+                <div className="flex-1">
+                  <Label className="font-semibold">SR Generation Date</Label>
+                  <Input value={srGenerationDate || ''} readOnly placeholder="Auto-set on Approve" />
+                </div>
+              </div>
+              {/* Stock Inward Date */}
+              <div>
+                <Label className="font-semibold">Stock Inward Date</Label>
+                <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
+              </div>
+              {/* Bank, Warehouse, Client, Commodity Details */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="font-semibold">Bank Details</Label>
+                  <Input value={selectedRowForSR.bankName || ''} readOnly className="mb-1" />
+                  <Input value={selectedRowForSR.bankBranch || ''} readOnly className="mb-1" />
+                  <Input value={selectedRowForSR.ifscCode || ''} readOnly />
+                </div>
+                <div>
+                  <Label className="font-semibold">Warehouse Details</Label>
+                  <Input value={selectedRowForSR.warehouseName || ''} readOnly className="mb-1" />
+                  <Input value={selectedRowForSR.warehouseCode || ''} readOnly className="mb-1" />
+                  <Input value={selectedRowForSR.warehouseAddress || ''} readOnly />
+                </div>
+                <div>
+                  <Label className="font-semibold">Client Details</Label>
+                  <Input value={selectedRowForSR.client || ''} readOnly className="mb-1" />
+                  <Input value={selectedRowForSR.clientCode || ''} readOnly className="mb-1" />
+                  <Input value={selectedRowForSR.clientAddress || ''} readOnly />
+                </div>
+                <div>
+                  <Label className="font-semibold">Commodity Details</Label>
+                  <Input value={selectedRowForSR.commodity || ''} readOnly className="mb-1" />
+                  <Input value={selectedRowForSR.varietyName || ''} readOnly />
+                </div>
+              </div>
+              {/* Bags and Quantity */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="font-semibold">No. of Bags</Label>
+                  <Input value={selectedRowForSR.totalBags || ''} readOnly />
+                </div>
+                <div>
+                  <Label className="font-semibold">Total Quantity (MT)</Label>
+                  <Input value={selectedRowForSR.totalQuantity || ''} readOnly />
+                </div>
+              </div>
+              {/* Validity Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="font-semibold">Validity Start Date</Label>
+                  <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
+                </div>
+                <div>
+                  <Label className="font-semibold">Validity End Date (Insurance End)</Label>
+                  <Input value={(() => {
+                    // Get the earliest insurance end date from inspection data
+                    let earliestEndDate = null;
+                    for (const insurance of inspectionInsuranceData) {
+                      const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : null;
+                      const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : null;
+                      
+                      if (fireEndDate && (!earliestEndDate || fireEndDate < earliestEndDate)) {
+                        earliestEndDate = fireEndDate;
+                      }
+                      if (burglaryEndDate && (!earliestEndDate || burglaryEndDate < earliestEndDate)) {
+                        earliestEndDate = burglaryEndDate;
+                      }
+                    }
+                    
+                    // Fallback to inward data if no inspection insurance found
+                    if (!earliestEndDate) {
+                      const fireEnd = selectedRowForSR.firePolicyEnd ? new Date(selectedRowForSR.firePolicyEnd) : null;
+                      const burglaryEnd = selectedRowForSR.burglaryPolicyEnd ? new Date(selectedRowForSR.burglaryPolicyEnd) : null;
+                      
+                      if (fireEnd && (!earliestEndDate || fireEnd < earliestEndDate)) {
+                        earliestEndDate = fireEnd;
+                      }
+                      if (burglaryEnd && (!earliestEndDate || burglaryEnd < earliestEndDate)) {
+                        earliestEndDate = burglaryEnd;
+                      }
+                    }
+                    
+                    return earliestEndDate ? earliestEndDate.toLocaleDateString() : '';
+                  })()} readOnly />
+                </div>
+              </div>
+              {/* Insurance Expiry Check */}
+              {isInsuranceExpired(selectedRowForSR) && (
+                <div className="bg-red-100 text-red-700 p-2 rounded font-semibold">
+                  Insurance is expired. Please update the end date before approval.
+                </div>
+              )}
+              {/* Hologram No and QR space */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <Label className="font-semibold">Hologram No</Label>
+                  <Input 
+                    placeholder="Enter Hologram No" 
+                    value={hologramNumber}
+                    onChange={(e) => setHologramNumber(e.target.value)}
+                    disabled={isFormApproved}
+                  />
+                </div>
+                <div className="w-32 h-16 border-2 border-dashed border-gray-400 flex items-center justify-center ml-4">
+                  <span className="text-xs text-gray-400">QR Sticker Space</span>
+                </div>
+              </div>
+              {/* Insurance Details */}
+              <div>
+                <Label className="font-semibold">Insurance Details (from Inspection)</Label>
+                {inspectionInsuranceData.length > 0 ? (
+                  inspectionInsuranceData.map((insurance, index) => (
+                    <div key={insurance.id || index} className="border border-gray-200 rounded-lg p-4 mb-4">
+                      <h6 className="font-medium text-blue-600 mb-2">Insurance Entry {index + 1}</h6>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-sm font-medium">Insurance Taken By</Label>
+                          <Input value={insurance.insuranceTakenBy || ''} readOnly className="text-sm" />
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Commodity</Label>
+                          <Input value={insurance.insuranceCommodity || ''} readOnly className="text-sm" />
+                        </div>
+                        {insurance.insuranceTakenBy === 'client' && (
+                          <>
+                            <div>
+                              <Label className="text-sm font-medium">Client Name</Label>
+                              <Input value={insurance.clientName || ''} readOnly className="text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Client Address</Label>
+                              <Input value={insurance.clientAddress || ''} readOnly className="text-sm" />
+                            </div>
+                          </>
+                        )}
+                        {insurance.insuranceTakenBy === 'bank' && (
+                          <div>
+                            <Label className="text-sm font-medium">Bank Name</Label>
+                            <Input value={insurance.selectedBankName || ''} readOnly className="text-sm" />
+                          </div>
+                        )}
+                        {insurance.insuranceTakenBy && insurance.insuranceTakenBy !== 'bank' && (
+                          <>
+                            <div>
+                              <Label className="text-sm font-medium">Fire Policy Company</Label>
+                              <Input value={insurance.firePolicyCompanyName || ''} readOnly className="text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Fire Policy Number</Label>
+                              <Input value={insurance.firePolicyNumber || ''} readOnly className="text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Fire Policy Amount</Label>
+                              <Input value={insurance.firePolicyAmount ? `₹${insurance.firePolicyAmount}` : ''} readOnly className="text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Fire Policy End Date</Label>
+                              <Input value={insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate).toLocaleDateString() : ''} readOnly className="text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Burglary Policy Company</Label>
+                              <Input value={insurance.burglaryPolicyCompanyName || ''} readOnly className="text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Burglary Policy Number</Label>
+                              <Input value={insurance.burglaryPolicyNumber || ''} readOnly className="text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Burglary Policy Amount</Label>
+                              <Input value={insurance.burglaryPolicyAmount ? `₹${insurance.burglaryPolicyAmount}` : ''} readOnly className="text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Burglary Policy End Date</Label>
+                              <Input value={insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate).toLocaleDateString() : ''} readOnly className="text-sm" />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-500 text-sm">No insurance data found in inspection</div>
+                )}
+              </div>
+              {/* Approve/Reject/Resubmit Buttons */}
+              {!isFormApproved && (
+              <div className="flex gap-4 mt-4">
+                <Button
+                  onClick={() => handleApproveSR(selectedRowForSR)}
+                  disabled={isInsuranceExpired(selectedRowForSR)}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                    Proceed to {selectedRowForSR?.receiptType || 'SR'}
+                </Button>
+                <Button
+                  onClick={() => handleRejectSR(selectedRowForSR)}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Reject
+                </Button>
+                <Button
+                  onClick={() => handleResubmitSR(selectedRowForSR)}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                >
+                  Resubmit
+                </Button>
+              </div>
+              )}
+              {/* Print Button - Only show after approval */}
+              {isFormApproved && (
+                <div className="flex justify-end mt-4">
+                  <Button
+                    onClick={generatePDF}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
+                  >
+                    <Printer className="mr-1 h-4 w-4" />
+                    Print Receipt
+                  </Button>
+                </div>
+              )}
+              {/* Insurance Seal/Stamp and Company Info */}
+              <div className="flex justify-between items-end mt-8">
+                <div>
+                  <div className="font-bold text-lg">TEST certificate</div>
+                </div>
+                <div className="flex flex-col items-end">
+                  <div className="w-32 h-16 border-2 border-dashed border-gray-400 flex items-center justify-center mb-2">
+                    <span className="text-xs text-gray-400">Seal/Stamp</span>
+                  </div>
+                  <div className="text-sm font-semibold">{process.env.NEXT_PUBLIC_COMPANY_NAME || 'Company Name'}</div>
+                  <div className="text-xs text-gray-500">{process.env.NEXT_PUBLIC_COMPANY_LOCATION || 'Location'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      {isFormApproved && selectedRowForSR && (
+        <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
+          <StaticReceipt
+            ref={printRef}
+            data={selectedRowForSR}
+            insurance={inspectionInsuranceData}
+            hologramNumber={hologramNumber}
+            srGenerationDate={srGenerationDate}
+          />
+        </div>
+      )}
     </DashboardLayout>
   );
 }

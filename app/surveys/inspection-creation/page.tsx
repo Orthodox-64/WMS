@@ -624,6 +624,18 @@ export default function InspectionCreationPage() {
       return;
     }
     
+    // Convert receipt type for Firebase storage
+    const convertReceiptType = (type: string) => {
+      switch (type) {
+        case 'storage':
+          return 'SR';
+        case 'warehouse':
+          return 'WR';
+        default:
+          return type; // Keep as is if it's already SR/WR or other values
+      }
+    };
+    
     try {
       if (isEditing && editingInspectionId) {
         // Update existing inspection
@@ -638,7 +650,7 @@ export default function InspectionCreationPage() {
           bankBranch: formData.bankBranch,
           bankName: formData.bankName,
           ifscCode: formData.ifscCode,
-          receiptType: formData.receiptType
+          receiptType: convertReceiptType(formData.receiptType)
         };
 
         // Update in Firebase
@@ -673,7 +685,7 @@ export default function InspectionCreationPage() {
           bankBranch: formData.bankBranch,
           bankName: formData.bankName,
           ifscCode: formData.ifscCode,
-          receiptType: formData.receiptType,
+          receiptType: convertReceiptType(formData.receiptType),
           createdAt: new Date().toISOString()
         };
 
@@ -733,6 +745,18 @@ export default function InspectionCreationPage() {
   };
 
   const handleEdit = (inspection: InspectionData) => {
+    // Convert receipt type from Firebase format to form format
+    const convertReceiptTypeForForm = (type: string) => {
+      switch (type) {
+        case 'SR':
+          return 'storage';
+        case 'WR':
+          return 'warehouse';
+        default:
+          return type; // Keep as is if it's already storage/warehouse or other values
+      }
+    };
+
     // Populate form with inspection data
     setFormData({
       state: inspection.state,
@@ -747,7 +771,7 @@ export default function InspectionCreationPage() {
       bankBranch: inspection.bankBranch,
       bankName: inspection.bankName,
       ifscCode: inspection.ifscCode,
-      receiptType: inspection.receiptType
+      receiptType: convertReceiptTypeForForm(inspection.receiptType)
     });
     
     setIsEditing(true);
