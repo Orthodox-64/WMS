@@ -96,6 +96,14 @@ interface InsuranceEntry {
   burglaryPolicyStartDate: Date | null;
   burglaryPolicyEndDate: Date | null;
   createdAt: Date;
+  remainingFirePolicyAmount: string;
+  remainingBurglaryPolicyAmount: string;
+}
+
+// Add index signature to formData type
+interface FormDataType {
+  // ...all your fields...
+  [key: string]: any;
 }
 
 export default function WarehouseInspectionForm({ 
@@ -107,7 +115,7 @@ export default function WarehouseInspectionForm({
   const { toast } = useToast();
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormDataType>({
     // Basic warehouse details
     warehouseName: '',
     warehouseCode: '',
@@ -739,6 +747,8 @@ export default function WarehouseInspectionForm({
       burglaryPolicyStartDate: null,
       burglaryPolicyEndDate: null,
       createdAt: new Date(),
+      remainingFirePolicyAmount: '',
+      remainingBurglaryPolicyAmount: '',
     };
 
     setFormData(prev => ({
@@ -1074,37 +1084,57 @@ export default function WarehouseInspectionForm({
       if (cleanFormData.insuranceEntries && Array.isArray(cleanFormData.insuranceEntries)) {
         cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map((entry: any) => {
           const cleanedEntry = { ...entry };
-          
           // Clean insurance entry dates
           ['firePolicyStartDate', 'firePolicyEndDate', 'burglaryPolicyStartDate', 'burglaryPolicyEndDate', 'createdAt'].forEach(dateField => {
             const dateValue = cleanedEntry[dateField];
-            
-            // Handle various date formats and invalid dates
             if (dateValue === null || dateValue === undefined || dateValue === '') {
               cleanedEntry[dateField] = null;
             } else if (dateValue instanceof Date) {
               if (isNaN(dateValue.getTime())) {
-                console.warn(`Invalid date found in ${dateField}:`, dateValue);
                 cleanedEntry[dateField] = null;
               } else {
                 cleanedEntry[dateField] = dateValue.toISOString();
               }
             } else if (typeof dateValue === 'string') {
-              // Try to parse string dates
               const parsedDate = new Date(dateValue);
               if (isNaN(parsedDate.getTime())) {
-                console.warn(`Invalid date string found in ${dateField}:`, dateValue);
                 cleanedEntry[dateField] = null;
               } else {
                 cleanedEntry[dateField] = parsedDate.toISOString();
               }
             } else {
-              // Unknown date format, set to null
-              console.warn(`Unknown date format in ${dateField}:`, dateValue);
               cleanedEntry[dateField] = null;
             }
           });
-          
+          // Ensure all fields are present and valid
+          const insuranceEntryFields = [
+            'id',
+            'insuranceTakenBy',
+            'insuranceCommodity',
+            'clientName',
+            'clientAddress',
+            'selectedBankName',
+            'firePolicyCompanyName',
+            'firePolicyNumber',
+            'firePolicyAmount',
+            'firePolicyStartDate',
+            'firePolicyEndDate',
+            'burglaryPolicyCompanyName',
+            'burglaryPolicyNumber',
+            'burglaryPolicyAmount',
+            'burglaryPolicyStartDate',
+            'burglaryPolicyEndDate',
+            'createdAt',
+            'remainingFirePolicyAmount',
+            'remainingBurglaryPolicyAmount'
+          ];
+          insuranceEntryFields.forEach(field => {
+            let value = cleanedEntry[field];
+            if (typeof value === 'undefined' || (typeof value === 'number' && isNaN(value))) {
+              value = '';
+            }
+            cleanedEntry[field] = value ?? '';
+          });
           return cleanedEntry;
         });
       }

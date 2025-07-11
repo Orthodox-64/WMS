@@ -565,6 +565,8 @@ export default function InsuranceMasterPage() {
                                       <TableHead className="text-green-700">Burglary Policy Amount</TableHead>
                                       <TableHead className="text-green-700">Burglary Policy Start</TableHead>
                                       <TableHead className="text-green-700">Burglary Policy End</TableHead>
+                                      <TableHead className="text-green-700">Remaining Fire Policy Amount</TableHead>
+                                      <TableHead className="text-green-700">Remaining Burglary Policy Amount</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
@@ -573,13 +575,15 @@ export default function InsuranceMasterPage() {
                                         <TableCell>{ins.firePolicyCompanyName || '-'}</TableCell>
                                         <TableCell>{ins.firePolicyNumber || '-'}</TableCell>
                                         <TableCell>{ins.firePolicyAmount || '-'}</TableCell>
-                                        <TableCell>{ins.firePolicyStartDate ? (typeof ins.firePolicyStartDate === 'string' ? new Date(ins.firePolicyStartDate).toLocaleDateString() : ins.firePolicyStartDate.toLocaleDateString()) : '-'}</TableCell>
-                                        <TableCell>{ins.firePolicyEndDate ? (typeof ins.firePolicyEndDate === 'string' ? new Date(ins.firePolicyEndDate).toLocaleDateString() : ins.firePolicyEndDate.toLocaleDateString()) : '-'}</TableCell>
+                                        <TableCell>{ins.firePolicyStartDate ? (typeof ins.firePolicyStartDate === 'string' || typeof ins.firePolicyStartDate === 'number' ? new Date(ins.firePolicyStartDate).toLocaleDateString() : '-') : '-'}</TableCell>
+                                        <TableCell>{ins.firePolicyEndDate ? (typeof ins.firePolicyEndDate === 'string' || typeof ins.firePolicyEndDate === 'number' ? new Date(ins.firePolicyEndDate).toLocaleDateString() : '-') : '-'}</TableCell>
                                         <TableCell>{ins.burglaryPolicyCompanyName || '-'}</TableCell>
                                         <TableCell>{ins.burglaryPolicyNumber || '-'}</TableCell>
                                         <TableCell>{ins.burglaryPolicyAmount || '-'}</TableCell>
-                                        <TableCell>{ins.burglaryPolicyStartDate ? (typeof ins.burglaryPolicyStartDate === 'string' ? new Date(ins.burglaryPolicyStartDate).toLocaleDateString() : ins.burglaryPolicyStartDate.toLocaleDateString()) : '-'}</TableCell>
-                                        <TableCell>{ins.burglaryPolicyEndDate ? (typeof ins.burglaryPolicyEndDate === 'string' ? new Date(ins.burglaryPolicyEndDate).toLocaleDateString() : ins.burglaryPolicyEndDate.toLocaleDateString()) : '-'}</TableCell>
+                                        <TableCell>{ins.burglaryPolicyStartDate ? (typeof ins.burglaryPolicyStartDate === 'string' || typeof ins.burglaryPolicyStartDate === 'number' ? new Date(ins.burglaryPolicyStartDate).toLocaleDateString() : '-') : '-'}</TableCell>
+                                        <TableCell>{ins.burglaryPolicyEndDate ? (typeof ins.burglaryPolicyEndDate === 'string' || typeof ins.burglaryPolicyEndDate === 'number' ? new Date(ins.burglaryPolicyEndDate).toLocaleDateString() : '-') : '-'}</TableCell>
+                                        <TableCell>{ins.remainingFirePolicyAmount || '-'}</TableCell>
+                                        <TableCell>{ins.remainingBurglaryPolicyAmount || '-'}</TableCell>
                                       </TableRow>
                                     ))}
                                   </TableBody>
