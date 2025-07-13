@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader as DialogHeaderUI, DialogTitle as DialogTitleUI } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, query, where } from 'firebase/firestore';
 import { Select as SelectUI, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/data-table';
@@ -58,6 +58,14 @@ export default function InsuranceMasterPage() {
     clientName: '',
     clientId: '',
     bankFundedBy: '',
+    // New insurance form fields
+    insuranceType: '',
+    commodity: '',
+    clientAddress: '',
+    firePolicyStartDate: '',
+    firePolicyEndDate: '',
+    burglaryPolicyStartDate: '',
+    burglaryPolicyEndDate: '',
   });
   const [selectedBankDetails, setSelectedBankDetails] = useState<any[]>([]);
 
@@ -305,7 +313,41 @@ export default function InsuranceMasterPage() {
   };
 
   // Generate sequential insuranceId
-  async function generateInsuranceId() {
+  async function generateInsuranceId(clientName?: string) {
+    if (form.insuranceType === 'client' && clientName) {
+      // For client insurance: Generate unique ID per client
+      const clientDoc = await getDocs(query(collection(db, 'clients'), where('firmName', '==', clientName)));
+      if (!clientDoc.empty) {
+        const clientData = clientDoc.docs[0].data() as any;
+        const existingInsurances = clientData.insurances || [];
+        
+        // Extract existing insurance IDs for this client
+        const existingIds = existingInsurances
+          .map((insurance: any) => insurance.insuranceId)
+          .filter(Boolean)
+          .map((id: string) => {
+            const match = id.match(/INS-(\d{4})/);
+            return match ? parseInt(match[1], 10) : 0;
+          });
+        
+        const maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
+        return `INS-${(maxId + 1).toString().padStart(4, '0')}`;
+      }
+    } else if (form.insuranceType === 'agrogreen') {
+      // For Agrogreen insurance: Generate unique ID across all Agrogreen insurances
+      const agrogreenSnap = await getDocs(collection(db, 'agrogreen'));
+      const ids = agrogreenSnap.docs
+        .map(doc => doc.data().insuranceId)
+        .filter(Boolean)
+        .map((id) => {
+          const match = id.match(/INS-(\d{4})/);
+          return match ? parseInt(match[1], 10) : 0;
+        });
+      const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+      return `INS-${(maxId + 1).toString().padStart(4, '0')}`;
+    }
+    
+    // Fallback: Generate unique ID across all insurance records
     const snap = await getDocs(collection(db, 'insurance'));
     const ids = snap.docs
       .map(doc => doc.data().insuranceId)
@@ -318,38 +360,133 @@ export default function InsuranceMasterPage() {
     return `INS-${(maxId + 1).toString().padStart(4, '0')}`;
   }
 
+  // Validate insurance ID uniqueness for client
+  async function validateInsuranceIdUniqueness(insuranceId: string, clientName: string) {
+    const clientDoc = await getDocs(query(collection(db, 'clients'), where('firmName', '==', clientName)));
+    if (!clientDoc.empty) {
+      const clientData = clientDoc.docs[0].data() as any;
+      const existingInsurances = clientData.insurances || [];
+      
+      // Check if insurance ID already exists for this client
+      const existingInsurance = existingInsurances.find((insurance: any) => insurance.insuranceId === insuranceId);
+      return !existingInsurance; // Return true if unique, false if duplicate
+    }
+    return true; // If client not found, consider it unique
+  }
+
   // Handle form submit
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     try {
-      if (editRow) {
-        // Only update fire/burglary policy fields
-        const updateFields: any = {};
-        ['firePolicyNumber','firePolicyAmount','firePolicyStart','firePolicyEnd','burglaryPolicyNumber','burglaryPolicyAmount','burglaryPolicyStart','burglaryPolicyEnd', 'firePolicyCompanyName', 'burglaryPolicyCompanyName'].forEach(key => {
-          updateFields[key] = form[key] === '' || form[key] === null || form[key] === undefined ? '-' : form[key];
-        });
-        await updateDoc(doc(db, 'insurance', editRow.id), updateFields);
-        toast({ title: 'Insurance updated successfully!', variant: 'default' });
-      } else {
-        // Add new
-        const dataToSave: any = { ...form };
-        Object.keys(dataToSave).forEach(key => {
-          const value = dataToSave[key];
-          if (value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
-            dataToSave[key] = '-';
-          }
-        });
-        const insuranceId = await generateInsuranceId();
-        dataToSave.insuranceId = insuranceId;
-        dataToSave.createdAt = new Date().toISOString();
-        await addDoc(collection(db, 'insurance'), dataToSave);
-        toast({ title: 'Insurance added successfully!', variant: 'default' });
+      // Validate required fields
+      if (!form.insuranceType) {
+        toast({ title: 'Error', description: 'Please select insurance type', variant: 'destructive' });
+        return;
       }
+      if (!form.commodity) {
+        toast({ title: 'Error', description: 'Please enter commodity', variant: 'destructive' });
+        return;
+      }
+      if (form.insuranceType === 'client' && !form.clientName) {
+        toast({ title: 'Error', description: 'Please select client name', variant: 'destructive' });
+        return;
+      }
+      if (!form.firePolicyCompanyName || !form.firePolicyNumber || !form.firePolicyAmount || !form.firePolicyStartDate || !form.firePolicyEndDate) {
+        toast({ title: 'Error', description: 'Please fill all fire policy details', variant: 'destructive' });
+        return;
+      }
+      if (!form.burglaryPolicyCompanyName || !form.burglaryPolicyNumber || !form.burglaryPolicyAmount || !form.burglaryPolicyStartDate || !form.burglaryPolicyEndDate) {
+        toast({ title: 'Error', description: 'Please fill all burglary policy details', variant: 'destructive' });
+        return;
+      }
+
+      // Prepare insurance data
+      const insuranceData = {
+        insuranceType: form.insuranceType,
+        commodity: form.commodity,
+        clientName: form.insuranceType === 'client' ? form.clientName : '',
+        clientAddress: form.insuranceType === 'client' ? form.clientAddress : '',
+        firePolicyCompanyName: form.firePolicyCompanyName,
+        firePolicyNumber: form.firePolicyNumber,
+        firePolicyAmount: form.firePolicyAmount,
+        firePolicyStartDate: form.firePolicyStartDate,
+        firePolicyEndDate: form.firePolicyEndDate,
+        burglaryPolicyCompanyName: form.burglaryPolicyCompanyName,
+        burglaryPolicyNumber: form.burglaryPolicyNumber,
+        burglaryPolicyAmount: form.burglaryPolicyAmount,
+        burglaryPolicyStartDate: form.burglaryPolicyStartDate,
+        burglaryPolicyEndDate: form.burglaryPolicyEndDate,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (form.insuranceType === 'client') {
+        // For client insurance: Add to client's document in clients collection
+        const selectedClient = clients.find((c: any) => c.firmName === form.clientName);
+        if (!selectedClient) {
+          toast({ title: 'Error', description: 'Selected client not found', variant: 'destructive' });
+          return;
+        }
+
+        // Generate insurance ID for this client
+        const insuranceId = await generateInsuranceId(form.clientName);
+        
+        // Validate insurance ID uniqueness
+        const isUnique = await validateInsuranceIdUniqueness(insuranceId, form.clientName);
+        if (!isUnique) {
+          toast({ title: 'Error', description: 'Insurance ID already exists for this client. Please try again.', variant: 'destructive' });
+          return;
+        }
+
+        // Get current client data
+        const clientDoc = await getDocs(query(collection(db, 'clients'), where('firmName', '==', form.clientName)));
+        if (clientDoc.empty) {
+          toast({ title: 'Error', description: 'Client document not found', variant: 'destructive' });
+          return;
+        }
+
+        const clientDocSnapshot = clientDoc.docs[0];
+        const clientData = clientDocSnapshot.data() as any;
+        const existingInsurances = clientData.insurances || [];
+        
+        // Add new insurance to the array with the validated insurance ID
+        const insuranceDataWithId = {
+          ...insuranceData,
+          insuranceId: insuranceId
+        };
+        const updatedInsurances = [...existingInsurances, insuranceDataWithId];
+        
+        // Update the client document with new insurance array
+        await updateDoc(doc(db, 'clients', clientDocSnapshot.id), {
+          insurances: updatedInsurances
+        });
+
+        toast({ title: 'Insurance added to client successfully!', variant: 'default' });
+      } else if (form.insuranceType === 'agrogreen') {
+        // For Agrogreen insurance: Create new document in agrogreen collection
+        const insuranceId = await generateInsuranceId();
+        const insuranceDataWithId = {
+          ...insuranceData,
+          insuranceId: insuranceId
+        };
+        await addDoc(collection(db, 'agrogreen'), insuranceDataWithId);
+        toast({ title: 'Agrogreen insurance added successfully!', variant: 'default' });
+      }
+
       fetchWarehouseInsurance();
       setShowAddModal(false);
       setEditRow(null);
+      
+      // Reset form
       setForm({
         state: '', branch: '', location: '', warehouse: '', commodities: [], banks: [], insuranceManagedBy: '', firePolicyNumber: '', firePolicyAmount: '', firePolicyStart: '', firePolicyEnd: '', burglaryPolicyNumber: '', burglaryPolicyAmount: '', burglaryPolicyStart: '', burglaryPolicyEnd: '', clientName: '', clientId: '', bankFundedBy: '', firePolicyCompanyName: '', burglaryPolicyCompanyName: '',
+        // New insurance form fields
+        insuranceType: '',
+        commodity: '',
+        clientAddress: '',
+        firePolicyStartDate: '',
+        firePolicyEndDate: '',
+        burglaryPolicyStartDate: '',
+        burglaryPolicyEndDate: '',
       });
     } catch (err) {
       toast({ title: 'Error saving insurance', description: String(err), variant: 'destructive' });
@@ -473,6 +610,21 @@ export default function InsuranceMasterPage() {
             </h1>
           </div>
         </div>
+
+        {/* Add New Insurance Button */}
+        <Card className="border-green-300 mb-4">
+          <CardContent className="p-4">
+            <div className="flex justify-center">
+              <Button 
+                onClick={() => setShowAddModal(true)}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 text-lg font-semibold"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Add New Insurance
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Search & Export Section */}
         <Card className="border-green-300">
@@ -610,209 +762,212 @@ export default function InsuranceMasterPage() {
 
         {/* Add New Insurance Modal */}
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeaderUI>
               <DialogTitleUI>Add New Insurance</DialogTitleUI>
             </DialogHeaderUI>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Insurance Type Selection */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* State */}
                 <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">State</Label>
-                  <SelectUI value={form.state} onValueChange={v => handleChange('state', v)} required>
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500 text-orange-700"><SelectValue placeholder="Select state" /></SelectTrigger>
-                    <SelectContent>{states.map(state => <SelectItem key={state} value={state}>{state}</SelectItem>)}</SelectContent>
-                  </SelectUI>
-                </div>
-                {/* Branch */}
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">Branch</Label>
-                  <SelectUI value={form.branch} onValueChange={v => handleChange('branch', v)} required disabled={!form.state}>
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500 text-orange-700"><SelectValue placeholder="Select branch" /></SelectTrigger>
-                    <SelectContent>{branches.filter((b: any) => b.state === form.state).map(branch => <SelectItem key={branch.branch} value={branch.branch}>{branch.branch}</SelectItem>)}</SelectContent>
-                  </SelectUI>
-                </div>
-                {/* Location */}
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">Location</Label>
-                  <SelectUI value={form.location} onValueChange={v => handleChange('location', v)} required disabled={!form.branch}>
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500 text-orange-700"><SelectValue placeholder="Select location" /></SelectTrigger>
-                    <SelectContent>{locations.map((loc: any) => <SelectItem key={loc.locationId} value={loc.locationName}>{loc.locationName}</SelectItem>)}</SelectContent>
-                  </SelectUI>
-                </div>
-                {/* Warehouse */}
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">Warehouse Name</Label>
-                  <SelectUI value={form.warehouse} onValueChange={v => handleChange('warehouse', v)} required disabled={!form.location}>
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500 text-orange-700"><SelectValue placeholder="Select warehouse" /></SelectTrigger>
-                    <SelectContent>{filteredWarehouses.map((wh: any) => <SelectItem key={wh.warehouseName} value={wh.warehouseName}>{wh.warehouseName}</SelectItem>)}</SelectContent>
-                  </SelectUI>
-                </div>
-                {/* Commodities Multi-Select (react-select, no children) */}
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="text-green-600 font-medium">Commodities</Label>
-                  <Select
-                    isMulti
-                    options={commodityOptions.map((c: string) => ({ value: c, label: c }))}
-                    value={commodityOptions.filter((c: string) => form.commodities?.includes(c)).map((c: string) => ({ value: c, label: c }))}
-                    onChange={(selected: any) => handleChange('commodities', selected.map((s: any) => s.value))}
-                    placeholder="Select commodities"
-                    styles={{
-                      control: (base: any) => ({ ...base, borderColor: '#fb923c', minHeight: 40 }),
-                      multiValue: (base: any) => ({ ...base, backgroundColor: '#bbf7d0', color: '#047857' }),
-                      multiValueLabel: (base: any) => ({ ...base, color: '#047857', fontWeight: 500 }),
-                      option: (base: any, state: any) => ({ ...base, color: state.isSelected ? '#fb923c' : '#047857', backgroundColor: state.isSelected ? '#fef3c7' : '#fff' }),
-                    }}
-                  />
-                </div>
-                {/* Banks Multi-Select (react-select, no children) */}
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="text-green-600 font-medium">Banks</Label>
-                  <Select
-                    isMulti
-                    options={bankLocationOptions.map((loc: any) => ({ value: `${loc.bankId}|${loc.locationId}`, label: `${loc.bankName} (${loc.branchName})` }))}
-                    value={bankLocationOptions.filter((loc: any) => form.banks?.includes(`${loc.bankId}|${loc.locationId}`)).map((loc: any) => ({ value: `${loc.bankId}|${loc.locationId}`, label: `${loc.bankName} (${loc.branchName})` }))}
-                    onChange={(selected: any) => handleChange('banks', selected.map((s: any) => s.value))}
-                    placeholder="Select banks"
-                    styles={{
-                      control: (base: any) => ({ ...base, borderColor: '#fb923c', minHeight: 40 }),
-                      multiValue: (base: any) => ({ ...base, backgroundColor: '#bbf7d0', color: '#047857' }),
-                      multiValueLabel: (base: any) => ({ ...base, color: '#047857', fontWeight: 500 }),
-                      option: (base: any, state: any) => ({ ...base, color: state.isSelected ? '#fb923c' : '#047857', backgroundColor: state.isSelected ? '#fef3c7' : '#fff' }),
-                    }}
-                  />
-                </div>
-                {/* After the Banks multi-select field, show selected bank details if any banks are selected */}
-                {form.banks && form.banks.length > 0 && (
-                  <div className="md:col-span-2 bg-green-50 border border-green-200 rounded-lg p-2 mt-2">
-                    <div className="font-semibold text-green-700 mb-1">Selected Bank Details:</div>
-                    {form.banks.map((val: string, idx: number) => {
-                      const [bankId, locationId] = val.split('|');
-                      const loc = bankLocationOptions.find((l: any) => l.bankId === bankId && l.locationId === locationId);
-                      if (!loc) return null;
-                      return (
-                        <div key={val} className="text-sm text-green-900 mb-1">
-                          {loc.state} | {loc.bankName} | {loc.branchName} | IFSC: {loc.ifscCode}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {/* Insurance Managed By */}
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="text-green-600 font-medium">Insurance Managed By</Label>
-                  <SelectUI value={form.insuranceManagedBy} onValueChange={v => handleChange('insuranceManagedBy', v)} required>
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500 text-orange-700"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <Label className="text-green-600 font-medium">Insurance Type</Label>
+                  <SelectUI value={form.insuranceType} onValueChange={v => handleChange('insuranceType', v)} required>
+                    <SelectTrigger className="border-orange-300 focus:border-orange-500 text-orange-700">
+                      <SelectValue placeholder="Select Insurance Type" />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="warehouse owner">Warehouse Owner</SelectItem>
-                      <SelectItem value="borrower">Borrower</SelectItem>
+                      <SelectItem value="client">Client</SelectItem>
                       <SelectItem value="agrogreen">Agrogreen</SelectItem>
-                      <SelectItem value="bank">Bank</SelectItem>
                     </SelectContent>
                   </SelectUI>
                 </div>
-                {/* Bank Funded By (Single Select, only from selected banks, react-select, no children) */}
-                {form.insuranceManagedBy === 'bank' && (
-                  <>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label className="text-green-600 font-medium">Bank Funded By</Label>
-                      <Select
-                        isMulti={false}
-                        options={bankLocationOptions.filter((loc: any) => form.banks.includes(`${loc.bankId}|${loc.locationId}`)).map((loc: any) => ({ value: `${loc.bankId}|${loc.locationId}`, label: `${loc.bankName} (${loc.branchName})` }))}
-                        value={bankLocationOptions.filter((loc: any) => `${loc.bankId}|${loc.locationId}` === form.bankFundedBy).map((loc: any) => ({ value: `${loc.bankId}|${loc.locationId}`, label: `${loc.bankName} (${loc.branchName})` }))}
-                        onChange={(selected: any) => handleChange('bankFundedBy', selected ? selected.value : '')}
-                        placeholder="Select bank funded by"
-                        styles={{
-                          control: (base: any) => ({ ...base, borderColor: '#fb923c', minHeight: 40, fontSize: '0.875rem', color: '#047857' }),
-                          singleValue: (base: any) => ({ ...base, color: '#047857', fontSize: '0.875rem' }),
-                          option: (base: any, state: any) => ({ ...base, color: '#047857', fontSize: '0.875rem', backgroundColor: state.isSelected ? '#fef3c7' : '#fff' }),
-                        }}
-                      />
-                    </div>
-                    {/* Show details of selected Bank Funded By */}
-                    {form.bankFundedBy && (
-                      (() => {
-                        const [bankId, locationId] = form.bankFundedBy.split('|');
-                        const loc = bankLocationOptions.find((l: any) => l.bankId === bankId && l.locationId === locationId);
-                        if (!loc) return null;
-                        return (
-                          <div className="md:col-span-2 bg-orange-50 border border-orange-200 rounded-lg p-2 mt-2">
-                            <div className="font-semibold text-orange-700 mb-1">Bank Funded By Details:</div>
-                            <div className="text-sm text-green-700 mb-1">
-                              {loc.state} | {loc.bankName} | {loc.branchName} | IFSC: {loc.ifscCode}
-                            </div>
-                          </div>
-                        );
-                      })()
-                    )}
-                  </>
-                )}
-                {/* If borrower, show client name/id */}
-                {form.insuranceManagedBy === 'borrower' && (
-                  <>
+                </div>
+
+              {/* Client-specific fields */}
+              {form.insuranceType === 'client' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                      <Label className="text-green-600 font-medium">Commodity</Label>
+                      <Input 
+                        value={form.commodity} 
+                        onChange={e => handleChange('commodity', e.target.value)} 
+                        className="border-orange-300 focus:border-orange-500 text-orange-700"
+                        placeholder="Enter commodity name"
+                        required
+                  />
+                </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Client Name</Label>
-                      <SelectUI value={form.clientName} onValueChange={v => handleChange('clientName', v)}>
-                        <SelectTrigger className="border-orange-300 focus:border-orange-500 text-orange-700"><SelectValue placeholder="Select client" /></SelectTrigger>
-                        <SelectContent>{clientOptions.map((c: any) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
-                      </SelectUI>
-                    </div>
+                      <SelectUI value={form.clientName} onValueChange={v => {
+                        const selectedClient = clients.find((c: any) => c.firmName === v);
+                        handleChange('clientName', v);
+                        handleChange('clientAddress', selectedClient?.companyAddress || '');
+                      }} required>
+                        <SelectTrigger className="border-orange-300 focus:border-orange-500 text-orange-700">
+                          <SelectValue placeholder="Select Client" />
+                        </SelectTrigger>
+                    <SelectContent>
+                          {clients.map((client: any) => (
+                            <SelectItem key={client.clientId} value={client.firmName}>
+                              {client.firmName}
+                            </SelectItem>
+                          ))}
+                    </SelectContent>
+                  </SelectUI>
+                </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-green-600 font-medium">Client ID</Label>
-                      <Input value={form.clientId} readOnly className="border-orange-300 focus:border-orange-500 text-orange-700 bg-gray-100" />
+                      <Label className="text-green-600 font-medium">Client Address</Label>
+                      <Input 
+                        value={form.clientAddress} 
+                        onChange={e => handleChange('clientAddress', e.target.value)} 
+                        className="border-orange-300 focus:border-orange-500 text-orange-700"
+                        placeholder="Client address will auto-fill"
+                        required
+                      />
                     </div>
+                            </div>
                   </>
                 )}
-                {/* If not managed by bank, show fire/burglary policy fields */}
-                {form.insuranceManagedBy && form.insuranceManagedBy !== 'bank' && (
-                  <>
-                    {/* Fire Policy */}
+
+              {/* Agrogreen-specific fields */}
+              {form.insuranceType === 'agrogreen' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                    <Label className="text-green-600 font-medium">Commodity</Label>
+                    <Input 
+                      value={form.commodity} 
+                      onChange={e => handleChange('commodity', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      placeholder="Enter commodity name"
+                      required
+                    />
+                    </div>
+                    </div>
+              )}
+
+              {/* Fire Policy Details */}
+              <div className="border border-green-200 rounded-lg p-4 bg-green-50">
+                <h3 className="text-lg font-semibold text-green-700 mb-4">Fire Policy Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-green-600 font-medium">Fire Policy Company Name</Label>
+                    <Input 
+                      value={form.firePolicyCompanyName} 
+                      onChange={e => handleChange('firePolicyCompanyName', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      placeholder="Enter company name"
+                      required
+                    />
+                  </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Fire Policy Number</Label>
-                      <Input value={form.firePolicyNumber} onChange={e => handleChange('firePolicyNumber', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    <Input 
+                      value={form.firePolicyNumber} 
+                      onChange={e => handleChange('firePolicyNumber', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      placeholder="Enter policy number"
+                      required
+                    />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Fire Policy Amount</Label>
-                      <Input type="number" value={form.firePolicyAmount} onChange={e => handleChange('firePolicyAmount', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    <Input 
+                      type="number"
+                      value={form.firePolicyAmount} 
+                      onChange={e => handleChange('firePolicyAmount', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      placeholder="Enter amount"
+                      required
+                    />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Fire Policy Start Date</Label>
-                      <Input type="date" value={form.firePolicyStart} onChange={e => handleChange('firePolicyStart', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    <Input 
+                      type="date"
+                      value={form.firePolicyStartDate} 
+                      onChange={e => handleChange('firePolicyStartDate', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      required
+                    />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Fire Policy End Date</Label>
-                      <Input type="date" value={form.firePolicyEnd} onChange={e => handleChange('firePolicyEnd', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    <Input 
+                      type="date"
+                      value={form.firePolicyEndDate} 
+                      onChange={e => handleChange('firePolicyEndDate', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      required
+                    />
                     </div>
-                    <div>
-                      <Label htmlFor="firePolicyCompanyName">Fire Policy Company Name</Label>
-                      <Input id="firePolicyCompanyName" value={form.firePolicyCompanyName} onChange={e => handleChange('firePolicyCompanyName', e.target.value)} />
                     </div>
-                    {/* Burglary Policy */}
+              </div>
+
+              {/* Burglary Policy Details */}
+              <div className="border border-green-200 rounded-lg p-4 bg-green-50">
+                <h3 className="text-lg font-semibold text-green-700 mb-4">Burglary Policy Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-green-600 font-medium">Burglary Policy Company Name</Label>
+                    <Input 
+                      value={form.burglaryPolicyCompanyName} 
+                      onChange={e => handleChange('burglaryPolicyCompanyName', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      placeholder="Enter company name"
+                      required
+                    />
+                  </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Burglary Policy Number</Label>
-                      <Input value={form.burglaryPolicyNumber} onChange={e => handleChange('burglaryPolicyNumber', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    <Input 
+                      value={form.burglaryPolicyNumber} 
+                      onChange={e => handleChange('burglaryPolicyNumber', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      placeholder="Enter policy number"
+                      required
+                    />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Burglary Policy Amount</Label>
-                      <Input type="number" value={form.burglaryPolicyAmount} onChange={e => handleChange('burglaryPolicyAmount', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    <Input 
+                      type="number"
+                      value={form.burglaryPolicyAmount} 
+                      onChange={e => handleChange('burglaryPolicyAmount', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      placeholder="Enter amount"
+                      required
+                    />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Burglary Policy Start Date</Label>
-                      <Input type="date" value={form.burglaryPolicyStart} onChange={e => handleChange('burglaryPolicyStart', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    <Input 
+                      type="date"
+                      value={form.burglaryPolicyStartDate} 
+                      onChange={e => handleChange('burglaryPolicyStartDate', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      required
+                    />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-green-600 font-medium">Burglary Policy End Date</Label>
-                      <Input type="date" value={form.burglaryPolicyEnd} onChange={e => handleChange('burglaryPolicyEnd', e.target.value)} className="border-orange-300 focus:border-orange-500 text-orange-700" />
+                    <Input 
+                      type="date"
+                      value={form.burglaryPolicyEndDate} 
+                      onChange={e => handleChange('burglaryPolicyEndDate', e.target.value)} 
+                      className="border-orange-300 focus:border-orange-500 text-orange-700"
+                      required
+                    />
                     </div>
-                    <div>
-                      <Label htmlFor="burglaryPolicyCompanyName">Burglary Policy Company Name</Label>
-                      <Input id="burglaryPolicyCompanyName" value={form.burglaryPolicyCompanyName} onChange={e => handleChange('burglaryPolicyCompanyName', e.target.value)} />
                     </div>
-                  </>
-                )}
               </div>
+
               <div className="flex justify-end pt-4">
-                <Button type="submit" className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-2 shadow-lg">{editRow ? 'Update Insurance' : 'Add Insurance'}</Button>
+                <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white px-8 py-2 shadow-lg">
+                  Save Insurance
+                </Button>
               </div>
             </form>
           </DialogContent>

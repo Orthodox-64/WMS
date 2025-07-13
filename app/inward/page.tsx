@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, updateDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -809,6 +809,9 @@ export default function InwardPage() {
           if (i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber) {
             return {
               ...i,
+              // Update both the original policy amounts and remaining amounts for consistency
+              firePolicyAmount: newRemainingFire,
+              burglaryPolicyAmount: newRemainingBurglary,
               remainingFirePolicyAmount: newRemainingFire,
               remainingBurglaryPolicyAmount: newRemainingBurglary,
             };
@@ -825,7 +828,104 @@ export default function InwardPage() {
       // Use the already calculated remaining amounts from state
       const newRemainingFire = remainingFirePolicy;
       const newRemainingBurglary = remainingBurglaryPolicy;
-      // Update Firestore
+      
+      // Update source collections (clients or agrogreen) based on sourceDocumentId and insuranceId
+      if (ins.sourceDocumentId && ins.insuranceId) {
+        try {
+          if (ins.sourceCollection === 'clients') {
+            // Update client insurance
+            try {
+              // Use the sourceDocumentId directly as the document ID
+              const clientDocRef = doc(db, 'clients', ins.sourceDocumentId);
+              const clientDocSnap = await getDoc(clientDocRef);
+              
+              if (clientDocSnap.exists()) {
+                const clientData = clientDocSnap.data() as any;
+                const insurances = clientData.insurances || [];
+                
+                // Debug the current data structure
+                await debugClientInsuranceData(ins.sourceDocumentId, ins.insuranceId);
+                
+                // Find and update the specific insurance
+                const updatedInsurances = insurances.map((insurance: any) => {
+                  if (insurance.insuranceId === ins.insuranceId) {
+                    console.log('=== UPDATING CLIENT INSURANCE ===');
+                    console.log('Insurance ID:', insurance.insuranceId);
+                    console.log('BEFORE UPDATE - Current values:');
+                    console.log('  firePolicyAmount:', insurance.firePolicyAmount);
+                    console.log('  burglaryPolicyAmount:', insurance.burglaryPolicyAmount);
+                    console.log('  remainingFirePolicyAmount:', insurance.remainingFirePolicyAmount);
+                    console.log('  remainingBurglaryPolicyAmount:', insurance.remainingBurglaryPolicyAmount);
+                    console.log('NEW VALUES TO SET:');
+                    console.log('  firePolicyAmount ->', newRemainingFire);
+                    console.log('  burglaryPolicyAmount ->', newRemainingBurglary);
+                    
+                    const updatedInsurance = {
+                      ...insurance,
+                      // DIRECT UPDATE: Set original policy amounts to calculated remaining amounts
+                      firePolicyAmount: newRemainingFire,
+                      burglaryPolicyAmount: newRemainingBurglary,
+                      // Also update remaining amounts for consistency
+                      remainingFirePolicyAmount: newRemainingFire,
+                      remainingBurglaryPolicyAmount: newRemainingBurglary,
+                    };
+                    
+                    console.log('AFTER UPDATE - New values:');
+                    console.log('  firePolicyAmount:', updatedInsurance.firePolicyAmount);
+                    console.log('  burglaryPolicyAmount:', updatedInsurance.burglaryPolicyAmount);
+                    console.log('  remainingFirePolicyAmount:', updatedInsurance.remainingFirePolicyAmount);
+                    console.log('  remainingBurglaryPolicyAmount:', updatedInsurance.remainingBurglaryPolicyAmount);
+                    console.log('=== END UPDATE ===');
+                    
+                    return updatedInsurance;
+                  }
+                  return insurance;
+                });
+                
+                console.log('Total insurances in array:', updatedInsurances.length);
+                console.log('Updated insurances array:', updatedInsurances);
+                
+                // Perform the database update
+                console.log('Updating client document with new insurance data...');
+                await updateDoc(clientDocRef, {
+                  insurances: updatedInsurances
+                });
+                console.log('✅ Database update completed successfully');
+              } else {
+                console.error('Client document not found with ID:', ins.sourceDocumentId);
+              }
+            } catch (error) {
+              console.error('Error updating client insurance:', error);
+            }
+          } else if (ins.sourceCollection === 'agrogreen') {
+            // Update Agrogreen insurance
+            try {
+              // Use the sourceDocumentId directly as the document ID
+              const agrogreenDocRef = doc(db, 'agrogreen', ins.sourceDocumentId);
+              const agrogreenDocSnap = await getDoc(agrogreenDocRef);
+              
+              if (agrogreenDocSnap.exists()) {
+                await updateDoc(agrogreenDocRef, {
+                  // Update both the original policy amounts and remaining amounts
+                  firePolicyAmount: newRemainingFire,
+                  burglaryPolicyAmount: newRemainingBurglary,
+                  remainingFirePolicyAmount: newRemainingFire,
+                  remainingBurglaryPolicyAmount: newRemainingBurglary,
+                });
+                console.log('Successfully updated Agrogreen insurance policy and remaining amounts');
+              } else {
+                console.error('Agrogreen document not found with ID:', ins.sourceDocumentId);
+              }
+            } catch (error) {
+              console.error('Error updating Agrogreen insurance:', error);
+            }
+          }
+        } catch (error) {
+          console.error('Error updating source insurance:', error);
+        }
+      }
+      
+      // Update Firestore inspection entry as well
       const inspectionsCollection = collection(db, 'inspections');
       const q = query(inspectionsCollection, where('warehouseName', '==', form.warehouseName));
       const querySnapshot = await getDocs(q);
@@ -1337,9 +1437,22 @@ export default function InwardPage() {
 
   // Helper to get particulars for selected commodity and variety
   const getSelectedVarietyParticulars = () => {
+    console.log('getSelectedVarietyParticulars called with:', { 
+      commodity: form.commodity, 
+      varietyName: form.varietyName,
+      commoditiesCount: commodities.length 
+    });
+    
     const commodity = commodities.find((c: any) => c.commodityName === form.commodity);
+    console.log('Found commodity:', commodity);
+    
     const variety = commodity?.varieties?.find((v: any) => v.varietyName === form.varietyName);
-    return variety?.particulars || [];
+    console.log('Found variety:', variety);
+    
+    const particulars = variety?.particulars || [];
+    console.log('Returning particulars:', particulars);
+    
+    return particulars;
   };
 
   // Add handler for lab result input changes
@@ -1707,31 +1820,154 @@ export default function InwardPage() {
     setSelectedInsuranceInfoIndex(idx);
     const ins = filteredInsuranceInfoEntries[idx];
     
-    // Fetch latest remaining values from Firestore
-    const inspectionsCollection = collection(db, 'inspections');
-    const q = query(inspectionsCollection, where('warehouseName', '==', form.warehouseName));
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      const inspectionData = querySnapshot.docs[0].data();
-      let insuranceList = inspectionData.insuranceEntries || [];
-      if (!Array.isArray(insuranceList) && inspectionData.warehouseInspectionData?.insuranceEntries) {
-        insuranceList = inspectionData.warehouseInspectionData.insuranceEntries;
+    try {
+      let foundInsurance = null;
+      
+      // Find insurance based on sourceDocumentId and insuranceId
+      if (ins.sourceDocumentId && ins.insuranceId) {
+        if (ins.sourceCollection === 'clients') {
+          // Find insurance in clients collection by sourceDocumentId and insuranceId
+          try {
+            const clientDocRef = doc(db, 'clients', ins.sourceDocumentId);
+            const clientDocSnap = await getDoc(clientDocRef);
+            
+            if (clientDocSnap.exists()) {
+              const clientData = clientDocSnap.data() as any;
+              const insurances = clientData.insurances || [];
+              console.log('Client insurances found:', insurances.length);
+              console.log('Looking for insuranceId:', ins.insuranceId);
+              
+              foundInsurance = insurances.find((insurance: any) => {
+                console.log('Checking insurance:', insurance.insuranceId, 'against:', ins.insuranceId);
+                return insurance.insuranceId === ins.insuranceId;
+              });
+              
+              if (foundInsurance) {
+                console.log('Found client insurance:', foundInsurance);
+                // Use remaining amounts from client insurance if available, otherwise use policy amounts
+                const initialFire = foundInsurance.remainingFirePolicyAmount || foundInsurance.firePolicyAmount || ins.firePolicyAmount || '';
+                const initialBurglary = foundInsurance.remainingBurglaryPolicyAmount || foundInsurance.burglaryPolicyAmount || ins.burglaryPolicyAmount || '';
+                
+                setInitialRemainingFire(initialFire);
+                setInitialRemainingBurglary(initialBurglary);
+              } else {
+                console.log('Insurance not found in client data');
+              }
+            } else {
+              console.log('Client document not found with ID:', ins.sourceDocumentId);
+            }
+          } catch (error) {
+            console.error('Error finding client insurance:', error);
+          }
+        } else if (ins.sourceCollection === 'agrogreen') {
+          // Find insurance in agrogreen collection by sourceDocumentId (which is the document ID)
+          try {
+            const agrogreenDocRef = doc(db, 'agrogreen', ins.sourceDocumentId);
+            const agrogreenDocSnap = await getDoc(agrogreenDocRef);
+            
+            if (agrogreenDocSnap.exists()) {
+              foundInsurance = agrogreenDocSnap.data();
+              
+              if (foundInsurance) {
+                console.log('Found Agrogreen insurance:', foundInsurance);
+                // Use remaining amounts from Agrogreen insurance if available, otherwise use policy amounts
+                const initialFire = foundInsurance.remainingFirePolicyAmount || foundInsurance.firePolicyAmount || ins.firePolicyAmount || '';
+                const initialBurglary = foundInsurance.remainingBurglaryPolicyAmount || foundInsurance.burglaryPolicyAmount || ins.burglaryPolicyAmount || '';
+                
+                setInitialRemainingFire(initialFire);
+                setInitialRemainingBurglary(initialBurglary);
+              }
+            } else {
+              console.log('Agrogreen document not found with ID:', ins.sourceDocumentId);
+            }
+          } catch (error) {
+            console.error('Error finding Agrogreen insurance:', error);
+          }
+        }
       }
-      const firestoreIns = insuranceList.find((i: any) => i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber);
       
-      // Use remaining values if they exist, otherwise use policy amounts
-      const initialFire = firestoreIns?.remainingFirePolicyAmount || ins.firePolicyAmount || '';
-      const initialBurglary = firestoreIns?.remainingBurglaryPolicyAmount || ins.burglaryPolicyAmount || '';
-      
-      setInitialRemainingFire(initialFire);
-      setInitialRemainingBurglary(initialBurglary);
-    } else {
-      // If no Firestore data, use policy amounts
+      // Fallback: If no sourceDocumentId or insuranceId, use the existing logic
+      if (!foundInsurance) {
+        console.log('No sourceDocumentId or insuranceId found, using fallback logic');
+        // Fetch latest remaining values from Firestore
+        const inspectionsCollection = collection(db, 'inspections');
+        const q = query(inspectionsCollection, where('warehouseName', '==', form.warehouseName));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const inspectionData = querySnapshot.docs[0].data();
+          let insuranceList = inspectionData.insuranceEntries || [];
+          if (!Array.isArray(insuranceList) && inspectionData.warehouseInspectionData?.insuranceEntries) {
+            insuranceList = inspectionData.warehouseInspectionData.insuranceEntries;
+          }
+          const firestoreIns = insuranceList.find((i: any) => i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber);
+          
+          // Use remaining values if they exist, otherwise use policy amounts
+          const initialFire = firestoreIns?.remainingFirePolicyAmount || ins.firePolicyAmount || '';
+          const initialBurglary = firestoreIns?.remainingBurglaryPolicyAmount || ins.burglaryPolicyAmount || '';
+          
+          setInitialRemainingFire(initialFire);
+          setInitialRemainingBurglary(initialBurglary);
+        } else {
+          // If no Firestore data, use policy amounts
+          const initialFire = ins.firePolicyAmount || '';
+          const initialBurglary = ins.burglaryPolicyAmount || '';
+          
+          setInitialRemainingFire(initialFire);
+          setInitialRemainingBurglary(initialBurglary);
+        }
+      }
+    } catch (error) {
+      console.error('Error finding insurance:', error);
+      // Fallback to policy amounts on error
       const initialFire = ins.firePolicyAmount || '';
       const initialBurglary = ins.burglaryPolicyAmount || '';
       
       setInitialRemainingFire(initialFire);
       setInitialRemainingBurglary(initialBurglary);
+    }
+  };
+
+  // Debug function to examine client insurance data structure
+  const debugClientInsuranceData = async (clientId: string, insuranceId: string) => {
+    try {
+      console.log('=== DEBUGGING CLIENT INSURANCE DATA ===');
+      console.log('Client ID:', clientId);
+      console.log('Insurance ID:', insuranceId);
+      
+      const clientDocRef = doc(db, 'clients', clientId);
+      const clientDocSnap = await getDoc(clientDocRef);
+      
+      if (clientDocSnap.exists()) {
+        const clientData = clientDocSnap.data() as any;
+        console.log('Client data structure:', Object.keys(clientData));
+        
+        const insurances = clientData.insurances || [];
+        console.log('Number of insurances:', insurances.length);
+        
+        insurances.forEach((insurance: any, index: number) => {
+          console.log(`Insurance ${index + 1}:`, {
+            insuranceId: insurance.insuranceId,
+            firePolicyAmount: insurance.firePolicyAmount,
+            burglaryPolicyAmount: insurance.burglaryPolicyAmount,
+            remainingFirePolicyAmount: insurance.remainingFirePolicyAmount,
+            remainingBurglaryPolicyAmount: insurance.remainingBurglaryPolicyAmount,
+            firePolicyNumber: insurance.firePolicyNumber,
+            burglaryPolicyNumber: insurance.burglaryPolicyNumber
+          });
+        });
+        
+        const targetInsurance = insurances.find((insurance: any) => insurance.insuranceId === insuranceId);
+        if (targetInsurance) {
+          console.log('Target insurance found:', targetInsurance);
+        } else {
+          console.log('Target insurance not found');
+        }
+      } else {
+        console.log('Client document does not exist');
+      }
+      console.log('=== END DEBUGGING ===');
+    } catch (error) {
+      console.error('Error debugging client insurance data:', error);
     }
   };
 
@@ -2278,7 +2514,7 @@ export default function InwardPage() {
                       <SelectContent>
                         {filteredInsuranceInfoEntries.map((ins: any, idx: number) => (
                           <SelectItem key={ins.id || idx} value={String(idx)}>
-                            {ins.firePolicyNumber} / {ins.burglaryPolicyNumber} (Fire: {ins.firePolicyAmount}, Burglary: {ins.burglaryPolicyAmount})
+                            {ins.insuranceId || 'N/A'} - {ins.firePolicyNumber} / {ins.burglaryPolicyNumber} (Fire: {ins.firePolicyAmount}, Burglary: {ins.burglaryPolicyAmount})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2315,7 +2551,7 @@ export default function InwardPage() {
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-lg font-medium text-orange-700">Insurance #{index + 1}</h4>
                         <div className="text-sm text-orange-600 font-medium">
-                          {insurance.insuranceTakenBy} - {insurance.insuranceCommodity}
+                          {insurance.insuranceId || 'N/A'} - {insurance.insuranceTakenBy} - {insurance.insuranceCommodity}
                         </div>
                       </div>
                       
@@ -2786,10 +3022,24 @@ export default function InwardPage() {
                       </thead>
                       <tbody>
                         {(() => {
-                          // Find particulars for the selectedRowForSR
-                          const commodity = commodities.find((c: any) => c.commodityName === selectedRowForSR?.commodity);
-                          const variety = commodity?.varieties?.find((v: any) => v.varietyName === selectedRowForSR?.varietyName);
+                          // Find particulars for the current form's commodity and variety
+                          console.log('Quality Parameters table rendering with:', {
+                            formCommodity: form.commodity,
+                            formVariety: form.varietyName,
+                            commoditiesCount: commodities.length
+                          });
+                          
+                          const commodity = commodities.find((c: any) => c.commodityName === form.commodity);
+                          const variety = commodity?.varieties?.find((v: any) => v.varietyName === form.varietyName);
                           const particulars = variety?.particulars || [];
+                          
+                          console.log('Quality Parameters found:', {
+                            commodity: commodity?.commodityName,
+                            variety: variety?.varietyName,
+                            particularsCount: particulars.length,
+                            particulars: particulars
+                          });
+                          
                           return particulars.length > 0 ? (
                             particulars.map((p: any, idx: number) => (
                           <tr key={idx} className="text-green-800">
@@ -2799,9 +3049,10 @@ export default function InwardPage() {
                             <td className="px-4 py-2 border-green-300 border">
                               <Input
                                 type="number"
-                                    value={selectedRowForSR?.labResults?.[idx] || ''}
-                                    readOnly
-                                    className="w-24 bg-white border border-green-300 text-center"
+                                value={currentEntryForm.labResults?.[idx] || ''}
+                                onChange={(e) => handleLabResultChange(idx, e.target.value)}
+                                className="w-24 bg-white border border-green-300 text-center"
+                                placeholder="Enter value"
                               />
                             </td>
                           </tr>

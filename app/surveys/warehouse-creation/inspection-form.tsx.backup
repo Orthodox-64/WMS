@@ -98,9 +98,6 @@ interface InsuranceEntry {
   createdAt: string;
   remainingFirePolicyAmount: string;
   remainingBurglaryPolicyAmount: string;
-  sourceDocumentId?: string; // Document ID from client or Agrogreen collection
-  sourceCollection?: string; // 'clients' or 'agrogreen'
-  insuranceId?: string; // Unique insurance ID from client or Agrogreen collection
 }
 
 // Add index signature to formData type
@@ -572,19 +569,10 @@ export default function WarehouseInspectionForm({
           console.log('Client document found:', !clientDoc.empty);
           if (!clientDoc.empty) {
             const clientData = clientDoc.docs[0].data() as any;
-            const clientDocId = clientDoc.docs[0].id; // Get the document ID
             console.log('Client data:', clientData);
             const insurances = clientData.insurances || [];
             console.log('Insurance data found:', insurances);
-            
-            // Add document ID and collection info to each insurance policy
-            const insurancesWithDocId = insurances.map((insurance: any) => ({
-              ...insurance,
-              sourceDocumentId: clientDocId,
-              sourceCollection: 'clients'
-            }));
-            
-            setClientInsuranceData(insurancesWithDocId);
+            setClientInsuranceData(insurances);
           } else {
             console.log('No client document found for:', formData.clientName);
             setClientInsuranceData([]);
@@ -604,24 +592,15 @@ export default function WarehouseInspectionForm({
   // Load initial client insurance data when form is opened with existing data
   useEffect(() => {
     const loadInitialClientInsuranceData = async () => {
-      if (initialData?.clientName && initialData?.insuranceTakenBy === 'client') {
+      if (initialData?.clientName && initialData?.insuranceTakenBy === 'client' && clientInsuranceData.length === 0) {
         try {
           console.log('Loading initial insurance data for client:', initialData.clientName);
           const clientDoc = await getDocs(query(collection(db, 'clients'), where('firmName', '==', initialData.clientName)));
           if (!clientDoc.empty) {
             const clientData = clientDoc.docs[0].data() as any;
-            const clientDocId = clientDoc.docs[0].id; // Get the document ID
             const insurances = clientData.insurances || [];
             console.log('Initial insurance data found:', insurances);
-            
-            // Add document ID and collection info to each insurance policy
-            const insurancesWithDocId = insurances.map((insurance: any) => ({
-              ...insurance,
-              sourceDocumentId: clientDocId,
-              sourceCollection: 'clients'
-            }));
-            
-            setClientInsuranceData(insurancesWithDocId);
+            setClientInsuranceData(insurances);
           }
         } catch (error) {
           console.error('Error loading initial client insurance data:', error);
@@ -630,7 +609,7 @@ export default function WarehouseInspectionForm({
     };
 
     loadInitialClientInsuranceData();
-  }, [initialData]);
+  }, [initialData, clientInsuranceData.length]);
 
   const loadWarehouses = async () => {
     try {
@@ -853,9 +832,7 @@ export default function WarehouseInspectionForm({
       if (selectedClientInsurances.length > 0) {
         // Create multiple insurance entries from selected client insurances
         const newInsuranceEntries: InsuranceEntry[] = selectedClientInsurances.map((insurance, index) => {
-          const timestamp = Date.now();
-          const randomSuffix = Math.random().toString(36).substr(2, 9);
-          const newInsuranceId = `insurance_${timestamp}_${randomSuffix}_${index}`;
+          const newInsuranceId = `insurance_${Date.now()}_${index}`;
           return {
             id: newInsuranceId,
             insuranceTakenBy: 'client',
@@ -876,9 +853,6 @@ export default function WarehouseInspectionForm({
             createdAt: new Date().toISOString(),
             remainingFirePolicyAmount: '',
             remainingBurglaryPolicyAmount: '',
-            sourceDocumentId: insurance.sourceDocumentId,
-            sourceCollection: insurance.sourceCollection,
-            insuranceId: insurance.insuranceId
           };
         });
 
@@ -901,9 +875,7 @@ export default function WarehouseInspectionForm({
       } else if (selectedAgrogreenInsurances.length > 0) {
         // Create multiple insurance entries from selected Agrogreen insurances
         const newInsuranceEntries: InsuranceEntry[] = selectedAgrogreenInsurances.map((insurance, index) => {
-          const timestamp = Date.now();
-          const randomSuffix = Math.random().toString(36).substr(2, 9);
-          const newInsuranceId = `insurance_${timestamp}_${randomSuffix}_${index}`;
+          const newInsuranceId = `insurance_${Date.now()}_${index}`;
           return {
             id: newInsuranceId,
             insuranceTakenBy: 'agrogreen',
@@ -924,9 +896,6 @@ export default function WarehouseInspectionForm({
             createdAt: new Date().toISOString(),
             remainingFirePolicyAmount: '',
             remainingBurglaryPolicyAmount: '',
-            sourceDocumentId: insurance.sourceDocumentId,
-            sourceCollection: insurance.sourceCollection,
-            insuranceId: insurance.insuranceId
           };
         });
 
@@ -947,43 +916,40 @@ export default function WarehouseInspectionForm({
 
         console.log('Created multiple Agrogreen insurance entries from selected insurances:', newInsuranceEntries);
       } else {
-        // Create a single empty insurance entry - NO AUTOMATIC POPULATION
-        const timestamp = Date.now();
-        const randomSuffix = Math.random().toString(36).substr(2, 9);
-        const newInsuranceId = `insurance_${timestamp}_${randomSuffix}`;
-        
-    const newInsurance: InsuranceEntry = {
-      id: newInsuranceId,
-          insuranceTakenBy: '', // Let user choose
-      insuranceCommodity: '',
-      clientName: '',
-      clientAddress: '',
-      selectedBankName: '',
-      firePolicyCompanyName: '',
-      firePolicyNumber: '',
-      firePolicyAmount: '',
-      firePolicyStartDate: null,
-      firePolicyEndDate: null,
-      burglaryPolicyCompanyName: '',
-      burglaryPolicyNumber: '',
-      burglaryPolicyAmount: '',
-      burglaryPolicyStartDate: null,
-      burglaryPolicyEndDate: null,
+        // Fallback to the original single insurance creation logic
+        const newInsuranceId = `insurance_${Date.now()}`;
+        const newInsurance: InsuranceEntry = {
+          id: newInsuranceId,
+          insuranceTakenBy: 'client', // Default to client
+          insuranceCommodity: '',
+          clientName: '',
+          clientAddress: '',
+          selectedBankName: '',
+          firePolicyCompanyName: '',
+          firePolicyNumber: '',
+          firePolicyAmount: '',
+          firePolicyStartDate: null,
+          firePolicyEndDate: null,
+          burglaryPolicyCompanyName: '',
+          burglaryPolicyNumber: '',
+          burglaryPolicyAmount: '',
+          burglaryPolicyStartDate: null,
+          burglaryPolicyEndDate: null,
           createdAt: new Date().toISOString(),
           remainingFirePolicyAmount: '',
           remainingBurglaryPolicyAmount: '',
-    };
+        };
 
-    setFormData(prev => ({
-      ...prev,
-      insuranceEntries: [...prev.insuranceEntries, newInsurance]
-    }));
+        setFormData(prev => ({
+          ...prev,
+          insuranceEntries: [...prev.insuranceEntries, newInsurance]
+        }));
 
-    toast({
-      title: "Insurance Added",
-      description: "New empty insurance section added",
-      variant: "default",
-    });
+        toast({
+          title: "Insurance Added",
+          description: "New empty insurance section added",
+          variant: "default",
+        });
       }
     } catch (error) {
       console.error('Error adding insurance entry:', error);
@@ -1374,12 +1340,38 @@ export default function WarehouseInspectionForm({
         });
       }
 
-      // Create insurance entries array - ONLY include explicitly added insurance entries
+      // Create insurance entries array including main insurance section if it has data
       let allInsuranceEntries = [...(formData.insuranceEntries || [])];
       
-      // REMOVED: Automatic creation of main insurance entry from form data
-      // Only insurance entries that were explicitly added via "Add Insurance" button should be saved
-      // This prevents automatic addition of insurance data when user hasn't selected anything
+      // Check if main insurance section has data and add it as an entry
+      if (formData.insuranceTakenBy && 
+          (formData.firePolicyCompanyName || formData.burglaryPolicyCompanyName)) {
+        
+        const mainInsuranceEntry = {
+          id: `main_insurance_${Date.now()}`,
+          insuranceTakenBy: formData.insuranceTakenBy,
+          insuranceCommodity: formData.insuranceCommodity || '',
+          clientName: formData.clientName || '',
+          clientAddress: formData.clientAddress || '',
+          selectedBankName: formData.selectedBankName || '',
+          firePolicyCompanyName: formData.firePolicyCompanyName || '',
+          firePolicyNumber: formData.firePolicyNumber || '',
+          firePolicyAmount: formData.firePolicyAmount || '',
+          firePolicyStartDate: safeDateToISO(formData.firePolicyStartDate),
+          firePolicyEndDate: safeDateToISO(formData.firePolicyEndDate),
+          burglaryPolicyCompanyName: formData.burglaryPolicyCompanyName || '',
+          burglaryPolicyNumber: formData.burglaryPolicyNumber || '',
+          burglaryPolicyAmount: formData.burglaryPolicyAmount || '',
+          burglaryPolicyStartDate: safeDateToISO(formData.burglaryPolicyStartDate),
+          burglaryPolicyEndDate: safeDateToISO(formData.burglaryPolicyEndDate),
+          createdAt: new Date().toISOString(),
+          remainingFirePolicyAmount: formData.remainingFirePolicyAmount || '',
+          remainingBurglaryPolicyAmount: formData.remainingBurglaryPolicyAmount || '',
+        };
+        
+        // Add main insurance entry to the beginning of the array
+        allInsuranceEntries.unshift(mainInsuranceEntry);
+      }
 
       const updateData = {
         ...cleanFormData,
@@ -2731,13 +2723,11 @@ export default function WarehouseInspectionForm({
                         </div>
                       </div>
                     </CardContent>
-          )}
                   </Card>
                 ))}
               </div>
             )}
           </CardContent>
-          )}
         </Card>
 
         {/* Physical Condition of Warehouse */}
@@ -2926,7 +2916,6 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="compoundWallAvailability">Compound Wall Availability <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.compoundWallAvailability} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, compoundWallAvailability: value }))}
                   className="text-orange-600"
@@ -3165,9 +3154,7 @@ export default function WarehouseInspectionForm({
                         if (!agrogreenDocs.empty) {
                           const agrogreenInsurances = agrogreenDocs.docs.map(doc => ({
                             id: doc.id,
-                            ...doc.data(),
-                            sourceDocumentId: doc.id, // Document ID from Agrogreen collection
-                            sourceCollection: 'agrogreen' // Mark as from Agrogreen collection
+                            ...doc.data()
                           }));
                           console.log('Found Agrogreen insurance data:', agrogreenInsurances);
                           setAgrogreenInsuranceData(agrogreenInsurances);
@@ -3232,19 +3219,10 @@ export default function WarehouseInspectionForm({
                             console.log('Client document found:', !clientDoc.empty);
                             if (!clientDoc.empty) {
                               const clientData = clientDoc.docs[0].data() as any;
-                              const clientDocId = clientDoc.docs[0].id; // Get the document ID
                               console.log('Client data:', clientData);
                               const insurances = clientData.insurances || [];
                               console.log('Insurance data found:', insurances);
-                              
-                              // Add document ID and collection info to each insurance policy
-                              const insurancesWithDocId = insurances.map((insurance: any) => ({
-                                ...insurance,
-                                sourceDocumentId: clientDocId,
-                                sourceCollection: 'clients'
-                              }));
-                              
-                              setClientInsuranceData(insurancesWithDocId);
+                              setClientInsuranceData(insurances);
                             } else {
                               console.log('No client document found for:', value);
                               setClientInsuranceData([]);
@@ -3315,8 +3293,21 @@ export default function WarehouseInspectionForm({
                                     onChange={(e) => {
                                       if (e.target.checked) {
                                         setSelectedClientInsurances(prev => [...prev, insurance]);
-                                        // REMOVED: Auto-fill form data with selected insurance
-                                        // Only add to selection state, don't auto-fill form
+                                        // Auto-fill form data with selected insurance
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          insuranceCommodity: insurance.commodity || '',
+                                          firePolicyCompanyName: insurance.firePolicyCompanyName || '',
+                                          firePolicyNumber: insurance.firePolicyNumber || '',
+                                          firePolicyAmount: insurance.firePolicyAmount || '',
+                                          firePolicyStartDate: safeCreateDate(insurance.firePolicyStartDate),
+                                          firePolicyEndDate: safeCreateDate(insurance.firePolicyEndDate),
+                                          burglaryPolicyCompanyName: insurance.burglaryPolicyCompanyName || '',
+                                          burglaryPolicyNumber: insurance.burglaryPolicyNumber || '',
+                                          burglaryPolicyAmount: insurance.burglaryPolicyAmount || '',
+                                          burglaryPolicyStartDate: safeCreateDate(insurance.burglaryPolicyStartDate),
+                                          burglaryPolicyEndDate: safeCreateDate(insurance.burglaryPolicyEndDate),
+                                        }));
                                       } else {
                                         setSelectedClientInsurances(prev => 
                                           prev.filter(selected => 
@@ -3333,7 +3324,6 @@ export default function WarehouseInspectionForm({
                                   </label>
                                 </div>
                                 <div className="text-xs text-green-600 space-y-1">
-                                  <div><strong>Insurance ID:</strong> {insurance.insuranceId || 'N/A'}</div>
                                   <div><strong>Commodity:</strong> {insurance.commodity}</div>
                                   <div><strong>Fire Policy:</strong> {insurance.firePolicyNumber}</div>
                                   <div><strong>Burglary Policy:</strong> {insurance.burglaryPolicyNumber}</div>
@@ -3400,8 +3390,21 @@ export default function WarehouseInspectionForm({
                                 onChange={(e) => {
                                   if (e.target.checked) {
                                     setSelectedAgrogreenInsurances(prev => [...prev, insurance]);
-                                    // REMOVED: Auto-fill form data with selected insurance
-                                    // Only add to selection state, don't auto-fill form
+                                    // Auto-fill form data with selected insurance
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      insuranceCommodity: insurance.commodity || '',
+                                      firePolicyCompanyName: insurance.firePolicyCompanyName || '',
+                                      firePolicyNumber: insurance.firePolicyNumber || '',
+                                      firePolicyAmount: insurance.firePolicyAmount || '',
+                                      firePolicyStartDate: safeCreateDate(insurance.firePolicyStartDate),
+                                      firePolicyEndDate: safeCreateDate(insurance.firePolicyEndDate),
+                                      burglaryPolicyCompanyName: insurance.burglaryPolicyCompanyName || '',
+                                      burglaryPolicyNumber: insurance.burglaryPolicyNumber || '',
+                                      burglaryPolicyAmount: insurance.burglaryPolicyAmount || '',
+                                      burglaryPolicyStartDate: safeCreateDate(insurance.burglaryPolicyStartDate),
+                                      burglaryPolicyEndDate: safeCreateDate(insurance.burglaryPolicyEndDate),
+                                    }));
                                   } else {
                                     setSelectedAgrogreenInsurances(prev => 
                                       prev.filter(selected => 
@@ -3418,7 +3421,6 @@ export default function WarehouseInspectionForm({
                               </label>
                             </div>
                             <div className="text-xs text-green-600 space-y-1">
-                              <div><strong>Insurance ID:</strong> {insurance.insuranceId || 'N/A'}</div>
                               <div><strong>Commodity:</strong> {insurance.commodity}</div>
                               <div><strong>Fire Policy:</strong> {insurance.firePolicyNumber}</div>
                               <div><strong>Burglary Policy:</strong> {insurance.burglaryPolicyNumber}</div>
@@ -5106,4 +5108,4 @@ export default function WarehouseInspectionForm({
       />
     </div>
   );
-} 
+}
