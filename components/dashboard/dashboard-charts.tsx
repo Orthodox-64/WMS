@@ -3,8 +3,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
-import { useAUM, useCommodities } from "@/lib/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { useAUM, useCommodities } from '@/lib/firestore';
+import CommoditySummaryTable from '@/components/CommoditySummaryTable';
+import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
+import AUMSummaryTable from '@/components/AUMSummaryTable';
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"];
 
@@ -18,106 +23,160 @@ const DUMMY_AUM_DATA = [
   { name: "Tamil Nadu", value: 100 }
 ];
 
-const DUMMY_COMMODITY_DATA = [
-  { name: "Wheat", value: 400 },
-  { name: "Rice", value: 300 },
-  { name: "Corn", value: 200 },
-  { name: "Soybeans", value: 150 },
-  { name: "Cotton", value: 100 },
-  { name: "Sugarcane", value: 80 }
-];
+function useCommodityPieData() {
+  const [data, setData] = useState<{ name: string; value: number; varieties: string[] }[]>([]);
+  const [loading, setLoading] = useState(true);
 
-function useDashboardData() {
-  const { data: aumData, loading: aumLoading } = useAUM();
-  const { data: commodityData, loading: commodityLoading } = useCommodities();
-
-  const pieChartData = useMemo(() => {
-    // If no data is available, use dummy data
-    if (!aumData || aumData.length === 0) {
-      return { 
-        aumData: DUMMY_AUM_DATA, 
-        commodityData: DUMMY_COMMODITY_DATA
-      };
-    }
-    
-    const stateTotals = aumData.reduce((acc, curr) => {
-      const state = curr.state;
-      acc[state] = (acc[state] || 0) + parseFloat(curr.aum);
-      return acc;
-    }, {} as Record<string, number>);
-
-    const aumResults = Object.entries(stateTotals)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-
-    const commodityTotals = commodityData?.reduce((acc, curr) => {
-      const commodity = curr.commodity;
-      acc[commodity] = (acc[commodity] || 0) + parseFloat(curr.quantity);
-      return acc;
-    }, {} as Record<string, number>) || {};
-
-    const commodityResults = Object.entries(commodityTotals)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-
-    return { 
-      aumData: aumResults.length > 0 ? aumResults : DUMMY_AUM_DATA,
-      commodityData: commodityResults.length > 0 ? commodityResults : DUMMY_COMMODITY_DATA
+  useEffect(() => {
+    const fetchInward = async () => {
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, 'inward'));
+        const inward = snap.docs.map(doc => doc.data());
+        // Group by commodity, sum quantity, collect unique varieties
+        const map = new Map();
+        inward.forEach(entry => {
+          const commodity = entry.commodity || '';
+          const variety = entry.varietyName || '';
+          const quantity = parseFloat(entry.totalQuantity || 0);
+          if (!map.has(commodity)) {
+            map.set(commodity, { name: commodity, value: 0, varieties: new Set() });
+          }
+          const obj = map.get(commodity);
+          obj.value += quantity;
+          if (variety) obj.varieties.add(variety);
+        });
+        const arr = Array.from(map.values()).map(obj => ({ ...obj, varieties: Array.from(obj.varieties) }));
+        arr.sort((a, b) => b.value - a.value);
+        setData(arr.slice(0, 6));
+      } catch {
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
     };
-  }, [aumData, commodityData]);
+    fetchInward();
+  }, []);
 
-  return {
-    ...pieChartData,
-    loading: aumLoading || commodityLoading
-  };
+  return { data, loading };
 }
 
-interface PieChartCardProps {
-  title: string;
-  data: Array<{ name: string; value: number }>;
-  redirectPath: string;
+function useAUMPieData() {
+  const [data, setData] = useState<{ name: string; value: number; commodities: string[] }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchInward = async () => {
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, 'inward'));
+        const inward = snap.docs.map(doc => doc.data());
+        // Group by state, sum AUM, collect unique commodities
+        const map = new Map();
+        inward.forEach(entry => {
+          const state = entry.state || '';
+          const commodity = entry.commodity || '';
+          const aum = parseFloat(entry.totalValue || 0);
+          if (!map.has(state)) {
+            map.set(state, { name: state, value: 0, commodities: new Set() });
+          }
+          const obj = map.get(state);
+          obj.value += aum;
+          if (commodity) obj.commodities.add(commodity);
+        });
+        const arr = Array.from(map.values()).map(obj => ({ ...obj, commodities: Array.from(obj.commodities) }));
+        arr.sort((a, b) => b.value - a.value);
+        setData(arr.slice(0, 6));
+      } catch {
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInward();
+  }, []);
+
+  return { data, loading };
 }
 
-function PieChartCard({ title, data, redirectPath }: PieChartCardProps) {
-  const router = useRouter();
+function CustomTooltip({ active, payload }: any) {
+  if (active && payload && payload.length) {
+    const { name, value, varieties } = payload[0].payload;
+    return (
+      <div className="bg-white border border-gray-200 rounded-md p-2 shadow text-xs">
+        <div><span className="font-semibold">{name}</span></div>
+        <div>Quantity: <span className="font-semibold">{value}</span></div>
+        {varieties && varieties.length > 0 && (
+          <div>Varieties: <span className="text-green-700">{varieties.join(", ")}</span></div>
+        )}
+      </div>
+    );
+  }
+  return null;
+}
 
+function CustomAUMTooltip({ active, payload }: any) {
+  if (active && payload && payload.length) {
+    const { name, value, commodities } = payload[0].payload;
+    return (
+      <div className="bg-white border border-gray-200 rounded-md p-2 shadow text-xs">
+        <div><span className="font-semibold">{name}</span></div>
+        <div>AUM: <span className="font-semibold">{value}</span></div>
+        {commodities && commodities.length > 0 && (
+          <div>Commodities: <span className="text-green-700">{commodities.join(", ")}</span></div>
+        )}
+      </div>
+    );
+  }
+  return null;
+}
+
+function PieChartCard({ title, data, showVarietiesTooltip = false }: { title: string; data: any[]; showVarietiesTooltip?: boolean }) {
+  const [open, setOpen] = useState(false);
   return (
-    <Card className="cursor-pointer bg-white" onClick={() => router.push(redirectPath)}>
-      <CardHeader>
-        <CardTitle className="inline-block w-fit border-b-2 border-green-500 pb-2">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              outerRadius={80}
-              fill="#8884d8"
-              dataKey="value"
-              label={({ name, percent }) => 
-                `${name} ${(percent * 100).toFixed(0)}%`
-              }
-            >
-              {data.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip />
-          </PieChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Card className="cursor-pointer bg-white">
+          <CardHeader>
+            <CardTitle className="inline-block w-fit border-b-2 border-green-500 pb-2">{title}</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  label={({ name, percent }) =>
+                    `${name} ${(percent * 100).toFixed(0)}%`
+                  }
+                >
+                  {data.map((_: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                {showVarietiesTooltip ? <Tooltip content={<CustomTooltip />} /> : <Tooltip />}
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </DialogTrigger>
+      <DialogContent className="max-w-6xl w-full">
+        <CommoditySummaryTable showHeader={true} />
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function DashboardCharts() {
-  const { commodityData, aumData, loading } = useDashboardData();
+  const { data: commodityData, loading: commodityLoading } = useCommodityPieData();
+  const { data: aumData, loading: aumLoading } = useAUMPieData();
+  const [openAUM, setOpenAUM] = useState(false);
 
-  if (loading) {
+  if (commodityLoading || aumLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
@@ -145,13 +204,42 @@ export function DashboardCharts() {
       <PieChartCard
         title="Commodity in Quantity"
         data={commodityData}
-        redirectPath="/commodity-summary"
+        showVarietiesTooltip={true}
       />
-      <PieChartCard
-        title="AUM Statewise"
-        data={aumData}
-        redirectPath="/aum-summary"
-      />
+      <Dialog open={openAUM} onOpenChange={setOpenAUM}>
+        <DialogTrigger asChild>
+          <Card className="cursor-pointer bg-white">
+            <CardHeader>
+              <CardTitle className="inline-block w-fit border-b-2 border-green-500 pb-2">AUM Statewise</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={aumData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }) =>
+                      `${name} ${(percent * 100).toFixed(0)}%`
+                    }
+                  >
+                    {aumData.map((_: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomAUMTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </DialogTrigger>
+        <DialogContent className="max-w-6xl w-full">
+          <AUMSummaryTable showHeader={true} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

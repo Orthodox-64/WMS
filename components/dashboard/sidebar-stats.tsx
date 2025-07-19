@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 interface StatsData {
   warehouseCount: number;
@@ -21,6 +24,45 @@ const mockStats: StatsData = {
 };
 
 export function SidebarStats() {
+  const [stats, setStats] = useState({
+    warehouseCount: 0,
+    pendingSurveys: 0,
+    pendingInward: 0,
+    pendingOutward: 0,
+    pendingDO: 0,
+    pendingRO: 0,
+  });
+
+  useEffect(() => {
+    async function fetchStats() {
+      // Number of Warehouses (unique warehouseName in inspections)
+      const inspectionsSnap = await getDocs(collection(db, 'inspections'));
+      const warehouseSet = new Set();
+      let pendingSurveys = 0;
+      inspectionsSnap.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.warehouseName) warehouseSet.add(data.warehouseName);
+        if (!data.status || data.status === 'pending') pendingSurveys++;
+      });
+      // Pending Inward Entries (inward entries with status not 'approve')
+      const inwardSnap = await getDocs(collection(db, 'inward'));
+      let pendingInward = 0;
+      inwardSnap.docs.forEach(doc => {
+        const data = doc.data();
+        if (!data.status || data.status !== 'approve') pendingInward++;
+      });
+      setStats({
+        warehouseCount: warehouseSet.size,
+        pendingSurveys,
+        pendingInward,
+        pendingOutward: 0,
+        pendingDO: 0,
+        pendingRO: 0,
+      });
+    }
+    fetchStats();
+  }, []);
+
   return (
     <Card className="bg-white">
       <CardHeader>
@@ -31,27 +73,27 @@ export function SidebarStats() {
           <TableBody>
             <TableRow>
               <TableCell className="font-medium">Number of Warehouses</TableCell>
-              <TableCell className="text-right text-orange-400">{mockStats.warehouseCount}</TableCell>
+              <TableCell className="text-right text-orange-400">{stats.warehouseCount}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending Surveys</TableCell>
-              <TableCell className="text-right text-orange-400">{mockStats.pendingSurveys}</TableCell>
+              <TableCell className="text-right text-orange-400">{stats.pendingSurveys}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending Inward Entries</TableCell>
-              <TableCell className="text-right text-orange-400">{mockStats.pendingInward}</TableCell>
+              <TableCell className="text-right text-orange-400">{stats.pendingInward}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending Outward Entries</TableCell>
-              <TableCell className="text-right text-orange-400">{mockStats.pendingOutward}</TableCell>
+              <TableCell className="text-right text-orange-400">0</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending DO Entries</TableCell>
-              <TableCell className="text-right text-orange-400">{mockStats.pendingDO}</TableCell>
+              <TableCell className="text-right text-orange-400">0</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending RO Entries</TableCell>
-              <TableCell className="text-right text-orange-400">{mockStats.pendingRO}</TableCell>
+              <TableCell className="text-right text-orange-400">0</TableCell>
             </TableRow>
           </TableBody>
         </Table>

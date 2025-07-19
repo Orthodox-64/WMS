@@ -5,11 +5,11 @@ import DashboardLayout from '@/components/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Search, Download, Plus } from "lucide-react";
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { DataTable } from '@/components/data-table';
+import { useRouter } from "next/navigation";
 
 const columns = [
   {
@@ -18,82 +18,114 @@ const columns = [
     cell: ({ row }: any) => <span className="font-semibold text-green-800">{row.getValue("state")}</span>,
   },
   {
-    accessorKey: "commodity",
-    header: "Commodity",
-    cell: ({ row }: any) => <span className="text-green-800">{row.getValue("commodity")}</span>,
+    accessorKey: "branch",
+    header: "Branch",
+    cell: ({ row }: any) => <span className="text-green-800">{row.getValue("branch")}</span>,
   },
   {
-    accessorKey: "quantity",
-    header: "Quantity (MT)",
-    cell: ({ row }: any) => <span className="text-green-800">{row.getValue("quantity")}</span>,
+    accessorKey: "location",
+    header: "Location",
+    cell: ({ row }: any) => <span className="text-green-800">{row.getValue("location")}</span>,
   },
   {
-    accessorKey: "aum",
-    header: "AUM (₹)",
+    accessorKey: "warehouseName",
+    header: "Warehouse Name",
+    cell: ({ row }: any) => <span className="text-green-800">{row.getValue("warehouseName")}</span>,
+  },
+  {
+    accessorKey: "warehouseCode",
+    header: "Warehouse Code",
+    cell: ({ row }: any) => <span className="text-green-800">{row.getValue("warehouseCode")}</span>,
+  },
+  {
+    accessorKey: "status",
+    header: "Warehouse Status",
     cell: ({ row }: any) => {
-      const amount = parseFloat(row.getValue("aum"));
-      const formatted = new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        maximumFractionDigits: 2,
-      }).format(amount);
-      return <span className="text-green-800">{formatted}</span>;
+      const status = row.getValue("status");
+      let color = "";
+      switch ((status || "").toLowerCase()) {
+        case "activated":
+        case "active":
+          color = "bg-green-200 text-green-800";
+          break;
+        case "pending":
+          color = "bg-yellow-200 text-yellow-800";
+          break;
+        case "closed":
+          color = "bg-red-200 text-red-800";
+          break;
+        case "reactivated":
+        case "reactive":
+          color = "bg-blue-200 text-blue-800";
+          break;
+        case "rejected":
+          color = "bg-gray-200 text-gray-800";
+          break;
+        default:
+          color = "bg-gray-100 text-gray-700";
+      }
+      return <span className={`px-2 py-1 rounded ${color}`}>{status}</span>;
     },
   },
 ];
 
-export default function AUMSummaryPage() {
-  const [inwardData, setInwardData] = useState<any[]>([]);
+export default function WarehouseStatusPage() {
+  const [inspections, setInspections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
-    const fetchInward = async () => {
+    const fetchInspections = async () => {
       setLoading(true);
       try {
-        const snap = await getDocs(collection(db, 'inward'));
-        setInwardData(snap.docs.map(doc => doc.data()));
+        const snap = await getDocs(collection(db, 'inspections'));
+        setInspections(snap.docs.map(doc => doc.data()));
       } catch (err) {
-        setError("Failed to fetch inward data");
+        setError("Failed to fetch warehouse inspections");
       } finally {
         setLoading(false);
       }
     };
-    fetchInward();
+    fetchInspections();
   }, []);
 
-  // Group by state + commodity, sum quantity and value
+  // Prepare rows for the table
   const summaryRows = useMemo(() => {
-    const map = new Map();
-    inwardData.forEach(entry => {
-      const key = `${entry.state || ''}__${entry.commodity || ''}`;
-      const prev = map.get(key) || { state: entry.state || '', commodity: entry.commodity || '', quantity: 0, aum: 0 };
-      prev.quantity += parseFloat(entry.totalQuantity || 0);
-      prev.aum += parseFloat(entry.totalValue || 0);
-      map.set(key, prev);
-    });
-    let arr = Array.from(map.values());
+    let arr = inspections.map(entry => ({
+      state: entry.state || (entry.warehouseInspectionData && entry.warehouseInspectionData.state) || '',
+      branch: entry.branch || (entry.warehouseInspectionData && entry.warehouseInspectionData.branch) || '',
+      location: entry.location || (entry.warehouseInspectionData && entry.warehouseInspectionData.location) || '',
+      warehouseName: entry.warehouseName || (entry.warehouseInspectionData && entry.warehouseInspectionData.warehouseName) || '',
+      warehouseCode: entry.warehouseCode || (entry.warehouseInspectionData && entry.warehouseInspectionData.warehouseCode) || '',
+      // Only use 'status', and if missing, default to 'Pending'
+      status: entry.status && entry.status.trim() ? entry.status : 'Pending',
+    }));
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       arr = arr.filter(row =>
         row.state.toLowerCase().includes(term) ||
-        row.commodity.toLowerCase().includes(term)
+        row.branch.toLowerCase().includes(term) ||
+        row.location.toLowerCase().includes(term) ||
+        row.warehouseName.toLowerCase().includes(term) ||
+        row.warehouseCode.toLowerCase().includes(term) ||
+        row.status.toLowerCase().includes(term)
       );
     }
     return arr;
-  }, [inwardData, searchTerm]);
+  }, [inspections, searchTerm]);
 
   // CSV export
   const handleExportCSV = () => {
-    const headers = ["State", "Commodity", "Quantity (MT)", "AUM (₹)"];
-    const rows = summaryRows.map(row => [row.state, row.commodity, row.quantity, row.aum]);
+    const headers = ["State", "Branch", "Location", "Warehouse Name", "Warehouse Code", "Warehouse Status"];
+    const rows = summaryRows.map(row => [row.state, row.branch, row.location, row.warehouseName, row.warehouseCode, row.status]);
     const csv = [headers, ...rows].map(r => r.join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "aum-summary.csv");
+    link.setAttribute("download", "warehouse-status.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -105,17 +137,20 @@ export default function AUMSummaryPage() {
       <div className="space-y-8">
         {/* Header row */}
         <div className="flex items-center justify-between">
-          <button className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors">
+          <button
+            className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+            onClick={() => router.push("/dashboard")}
+          >
             ← Dashboard
           </button>
           <div className="flex-1 text-center">
             <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
-              AUM Summary
+              Warehouse Status
             </h1>
           </div>
           <Button className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 shadow-lg">
             <Plus className="w-5 h-5 mr-2" />
-            Add New AUM
+            Add New Warehouse
           </Button>
         </div>
 
@@ -131,7 +166,7 @@ export default function AUMSummaryPage() {
                 <Input
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  placeholder="Search by state or commodity..."
+                  placeholder="Search by state, branch, location, warehouse name, code, or status..."
                   className="border-green-300 focus:border-green-500 pl-10"
                 />
               </div>
@@ -150,7 +185,7 @@ export default function AUMSummaryPage() {
         {/* Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-green-700 text-xl">AUM Summary Table</CardTitle>
+            <CardTitle className="text-green-700 text-xl">Warehouse Status Table</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <DataTable
@@ -167,4 +202,4 @@ export default function AUMSummaryPage() {
       </div>
     </DashboardLayout>
   );
-}
+} 

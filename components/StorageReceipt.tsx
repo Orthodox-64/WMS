@@ -1,0 +1,179 @@
+import React from 'react';
+
+interface InsuranceDetail {
+  policyNo: string;
+  company: string;
+  validFrom: string;
+  validTo: string;
+  sumInsured: string;
+}
+
+interface StorageReceiptProps {
+  data: {
+    srNo: string;
+    inwardId?: string;
+    srGenerationDate?: string;
+    dateOfIssue: string;
+    baseReceiptNo: string;
+    cadNo?: string;
+    cadNumber?: string;
+    dateOfDeposit: string;
+    branch: string;
+    warehouseName: string;
+    warehouseAddress: string;
+    client: string;
+    clientAddress: string;
+    commodity: string;
+    totalBags: string;
+    netWeight: string;
+    grade: string;
+    remarks: string;
+    marketRate: string;
+    valueOfCommodity: string;
+    hologramNumber: string;
+    insuranceDetails: InsuranceDetail[];
+    bankName: string;
+    date: string;
+    place: string;
+    stockInwardDate?: string;
+    receiptType?: string; // 'SR' or 'WR'
+  };
+}
+
+const borderColor = '#e67c1f';
+const borderLight = '#f3c892';
+const headerBg = '#fff7ed';
+const labelStyle = { fontWeight: 700, color: borderColor, fontSize: 15, letterSpacing: 0.5 };
+const valueStyle = { fontWeight: 500, color: '#222', fontSize: 15, letterSpacing: 0.2 };
+const cellPad = 14;
+
+const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
+  // Fallbacks for SR/WR No and CAD No
+  const srNo = data.srNo || data.inwardId || '-';
+  const cadNo = data.cadNo || data.cadNumber || '-';
+  const srGenerationDate = data.srGenerationDate || '-';
+  const insurance = data.insuranceDetails[0] || {};
+  const receiptType = (data.receiptType || 'SR').toUpperCase();
+  const isWR = receiptType === 'WR';
+
+  // Dynamic labels
+  const receiptTitle = isWR ? 'WAREHOUSE RECEIPT (WR)' : 'STORAGE RECEIPT (SR)';
+  const noLabel = isWR ? 'WR No.' : 'SR No.';
+  const genDateLabel = isWR ? 'WR Generation Date' : 'SR Generation Date';
+
+  return (
+    <div
+      style={{
+        width: 900,
+        margin: '24px auto',
+        background: '#fff',
+        border: `2.5px solid ${borderColor}`,
+        borderRadius: 16,
+        fontFamily: 'Arial, sans-serif',
+        color: '#222',
+        boxShadow: '0 4px 24px #e0f2e9',
+        padding: 36,
+      }}
+    >
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: 8 }}>
+        <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
+        <div style={{ fontSize: 22, fontWeight: 700, color: '#1aad4b', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+        <div style={{ fontSize: 14, fontWeight: 500, color: borderColor, marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+      </div>
+      {/* Centered STORAGE RECEIPT title with margin */}
+      <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '36px auto 36px auto' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: borderColor, textAlign: 'center' }}>
+          STORAGE RECEIPT
+        </span>
+      </div>
+      {/* Info Table - two column, bordered, orange style */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+        <tbody>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Client Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.client}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Client Address</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.clientAddress}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Commodity</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.commodity}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Grade</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.grade}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Warehouse Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.warehouseName}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Warehouse Address</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.warehouseAddress}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Total Bags</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.totalBags}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Net Weight</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.netWeight}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>SR No.</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{srNo}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>SR Generation Date</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{srGenerationDate}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>CAD No.</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{cadNo}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Stock Inward Date</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.stockInwardDate || data.dateOfIssue || '-'}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Issue</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfIssue}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Deposit</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfDeposit}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Branch Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.branch}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Base Receipt/Licenses No.</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.baseReceiptNo}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Market Rate</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.marketRate}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Value of Commodity</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.valueOfCommodity}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Hologram Number</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.hologramNumber}</td>
+            {/* Remove Sticker/Stamp Area cell */}
+            <td style={{ border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, background: headerBg }}></td>
+            <td style={{ border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}></td>
+          </tr>
+        </tbody>
+      </table>
+      {/* Footer Section - matches uploaded image, with sticker/stamp box in bottom left */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 44, marginBottom: 0, position: 'relative' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, textAlign: 'left', position: 'relative' }}>
+                   <div style={{ width: 190, height: 100, border: '2.5px dashed #fff', marginTop: 8, marginBottom: 4 }} />
+
+          Signature &amp; stamp of authorized signatory
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1aad4b', marginBottom: 4 }}>AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
+          <div style={{ width: 190, height: 100, border: '2.5px dashed #fff', marginTop: 8, marginBottom: 4 }} />
+
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1aad4b', marginTop: 4 }}>AUTHORIZED SIGNATORY</div>
+        </div>
+      </div>
+       <div style={{ borderTop: `1.5px solid ${borderColor}`, margin: '18px 0 0 0' }} />
+      {/* Footer/Disclaimer */}
+      <div style={{ marginTop: 10, fontSize: 12, color: '#888', textAlign: 'center' }}>
+        This certificate is computer generated and does not require a physical signature. Please verify all details. For any discrepancy, contact Agrogreen Warehousing Pvt. Ltd. within 48 hours.
+      </div>
+    </div>
+  );
+};
+
+export default StorageReceipt;

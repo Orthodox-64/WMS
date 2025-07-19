@@ -17,6 +17,168 @@ import { useToast } from '@/hooks/use-toast';
 import { DataTable } from '@/components/data-table';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import React from 'react';
+import StorageReceipt from '@/components/StorageReceipt';
+import TestCertificate from '@/components/TestCertificate';
+
+// Move normalizeDate to top-level scope (before export default function InwardPage)
+function normalizeDate(val: any) {
+  if (!val) return '';
+  let date: Date | null = null;
+
+  // Firestore Timestamp object
+  if (val.seconds) date = new Date(val.seconds * 1000);
+  // Milliseconds number
+  else if (typeof val === 'number' && val > 1000000000000) date = new Date(val);
+  // String that looks like a number with .000000000 (e.g. '063888114600.000000000')
+  else if (typeof val === 'string' && /^\d{10,}(\.\d+)?$/.test(val.replace(/^0+/, ''))) {
+    const num = val.replace(/^0+/, '').split('.')[0];
+    const ts = num.length > 10 ? parseInt(num) : parseInt(num) * 1000;
+    if (!isNaN(ts)) date = new Date(ts);
+  }
+  // String that looks like a number
+  else if (!isNaN(val) && val.length > 10) date = new Date(Number(val));
+  // ISO string or yyyy-mm-dd or Firestore string
+  else if (typeof val === 'string' && val.length >= 10) {
+    const parsed = Date.parse(val);
+    if (!isNaN(parsed)) date = new Date(parsed);
+    else {
+      const match = val.match(/([A-Za-z]+ \d{1,2}, \d{4})/);
+      if (match) {
+        const d = new Date(match[1]);
+        if (!isNaN(d.getTime())) date = d;
+      }
+    }
+  }
+
+  if (date && !isNaN(date.getTime())) {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  }
+  return '';
+}
+
+// Add this helper at the top-level scope:
+function parseDDMMYYYY(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const [day, month, year] = dateStr.split('-').map(Number);
+  if (!day || !month || !year) return null;
+  return new Date(year, month - 1, day);
+}
+
+// 1. Add helper functions at the top-level scope:
+function isDateExpired(dateStr: string): boolean {
+  if (!dateStr) return false;
+  let d: Date | null = null;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+    d = parseDDMMYYYY(dateStr);
+  } else {
+    d = new Date(dateStr);
+  }
+  if (!d || isNaN(d.getTime())) return false;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  // Debug log
+  console.log('EXPIRED CHECK:', { dateStr, parsed: d, parsedISO: d.toISOString(), today, expired: d < today });
+  return d < today;
+}
+function isDateWithinDays(dateStr: string, days: number): boolean {
+  if (!dateStr) return false;
+  let d: Date | null = null;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+    d = parseDDMMYYYY(dateStr);
+  } else {
+    d = new Date(dateStr);
+  }
+  if (!d || isNaN(d.getTime())) return false;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const diff = (d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+  return diff >= 0 && diff <= days;
+}
+
+// Add this above the InwardPage component:
+function AlertCell({ row }: { row: any }) {
+  const [insuranceEndDates, setInsuranceEndDates] = React.useState<{fire: string, burglary: string}>({fire: '', burglary: ''});
+  // Always prefer selectedInsurance fields if present
+  const insuranceTakenBy = (row.original.selectedInsurance && row.original.selectedInsurance.insuranceTakenBy) || row.original.insuranceManagedBy || row.original.insuranceTakenBy;
+  const insuranceId = (row.original.selectedInsurance && row.original.selectedInsurance.insuranceId) || row.original.insuranceId;
+  React.useEffect(() => {
+    async function fetchInsuranceEndDates() {
+      const warehouseName = row.original.warehouseName;
+      if (!warehouseName || !insuranceTakenBy || !insuranceId) {
+        setInsuranceEndDates({
+          fire: row.original.firePolicyEnd || '',
+          burglary: row.original.burglaryPolicyEnd || ''
+        });
+        return;
+      }
+      try {
+        const inspectionsCollection = collection(db, 'inspections');
+        const q = query(inspectionsCollection, where('warehouseName', '==', warehouseName));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const inspectionData = querySnapshot.docs[0].data();
+          let insuranceEntries = inspectionData.insuranceEntries || [];
+          if (!Array.isArray(insuranceEntries) && inspectionData.warehouseInspectionData?.insuranceEntries) {
+            insuranceEntries = inspectionData.warehouseInspectionData.insuranceEntries;
+          }
+          // Debug: log all insurance entries for this warehouse
+          console.log('INSURANCE ENTRIES for', warehouseName, insuranceEntries);
+          const match = insuranceEntries.find((ins: any) => ins.insuranceTakenBy === insuranceTakenBy && ins.insuranceId === insuranceId);
+          if (match) {
+            setInsuranceEndDates({
+              fire: match.firePolicyEndDate || '',
+              burglary: match.burglaryPolicyEndDate || ''
+            });
+            return;
+          }
+        }
+      } catch (e) { /* ignore */ }
+      setInsuranceEndDates({
+        fire: row.original.firePolicyEnd || '',
+        burglary: row.original.burglaryPolicyEnd || ''
+      });
+    }
+    fetchInsuranceEndDates();
+  }, [row.original, insuranceTakenBy, insuranceId]);
+  const fireEnd = normalizeDate(insuranceEndDates.fire);
+  const burglaryEnd = normalizeDate(insuranceEndDates.burglary);
+  const isExpired = isDateExpired(fireEnd) || isDateExpired(burglaryEnd);
+  const isWithin10 = !isExpired && (isDateWithinDays(fireEnd, 10) || isDateWithinDays(burglaryEnd, 10));
+  // Debug log
+  console.log('ALERT CHECK:', {
+    warehouse: row.original.warehouseName,
+    insuranceTakenBy,
+    insuranceId,
+    fireEnd,
+    burglaryEnd,
+    isExpired,
+    isWithin10
+  });
+  if (isWithin10) {
+    // Blinking red SVG star icon
+    return (
+      <svg className="blinking-red" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="16" cy="28" rx="10" ry="4" fill="#B0BEC5"/>
+        <polygon points="16,4 18.5,13 28,13 20,18 22.5,27 16,21.5 9.5,27 12,18 4,13 13.5,13" fill="#FF5252" stroke="#FF8A65" strokeWidth="1.5"/>
+        <polygon points="16,7 17.5,13 23,13 18,16 19.5,22 16,18.5 12.5,22 14,16 9,13 14.5,13" fill="#FFE0B2"/>
+      </svg>
+    );
+  }
+  if (isExpired) {
+    // Blinking orange SVG star icon
+    return (
+      <svg className="blinking-orange" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="16" cy="28" rx="10" ry="4" fill="#B0BEC5"/>
+        <polygon points="16,4 18.5,13 28,13 20,18 22.5,27 16,21.5 9.5,27 12,18 4,13 13.5,13" fill="#FF9800" stroke="#FFB300" strokeWidth="1.5"/>
+        <polygon points="16,7 17.5,13 23,13 18,16 19.5,22 16,18.5 12.5,22 14,16 9,13 14.5,13" fill="#FFE0B2"/>
+      </svg>
+    );
+  }
+  return null;
+}
 
 export default function InwardPage() {
   const router = useRouter();
@@ -53,6 +215,7 @@ export default function InwardPage() {
   const [isFormApproved, setIsFormApproved] = useState(false);
   const [srGenerationDate, setSrGenerationDate] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
+  const testCertRef = useRef<HTMLDivElement>(null);
   // Add state for initial remaining values from Firestore
   const [initialRemainingFire, setInitialRemainingFire] = useState('');
   const [initialRemainingBurglary, setInitialRemainingBurglary] = useState('');
@@ -62,6 +225,10 @@ export default function InwardPage() {
   // Add state for insurance information section
   const [selectedInsuranceInfoType, setSelectedInsuranceInfoType] = useState<string>('');
   const [selectedInsuranceInfoIndex, setSelectedInsuranceInfoIndex] = useState<number | null>(null);
+  const [insuranceReadOnly, setInsuranceReadOnly] = useState(false);
+
+  // In the InwardPage component, add state for 'your insurance' data
+  const [yourInsurance, setYourInsurance] = useState<any>(null);
 
   // Filter insurance entries based on selected type
   const filteredInsuranceEntries = useMemo(() => {
@@ -693,6 +860,49 @@ export default function InwardPage() {
       allEntries = [{ id: Date.now(), ...baseForm, ...currentEntryForm, entryNumber: 1 }];
     }
 
+    // --- Insurance selection validation ---
+    let selectedInsuranceMeta = null;
+    let debugSelectedInsurance = null;
+    if (selectedInsuranceInfoIndex !== null) {
+      const ins = filteredInsuranceInfoEntries[selectedInsuranceInfoIndex];
+      debugSelectedInsurance = ins;
+      selectedInsuranceMeta = {
+        insuranceTakenBy: ins?.insuranceTakenBy,
+        insuranceId: ins?.insuranceId,
+      };
+    } else if (selectedInsuranceIndex !== null) {
+      const ins = insuranceEntries[selectedInsuranceIndex];
+      debugSelectedInsurance = ins;
+      selectedInsuranceMeta = {
+        insuranceTakenBy: ins?.insuranceTakenBy,
+        insuranceId: ins?.insuranceId,
+      };
+    }
+    // Debug log
+    console.log('DEBUG: Selected insurance entry:', debugSelectedInsurance);
+    // If insurance type is selected, require a valid insurance entry
+    if ((selectedInsuranceInfoIndex !== null || selectedInsuranceIndex !== null) && (!selectedInsuranceMeta || !selectedInsuranceMeta.insuranceTakenBy || !selectedInsuranceMeta.insuranceId)) {
+      let missingFields = [];
+      if (!selectedInsuranceMeta?.insuranceTakenBy) missingFields.push('insuranceTakenBy');
+      if (!selectedInsuranceMeta?.insuranceId) missingFields.push('insuranceId');
+      toast({
+        title: "Error",
+        description: `Please select a valid insurance entry for the selected insurance type. Missing: ${missingFields.join(', ')}. Check your inspection insurance data in Firestore if this persists.`,
+        variant: "destructive",
+      });
+      setIsUploading(false);
+      return;
+    }
+
+    // --- Ensure all date fields are strings ---
+    allEntries = allEntries.map(entry => ({
+      ...entry,
+      firePolicyStart: entry.firePolicyStart ? String(entry.firePolicyStart) : '',
+      firePolicyEnd: entry.firePolicyEnd ? String(entry.firePolicyEnd) : '',
+      burglaryPolicyStart: entry.burglaryPolicyStart ? String(entry.burglaryPolicyStart) : '',
+      burglaryPolicyEnd: entry.burglaryPolicyEnd ? String(entry.burglaryPolicyEnd) : '',
+    }));
+
     // Final validation loop for all entries
     for (const entry of allEntries) {
       const missingFields = [];
@@ -740,6 +950,7 @@ export default function InwardPage() {
             attachmentUrl: uploadedFileUrl,
             updatedAt: new Date().toISOString(),
             labResults: allEntries[0].labResults || [],
+            selectedInsurance: selectedInsuranceMeta,
           });
           
           toast({
@@ -768,6 +979,8 @@ export default function InwardPage() {
             inwardId,
             createdAt: new Date().toISOString(),
             labResults: entry.labResults || [],
+            selectedInsurance: selectedInsuranceMeta,
+            status: 'pending', // <-- set default status
           });
         }
         
@@ -807,14 +1020,25 @@ export default function InwardPage() {
         }
         const updatedList = insuranceList.map((i: any) => {
           if (i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber) {
-            return {
-              ...i,
-              // Update both the original policy amounts and remaining amounts for consistency
-              firePolicyAmount: newRemainingFire,
-              burglaryPolicyAmount: newRemainingBurglary,
-              remainingFirePolicyAmount: newRemainingFire,
-              remainingBurglaryPolicyAmount: newRemainingBurglary,
-            };
+            if (ins.insuranceTakenBy === 'warehouse owner') {
+              // Swap the update for warehouse owner type
+              return {
+                ...i,
+                burglaryPolicyAmount: newRemainingFire,
+                firePolicyAmount: newRemainingBurglary,
+                remainingFirePolicyAmount: newRemainingFire,
+                remainingBurglaryPolicyAmount: newRemainingBurglary,
+              };
+            } else {
+              // Default update for other types
+              return {
+                ...i,
+                firePolicyAmount: newRemainingFire,
+                burglaryPolicyAmount: newRemainingBurglary,
+                remainingFirePolicyAmount: newRemainingFire,
+                remainingBurglaryPolicyAmount: newRemainingBurglary,
+              };
+            }
           }
           return i;
         });
@@ -1300,6 +1524,21 @@ export default function InwardPage() {
     // Insurance details
     { accessorKey: "insuranceManagedBy", header: "Insurance Managed By" },
     { accessorKey: "bankFundedBy", header: "Bank Funded By" },
+    // Add status column
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }: any) => {
+        const status = row.original.status || 'pending';
+        // Optionally, you can style the status text
+        let color = 'text-gray-600';
+        if (status === 'approve') color = 'text-green-600 font-semibold';
+        else if (status === 'rejected') color = 'text-red-600 font-semibold';
+        else if (status === 'resubmited') color = 'text-yellow-600 font-semibold';
+        else if (status === 'pending') color = 'text-blue-600 font-semibold';
+        return <span className={color}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
+      }
+    },
     // Action column
     {
       accessorKey: "actions",
@@ -1332,6 +1571,11 @@ export default function InwardPage() {
           </Button>
         </div>
       ),
+    },
+    {
+      accessorKey: 'alert',
+      header: 'Alert',
+      cell: AlertCell
     },
   ];
 
@@ -1488,7 +1732,7 @@ export default function InwardPage() {
   };
 
   // Handle edit button click
-  const handleEdit = (row: any) => {
+  const handleEdit = async (row: any) => {
     setIsEditMode(true);
     setEditingRow(row);
     
@@ -1561,16 +1805,52 @@ export default function InwardPage() {
       stacks: row.stacks || [{ stackNumber: '', numberOfBags: '' }],
     });
 
-    // Fetch insurance entries if warehouse is selected
+    // Fetch insurance entries from inspection collection if warehouse is selected
+    let inspectionInsuranceEntries = [];
     if (row.warehouseName) {
-      const selectedWarehouse = warehouses.find(w => w.warehouseName === row.warehouseName);
-      if (selectedWarehouse) {
-        const inspectionInsuranceEntries = selectedWarehouse.insuranceEntries || [];
-        setInsuranceEntries(inspectionInsuranceEntries);
+      // Fetch from Firestore to ensure latest data
+      const inspectionsCollection = collection(db, 'inspections');
+      const q = query(inspectionsCollection, where('warehouseName', '==', row.warehouseName));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const inspectionData = querySnapshot.docs[0].data();
+        if (inspectionData.insuranceEntries && Array.isArray(inspectionData.insuranceEntries)) {
+          inspectionInsuranceEntries = inspectionData.insuranceEntries;
+        } else if (inspectionData.warehouseInspectionData?.insuranceEntries && Array.isArray(inspectionData.warehouseInspectionData.insuranceEntries)) {
+          inspectionInsuranceEntries = inspectionData.warehouseInspectionData.insuranceEntries;
+        }
       }
     }
+    setInsuranceEntries(inspectionInsuranceEntries);
 
     setShowAddModal(true);
+
+    // Auto-select insurance by insuranceTakenBy and insuranceId
+    if (row.selectedInsurance) {
+      const idx = inspectionInsuranceEntries.findIndex(
+        (ins: any) => ins.insuranceId === row.selectedInsurance.insuranceId &&
+                      ins.insuranceTakenBy === row.selectedInsurance.insuranceTakenBy
+      );
+      if (idx !== -1) {
+        setSelectedInsuranceInfoIndex(idx);
+        setSelectedInsuranceIndex(idx);
+      }
+      setInsuranceReadOnly(true);
+    } else {
+      setInsuranceReadOnly(false);
+    }
+
+    // In handleEdit, after setting insuranceEntries and before setShowAddModal(true):
+    if (row.selectedInsurance && inspectionInsuranceEntries.length > 0) {
+      const match = inspectionInsuranceEntries.find(
+        (ins: any) =>
+          ins.insuranceId === row.selectedInsurance.insuranceId &&
+          ins.insuranceTakenBy === row.selectedInsurance.insuranceTakenBy
+      );
+      setYourInsurance(match || null);
+    } else {
+      setYourInsurance(null);
+    }
   };
 
   // Handle delete button click
@@ -1610,6 +1890,7 @@ export default function InwardPage() {
   const handleViewSR = async (row: any) => {
     setSelectedRowForSR(row);
     setShowSRForm(true);
+    setRemarks(row.remarks || '');
     
     // Fetch insurance data from inspection collection
     try {
@@ -1668,7 +1949,7 @@ export default function InwardPage() {
   };
 
   // SR/WR View Modal
-  const handleApproveSR = (sr: any) => {
+  const handleApproveSR = async (sr: any) => {
     if (!hologramNumber.trim()) {
       toast({
         title: 'Hologram Number Required',
@@ -1677,6 +1958,18 @@ export default function InwardPage() {
       });
       return;
     }
+    // Update status in Firestore
+    try {
+      const inwardCollection = collection(db, 'inward');
+      const q = query(inwardCollection, where('inwardId', '==', sr.inwardId));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { status: 'approve' });
+      }
+    } catch (error) {
+      console.error('Error updating status to approve:', error);
+    }
     setIsFormApproved(true);
     setSrGenerationDate(new Date().toLocaleDateString());
     toast({
@@ -1684,56 +1977,79 @@ export default function InwardPage() {
       description: 'The receipt has been approved and is now ready for printing.',
       variant: 'default',
     });
+    // Update the inward document with remarks
+    if (sr && sr.id) {
+      const inwardDocRef = doc(db, 'inward', sr.id);
+      await updateDoc(inwardDocRef, { remarks });
+    }
   };
 
-  const handleRejectSR = (sr: any) => {
-    // Implement reject logic
-    console.log('Reject SR:', sr);
+  const handleRejectSR = async (sr: any) => {
+    // Update status in Firestore
+    try {
+      const inwardCollection = collection(db, 'inward');
+      const q = query(inwardCollection, where('inwardId', '==', sr.inwardId));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { status: 'rejected' });
+      }
+    } catch (error) {
+      console.error('Error updating status to rejected:', error);
+    }
     setShowSRForm(false);
   };
 
-  const handleResubmitSR = (sr: any) => {
-    // Implement resubmit logic
-    console.log('Resubmit SR:', sr);
+  const handleResubmitSR = async (sr: any) => {
+    // Update status in Firestore
+    try {
+      const inwardCollection = collection(db, 'inward');
+      const q = query(inwardCollection, where('inwardId', '==', sr.inwardId));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { status: 'resubmited' });
+      }
+    } catch (error) {
+      console.error('Error updating status to resubmited:', error);
+    }
     setShowSRForm(false);
+    // Open edit modal for this entry
+    handleEdit(sr);
   };
 
   const isInsuranceExpired = (sr: any) => {
     // Check if any insurance policy is expired
     const today = new Date();
-    
     // Check inspection insurance data first
     for (const insurance of inspectionInsuranceData) {
       const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : null;
       const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : null;
-      
-      if (fireEndDate && fireEndDate < today) {
+      if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime()) && fireEndDate < today) {
         return true;
       }
-      if (burglaryEndDate && burglaryEndDate < today) {
+      if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime()) && burglaryEndDate < today) {
         return true;
       }
     }
-    
     // Fallback to inward data if no inspection insurance found
     const fireEndDate = sr.firePolicyEnd ? new Date(sr.firePolicyEnd) : null;
     const burglaryEndDate = sr.burglaryPolicyEnd ? new Date(sr.burglaryPolicyEnd) : null;
-    
-    if (fireEndDate && fireEndDate < today) {
+    if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime()) && fireEndDate < today) {
       return true;
     }
-    if (burglaryEndDate && burglaryEndDate < today) {
+    if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime()) && burglaryEndDate < today) {
       return true;
     }
-    
     return false;
   };
 
-  // Generate a unique SR No based on inwardId and date
+  // Generate a unique SR/WR No based on inwardId, date, and receiptType
   const generateSRNo = (row: any) => {
     if (!row) return '';
     const date = row.dateOfInward ? row.dateOfInward.replace(/-/g, '') : '';
-    return `SR-${row.inwardId || 'XXX'}-${date}`;
+    const prefix = row.receiptType === 'WR' ? 'WR' : 'SR';
+    return `${prefix}-${row.inwardId || 'XXX'}-${date}`;
   };
 
   // In the insurance selection section, update the calculation:
@@ -1752,29 +2068,33 @@ export default function InwardPage() {
 
   // Print handler using html2canvas and jsPDF
   const handlePrint = async () => {
-    if (!printRef.current) return;
+    if (!printRef.current || !testCertRef.current) return;
     const html2canvas = (await import('html2canvas')).default;
     const jsPDF = (await import('jspdf')).default;
-    const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
-    const imgData = canvas.toDataURL('image/png');
+
+    // Page 1: Storage Receipt
+    const canvas1 = await html2canvas(printRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+    const imgData1 = canvas1.toDataURL('image/png');
+
+    // Page 2: Test Certificate
+    const canvas2 = await html2canvas(testCertRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+    const imgData2 = canvas2.toDataURL('image/png');
+
     const pdf = new jsPDF('p', 'mm', 'a4');
     const imgWidth = 210;
     const pageHeight = 295;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-    let position = 0;
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-    while (heightLeft >= 0) {
-      position = heightLeft - imgHeight;
+
+    // Add first page
+    const imgHeight1 = (canvas1.height * imgWidth) / canvas1.width;
+    pdf.addImage(imgData1, 'PNG', 0, 0, imgWidth, imgHeight1);
+
+    // Add second page
       pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
-    const receiptType = selectedRowForSR?.receiptType || 'SR';
-    const filename = `${receiptType}-${selectedRowForSR?.inwardId || 'XXX'}-${new Date().toISOString().split('T')[0]}.pdf`;
-    pdf.save(filename);
-    toast({ title: 'PDF Generated', description: 'The receipt PDF has been downloaded successfully.', variant: 'default' });
+    const imgHeight2 = (canvas2.height * imgWidth) / canvas2.width;
+    pdf.addImage(imgData2, 'PNG', 0, 0, imgWidth, imgHeight2);
+
+    pdf.save('storage-receipt-and-test-certificate.pdf');
+    toast({ title: 'PDF Generated', description: 'The PDF with both pages has been downloaded successfully.', variant: 'default' });
   };
 
   // Update insurance selection logic to fetch and display remaining values from Firestore
@@ -1985,6 +2305,9 @@ export default function InwardPage() {
       setRemainingBurglaryPolicy(remainingBurglary >= 0 ? remainingBurglary.toFixed(2) : '0.00');
     }
   }, [selectedInsuranceInfoIndex, initialRemainingFire, initialRemainingBurglary, baseForm.totalValue]);
+
+  // Add remarks state in InwardPage component
+  const [remarks, setRemarks] = useState('');
 
   return (
     <DashboardLayout>
@@ -2477,6 +2800,67 @@ export default function InwardPage() {
               </div>
             )}
 
+            {/* Your Insurance Section */}
+            {isEditMode && (
+              <div className="border-t pt-6 mb-6">
+                <h3 className="text-xl font-semibold mb-4 text-blue-700">Your Insurance</h3>
+                {yourInsurance ? (
+                  <div className="border border-blue-200 rounded-lg p-6 bg-blue-50">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-medium text-blue-700">Insurance ID: {yourInsurance.insuranceId}</h4>
+                      <div className="text-sm text-blue-600 font-medium">
+                        {yourInsurance.insuranceTakenBy} - {yourInsurance.insuranceCommodity}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <Label className="block font-semibold mb-1">Insurance Taken By</Label>
+                        <Input value={yourInsurance.insuranceTakenBy || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Commodity</Label>
+                        <Input value={yourInsurance.insuranceCommodity || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Number</Label>
+                        <Input value={yourInsurance.firePolicyNumber || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
+                        <Input value={yourInsurance.firePolicyAmount || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
+                        <Input value={normalizeDate(yourInsurance.firePolicyStartDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
+                        <Input value={normalizeDate(yourInsurance.firePolicyEndDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
+                        <Input value={yourInsurance.burglaryPolicyNumber || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
+                        <Input value={yourInsurance.burglaryPolicyAmount || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
+                        <Input value={normalizeDate(yourInsurance.burglaryPolicyStartDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
+                        <Input value={normalizeDate(yourInsurance.burglaryPolicyEndDate)} readOnly />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500">No insurance found for this inward entry.</div>
+                )}
+              </div>
+            )}
+
             {/* Insurance Information */}
             {insuranceEntries.length > 0 && (
               <div className="border-t pt-6">
@@ -2522,152 +2906,130 @@ export default function InwardPage() {
                   </div>
                 )}
 
-
-
-                {/* Calculation Details - shown when insurance is selected */}
-                {selectedInsuranceInfoIndex !== null && (
-                  <div className="mb-6">
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                      <div className="font-semibold text-orange-700 mb-2">Calculation Details</div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium">Total Value of Current Entry: </span>
-                          <span className="text-blue-700">{baseForm.totalValue || '0'}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">Calculation: </span>
-                          <span className="text-blue-700">Current Remaining - Total Value</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Display Insurance Information based on selected type */}
-                {selectedInsuranceInfoType && filteredInsuranceInfoEntries.length > 0 && (
-                <div className="space-y-6">
-                    {filteredInsuranceInfoEntries.map((insurance, index) => (
-                    <div key={insurance.id || index} className="border border-orange-200 rounded-lg p-6 bg-orange-50">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-medium text-orange-700">Insurance #{index + 1}</h4>
-                        <div className="text-sm text-orange-600 font-medium">
-                          {insurance.insuranceId || 'N/A'} - {insurance.insuranceTakenBy} - {insurance.insuranceCommodity}
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <Label className="block font-semibold mb-1">Insurance Taken By</Label>
-                          <Input value={insurance.insuranceTakenBy || ''} readOnly placeholder="Auto-filled from inspection" />
-                        </div>
-                        <div>
-                          <Label className="block font-semibold mb-1">Commodity</Label>
-                          <Input value={insurance.insuranceCommodity || ''} readOnly placeholder="Auto-filled from inspection" />
-                        </div>
-                      </div>
-
-                      {insurance.insuranceTakenBy === 'client' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <Label className="block font-semibold mb-1">Client Name</Label>
-                            <Input value={insurance.clientName || ''} readOnly placeholder="Auto-filled from inspection" />
+                {/* Display Insurance Information based on selected insurance only */}
+                {selectedInsuranceInfoType && filteredInsuranceInfoEntries.length > 0 && selectedInsuranceInfoIndex !== null && (
+                  <div className="space-y-6">
+                    {(() => {
+                      const insurance = filteredInsuranceInfoEntries[selectedInsuranceInfoIndex];
+                      if (!insurance) return null;
+                      return (
+                        <div key={insurance.id || selectedInsuranceInfoIndex} className="border border-orange-200 rounded-lg p-6 bg-orange-50">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-lg font-medium text-orange-700">Insurance #{selectedInsuranceInfoIndex + 1}</h4>
+                            <div className="text-sm text-orange-600 font-medium">
+                              {insurance.insuranceId || 'N/A'} - {insurance.insuranceTakenBy} - {insurance.insuranceCommodity}
+                            </div>
                           </div>
-                          <div>
-                            <Label className="block font-semibold mb-1">Client Address</Label>
-                            <Input value={insurance.clientAddress || ''} readOnly placeholder="Auto-filled from inspection" />
-                          </div>
-                        </div>
-                      )}
-
-                      {insurance.insuranceTakenBy === 'bank' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <Label className="block font-semibold mb-1">Bank Name</Label>
-                            <Input value={insurance.selectedBankName || ''} readOnly placeholder="Auto-filled from inspection" />
-                          </div>
-                        </div>
-                      )}
-
-                      {insurance.insuranceTakenBy && insurance.insuranceTakenBy !== 'bank' && (
-                        <>
-                          {/* Fire Policy */}
-                          <h5 className="text-md font-semibold text-orange-600 mt-4 mb-2">Fire Policy Details</h5>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
-                              <Label className="block font-semibold mb-1">Fire Policy Company Name</Label>
-                              <Input value={insurance.firePolicyCompanyName || ''} readOnly placeholder="Auto-filled from inspection" />
+                              <Label className="block font-semibold mb-1">Insurance Taken By</Label>
+                              <Input value={insurance.insuranceTakenBy || ''} readOnly placeholder="Auto-filled from inspection" />
                             </div>
                             <div>
-                              <Label className="block font-semibold mb-1">Fire Policy Number</Label>
-                              <Input value={insurance.firePolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
+                              <Label className="block font-semibold mb-1">Commodity</Label>
+                              <Input value={insurance.insuranceCommodity || ''} readOnly placeholder="Auto-filled from inspection" />
                             </div>
-                            <div>
-                              <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
-                              <Input value={insurance.firePolicyAmount || ''} readOnly placeholder="Auto-filled from inspection" />
-                            </div>
-                            <div>
-                              <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
-                              <Input value={insurance.firePolicyStartDate || ''} readOnly placeholder="Auto-filled from inspection" />
-                            </div>
-                            <div>
-                              <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
-                              <Input value={insurance.firePolicyEndDate || ''} readOnly placeholder="Auto-filled from inspection" />
-                            </div>
-                              {selectedInsuranceInfoIndex === index && (
-                                <>
-                                  <div>
-                                    <Label className="block font-semibold mb-1">Remaining Fire Policy Amount</Label>
-                                    <Input value={initialRemainingFire || '0'} readOnly className="bg-green-50" />
-                                  </div>
-                                  <div>
-                                    <Label className="block font-semibold mb-1">Update Remaining Fire Policy Amount</Label>
-                                    <Input value={remainingFirePolicy} readOnly className="bg-blue-50" />
-                                  </div>
-                                </>
-                              )}
                           </div>
-
-                          {/* Burglary Policy */}
-                          <h5 className="text-md font-semibold text-orange-600 mt-4 mb-2">Burglary Policy Details</h5>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <Label className="block font-semibold mb-1">Burglary Policy Company Name</Label>
-                              <Input value={insurance.burglaryPolicyCompanyName || ''} readOnly placeholder="Auto-filled from inspection" />
+                          {insurance.insuranceTakenBy === 'client' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              <div>
+                                <Label className="block font-semibold mb-1">Client Name</Label>
+                                <Input value={insurance.clientName || ''} readOnly placeholder="Auto-filled from inspection" />
+                              </div>
+                              <div>
+                                <Label className="block font-semibold mb-1">Client Address</Label>
+                                <Input value={insurance.clientAddress || ''} readOnly placeholder="Auto-filled from inspection" />
+                              </div>
                             </div>
-                            <div>
-                              <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
-                              <Input value={insurance.burglaryPolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
+                          )}
+                          {insurance.insuranceTakenBy === 'bank' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              <div>
+                                <Label className="block font-semibold mb-1">Bank Name</Label>
+                                <Input value={insurance.selectedBankName || ''} readOnly placeholder="Auto-filled from inspection" />
+                              </div>
                             </div>
-                            <div>
-                              <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
-                              <Input value={insurance.burglaryPolicyAmount || ''} readOnly placeholder="Auto-filled from inspection" />
-                            </div>
-                            <div>
-                              <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
-                              <Input value={insurance.burglaryPolicyStartDate || ''} readOnly placeholder="Auto-filled from inspection" />
-                            </div>
-                            <div>
-                              <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
-                              <Input value={insurance.burglaryPolicyEndDate || ''} readOnly placeholder="Auto-filled from inspection" />
-                            </div>
-                              {selectedInsuranceInfoIndex === index && (
-                                <>
-                                  <div>
-                                    <Label className="block font-semibold mb-1">Remaining Burglary Policy Amount</Label>
-                                    <Input value={initialRemainingBurglary || '0'} readOnly className="bg-green-50" />
-                                  </div>
-                                  <div>
-                                    <Label className="block font-semibold mb-1">Update Remaining Burglary Policy Amount</Label>
-                                    <Input value={remainingBurglaryPolicy} readOnly className="bg-blue-50" />
-                                  </div>
-                                </>
-                              )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                          )}
+                          {insurance.insuranceTakenBy && insurance.insuranceTakenBy !== 'bank' && (
+                            <>
+                              {/* Fire Policy */}
+                              <h5 className="text-md font-semibold text-orange-600 mt-4 mb-2">Fire Policy Details</h5>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                  <Label className="block font-semibold mb-1">Fire Policy Company Name</Label>
+                                  <Input value={insurance.firePolicyCompanyName || ''} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Fire Policy Number</Label>
+                                  <Input value={insurance.firePolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
+                                  <Input value={insurance.firePolicyAmount || ''} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
+                                  <Input value={normalizeDate(insurance.firePolicyStartDate)} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
+                                  <Input value={normalizeDate(insurance.firePolicyEndDate)} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                {selectedInsuranceInfoIndex === selectedInsuranceInfoIndex && (
+                                  <>
+                                    <div>
+                                      <Label className="block font-semibold mb-1">Remaining Fire Policy Amount</Label>
+                                      <Input value={initialRemainingFire || '0'} readOnly className="bg-green-50" />
+                                    </div>
+                                    <div>
+                                      <Label className="block font-semibold mb-1">Update Remaining Fire Policy Amount</Label>
+                                      <Input value={remainingFirePolicy} readOnly className="bg-blue-50" />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              {/* Burglary Policy */}
+                              <h5 className="text-md font-semibold text-orange-600 mt-4 mb-2">Burglary Policy Details</h5>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <Label className="block font-semibold mb-1">Burglary Policy Company Name</Label>
+                                  <Input value={insurance.burglaryPolicyCompanyName || ''} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
+                                  <Input value={insurance.burglaryPolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
+                                  <Input value={insurance.burglaryPolicyAmount || ''} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
+                                  <Input value={normalizeDate(insurance.burglaryPolicyStartDate)} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
+                                  <Input value={normalizeDate(insurance.burglaryPolicyEndDate)} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                {selectedInsuranceInfoIndex === selectedInsuranceInfoIndex && (
+                                  <>
+                                    <div>
+                                      <Label className="block font-semibold mb-1">Remaining Burglary Policy Amount</Label>
+                                      <Input value={initialRemainingBurglary || '0'} readOnly className="bg-green-50" />
+                                    </div>
+                                    <div>
+                                      <Label className="block font-semibold mb-1">Update Remaining Burglary Policy Amount</Label>
+                                      <Input value={remainingBurglaryPolicy} readOnly className="bg-blue-50" />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 )}
 
                 {/* Show message when no insurance found for selected type */}
@@ -3115,10 +3477,23 @@ export default function InwardPage() {
 
       {/* SR/WR View Modal */}
       <Dialog open={showSRForm} onOpenChange={setShowSRForm}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          {/* Custom Header Section */}
+          <div className="flex flex-col items-center justify-center mb-8 mt-2">
+            <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 120, height: 100, marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
+            <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
+              AGROGREEN WAREHOUSING PRIVATE LTD.
+            </div>
+            <div className="text-base font-semibold text-green-600 mb-2 text-center">
+              603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
+            </div>
+            <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
+              Stock Receipt
+            </div>
+          </div>
           <DialogHeader>
             <DialogTitle className="text-green-700 text-xl">
-              {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt View' : 'Stock Receipt View'}
+              {/* {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt View' : 'Stock Receipt View'} */}
             </DialogTitle>
           </DialogHeader>
           {selectedRowForSR && (
@@ -3147,26 +3522,26 @@ export default function InwardPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="font-semibold">Bank Details</Label>
-                  <Input value={selectedRowForSR.bankName || ''} readOnly className="mb-1" />
-                  <Input value={selectedRowForSR.bankBranch || ''} readOnly className="mb-1" />
-                  <Input value={selectedRowForSR.ifscCode || ''} readOnly />
+                  <Input value={`Bank Name - ${selectedRowForSR.bankName || ''}`} readOnly className="mb-1" />
+                  <Input value={`Bank Branch - ${selectedRowForSR.bankBranch || ''}`} readOnly className="mb-1" />
+                  <Input value={`IFSC Code - ${selectedRowForSR.ifscCode || ''}`} readOnly />
                 </div>
                 <div>
                   <Label className="font-semibold">Warehouse Details</Label>
-                  <Input value={selectedRowForSR.warehouseName || ''} readOnly className="mb-1" />
-                  <Input value={selectedRowForSR.warehouseCode || ''} readOnly className="mb-1" />
-                  <Input value={selectedRowForSR.warehouseAddress || ''} readOnly />
+                  <Input value={`Warehouse Name - ${selectedRowForSR.warehouseName || ''}`} readOnly className="mb-1" />
+                  <Input value={`Warehouse Code - ${selectedRowForSR.warehouseCode || ''}`} readOnly className="mb-1" />
+                  <Input value={`Warehouse Address - ${selectedRowForSR.warehouseAddress || ''}`} readOnly />
                 </div>
                 <div>
                   <Label className="font-semibold">Client Details</Label>
-                  <Input value={selectedRowForSR.client || ''} readOnly className="mb-1" />
-                  <Input value={selectedRowForSR.clientCode || ''} readOnly className="mb-1" />
-                  <Input value={selectedRowForSR.clientAddress || ''} readOnly />
+                  <Input value={`Client Name - ${selectedRowForSR.client || ''}`} readOnly className="mb-1" />
+                  <Input value={`Client Code - ${selectedRowForSR.clientCode || ''}`} readOnly className="mb-1" />
+                  <Input value={`Client Address - ${selectedRowForSR.clientAddress || ''}`} readOnly />
                 </div>
                 <div>
                   <Label className="font-semibold">Commodity Details</Label>
-                  <Input value={selectedRowForSR.commodity || ''} readOnly className="mb-1" />
-                  <Input value={selectedRowForSR.varietyName || ''} readOnly />
+                  <Input value={`Commodity - ${selectedRowForSR.commodity || ''}`} readOnly className="mb-1" />
+                  <Input value={`Variety - ${selectedRowForSR.varietyName || ''}`} readOnly />
                 </div>
               </div>
               {/* Bags and Quantity */}
@@ -3190,30 +3565,24 @@ export default function InwardPage() {
                   <Label className="font-semibold">Validity End Date (Insurance End)</Label>
                   <Input value={(() => {
                     // Get the earliest insurance end date from inspection data
-                    let earliestEndDate: Date | null = null;
+                    let dates: Date[] = [];
                     for (const insurance of inspectionInsuranceData) {
                       const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : null;
                       const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : null;
-                      
-                      if (fireEndDate && (!earliestEndDate || fireEndDate < earliestEndDate)) {
-                        earliestEndDate = fireEndDate;
+                      if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime())) dates.push(fireEndDate);
+                      if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime())) dates.push(burglaryEndDate);
                       }
-                      if (burglaryEndDate && (!earliestEndDate || burglaryEndDate < earliestEndDate)) {
-                        earliestEndDate = burglaryEndDate;
-                      }
-                    }
-                    
                     // Fallback to inward data if no inspection insurance found
-                    if (!earliestEndDate) {
+                    if (dates.length === 0) {
                       const fireEnd = selectedRowForSR.firePolicyEnd ? new Date(selectedRowForSR.firePolicyEnd) : null;
                       const burglaryEnd = selectedRowForSR.burglaryPolicyEnd ? new Date(selectedRowForSR.burglaryPolicyEnd) : null;
-                      
-                      if (fireEnd && (!earliestEndDate || fireEnd < earliestEndDate)) earliestEndDate = fireEnd;
-                      if (burglaryEnd && (!earliestEndDate || burglaryEnd < earliestEndDate)) earliestEndDate = burglaryEnd;
+                      if (fireEnd instanceof Date && !isNaN(fireEnd.getTime())) dates.push(fireEnd);
+                      if (burglaryEnd instanceof Date && !isNaN(burglaryEnd.getTime())) dates.push(burglaryEnd);
                     }
-                    
-                    return earliestEndDate ? earliestEndDate.toLocaleDateString() : '';
-                  })()} readOnly />
+                    if (dates.length === 0) return '';
+                    const earliest = new Date(Math.min(...dates.map(d => d.getTime())));
+                    return earliest.toISOString().slice(0, 10);
+                  })()} readOnly placeholder="Auto-set on Approve" />
                 </div>
               </div>
               {/* Insurance Expiry Check */}
@@ -3222,6 +3591,17 @@ export default function InwardPage() {
                   Insurance is expired. Please update the end date before approval.
                 </div>
               )}
+                 <div className="grid grid-cols-2 gap-4 mt-2">
+                <div>
+                  <Label className="font-semibold">Total Value</Label>
+                  <Input value={`Total Value - ${selectedRowForSR.totalValue || ''}`} readOnly />
+                </div>
+                <div>
+                  <Label className="font-semibold">Total Rate</Label>
+                  <Input value={`Total Rate - ${selectedRowForSR.marketRate || ''}`} readOnly />
+                </div>
+              </div>
+            
               {/* Hologram No and QR space */}
               <div className="flex items-center gap-4">
                 <div className="flex-1">
@@ -3239,79 +3619,102 @@ export default function InwardPage() {
               </div>
               {/* Insurance Details */}
               <div>
-                <Label className="font-semibold">Insurance Details (from Inspection)</Label>
-                {inspectionInsuranceData.length > 0 ? (
-                  inspectionInsuranceData.map((insurance, index) => (
-                    <div key={insurance.id || index} className="border border-gray-200 rounded-lg p-4 mb-4">
-                      <h6 className="font-medium text-blue-600 mb-2">Insurance Entry {index + 1}</h6>
+                <Label className="font-semibold text-orange-500">Insurance Details </Label>
+                {(() => {
+                  if (!selectedRowForSR?.selectedInsurance || !inspectionInsuranceData.length) {
+                    return <div className="text-gray-500 text-sm">No insurance data found in inspection</div>;
+                  }
+                  const match = inspectionInsuranceData.find(
+                    (insurance: any) =>
+                      insurance.insuranceId === selectedRowForSR.selectedInsurance.insuranceId &&
+                      insurance.insuranceTakenBy === selectedRowForSR.selectedInsurance.insuranceTakenBy
+                  );
+                  if (!match) {
+                    return <div className="text-gray-500 text-sm">No insurance data found in inspection</div>;
+                  }
+                  return (
+                    <div className="border border-gray-200 rounded-lg p-4 mb-4">
+                      {/* <h6 className="font-medium text-blue-600 mb-2">Insurance Entry</h6> */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <Label className="text-sm font-medium">Insurance Taken By</Label>
-                          <Input value={insurance.insuranceTakenBy || ''} readOnly className="text-sm" />
+                          <Input value={match.insuranceTakenBy || ''} readOnly className="text-sm" />
                         </div>
                         <div>
                           <Label className="text-sm font-medium">Commodity</Label>
-                          <Input value={insurance.insuranceCommodity || ''} readOnly className="text-sm" />
+                          <Input value={match.insuranceCommodity || ''} readOnly className="text-sm" />
                         </div>
-                        {insurance.insuranceTakenBy === 'client' && (
+                        {match.insuranceTakenBy === 'client' && (
                           <>
                             <div>
                               <Label className="text-sm font-medium">Client Name</Label>
-                              <Input value={insurance.clientName || ''} readOnly className="text-sm" />
+                              <Input value={match.clientName || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Client Address</Label>
-                              <Input value={insurance.clientAddress || ''} readOnly className="text-sm" />
+                              <Input value={match.clientAddress || ''} readOnly className="text-sm" />
                             </div>
                           </>
                         )}
-                        {insurance.insuranceTakenBy === 'bank' && (
+                        {match.insuranceTakenBy === 'bank' && (
                           <div>
                             <Label className="text-sm font-medium">Bank Name</Label>
-                            <Input value={insurance.selectedBankName || ''} readOnly className="text-sm" />
+                            <Input value={match.selectedBankName || ''} readOnly className="text-sm" />
                           </div>
                         )}
-                        {insurance.insuranceTakenBy && insurance.insuranceTakenBy !== 'bank' && (
+                        {match.insuranceTakenBy && match.insuranceTakenBy !== 'bank' && (
                           <>
                             <div>
                               <Label className="text-sm font-medium">Fire Policy Company</Label>
-                              <Input value={insurance.firePolicyCompanyName || ''} readOnly className="text-sm" />
+                              <Input value={match.firePolicyCompanyName || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Fire Policy Number</Label>
-                              <Input value={insurance.firePolicyNumber || ''} readOnly className="text-sm" />
+                              <Input value={match.firePolicyNumber || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Fire Policy Amount</Label>
-                              <Input value={insurance.firePolicyAmount ? `₹${insurance.firePolicyAmount}` : ''} readOnly className="text-sm" />
+                              <Input value={match.firePolicyAmount ? `₹${match.firePolicyAmount}` : ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Fire Policy End Date</Label>
-                              <Input value={insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate).toLocaleDateString() : ''} readOnly className="text-sm" />
+                              <Input value={normalizeDate(match.firePolicyEndDate)} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Burglary Policy Company</Label>
-                              <Input value={insurance.burglaryPolicyCompanyName || ''} readOnly className="text-sm" />
+                              <Input value={match.burglaryPolicyCompanyName || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Burglary Policy Number</Label>
-                              <Input value={insurance.burglaryPolicyNumber || ''} readOnly className="text-sm" />
+                              <Input value={match.burglaryPolicyNumber || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Burglary Policy Amount</Label>
-                              <Input value={insurance.burglaryPolicyAmount ? `₹${insurance.burglaryPolicyAmount}` : ''} readOnly className="text-sm" />
+                              <Input value={match.burglaryPolicyAmount ? `₹${match.burglaryPolicyAmount}` : ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Burglary Policy End Date</Label>
-                              <Input value={insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate).toLocaleDateString() : ''} readOnly className="text-sm" />
+                              <Input value={normalizeDate(match.burglaryPolicyEndDate)} readOnly className="text-sm" />
                             </div>
                           </>
                         )}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-gray-500 text-sm">No insurance data found in inspection</div>
+                  );
+                })()}
+                {/* Signature block for Stock Receipt only, right after insurance details */}
+                {selectedRowForSR?.receiptType !== 'WR' && (
+                  <div className="w-full flex justify-end mt-8 mb-2">
+                    <div className="flex flex-col items-end">
+                      <div className="w-56 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
+
+                        <span className="text-[10px] text-gray-400">Sign</span>
+                      </div>
+                                                                    <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
+
+                      <div className="text-[10px] font-semibold">AUTHORIZED SIGNATORY</div>
+                    </div>
+                  </div>
                 )}
               </div>
               {/* Margin and Dotted Line */}
@@ -3320,11 +3723,20 @@ export default function InwardPage() {
               </div>
               {/* Agrogreen Logo and Test Certificate (Modal View) */}
               <div className="relative flex flex-col items-center justify-center my-8">
-                <img src="/AGlogo.webp" alt="Agrogreen Logo" style={{ width: 280, height: 'auto', marginBottom: 8 }} />
-                <div className="text-base font-bold text-center tracking-wide mb-8" style={{ letterSpacing: 1 }}>TEST CERTIFICATE</div>
-                <img src="/AGlogo.webp" alt="Agrogreen Logo Small" style={{ width: 48, height: 'auto', position: 'absolute', right: 0, bottom: 0, opacity: 0.7 }} />
+              <div className="flex flex-col items-center justify-center mb-8 mt-2">
+            <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 120, height: 100, marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
+            <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
+              AGROGREEN WAREHOUSING PRIVATE LTD.
+            </div>
+            <div className="text-base font-semibold text-green-600 mb-2 text-center">
+              603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
+            </div>
+            <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
+              TEST CERTIFICATE
+            </div>
+          </div>
                 {/* FROM SECTION */}
-                <div className="w-full max-w-2xl mx-auto mt-8 mb-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <div className="w-full max-w-2xl mt-8 mb-4 border border-gray-200 rounded-lg p-4 bg-gray-50" style={{ maxWidth: '900px' }}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                       <Label className="font-semibold mb-1">Client Name</Label>
@@ -3333,6 +3745,14 @@ export default function InwardPage() {
                     <div>
                       <Label className="font-semibold mb-1">Commodity Name</Label>
                       <Input readOnly value={selectedRowForSR?.commodity || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Commodity Variety Name</Label>
+                      <Input readOnly value={selectedRowForSR?.varietyName || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Client Address</Label>
+                      <Input readOnly value={selectedRowForSR?.clientAddress || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                     <div>
                       <Label className="font-semibold mb-1">Warehouse Name</Label>
@@ -3360,17 +3780,20 @@ export default function InwardPage() {
                     </div>
                   </div>
                 </div>
-                {/* Disclaimer */}
-                {/* <div className="w-full max-w-2xl mx-auto text-xs text-gray-600 mb-4 text-justify">
-                  This Report is given to you on the base of best tesing ability. Any discrepancy found in the report should be brought to our notice  within 48 hours of Receipt of the report. The above results are valid for the date and time of sampling and testing only. Total liability or any claim arising out of this report is limited to the invoiced amount only.
-                </div> */}
-                {/* Analysis Statement */}
-                <div className="w-full max-w-2xl mx-auto text-center font-semibold text-sm mb-4">
-                  THE ABOVE SAMPLE WAS ANALYZED BY US AND THE RESULTS ARE FOLLOWS
+                {/* Remarks input - left aligned */}
+                <div className="w-full max-w-2xl mb-4 flex flex-col items-start" style={{ maxWidth: '900px' }}>
+                  <Label className="font-semibold mb-1">Remarks</Label>
+                  <Input
+                    type="text"
+                    value={remarks}
+                    onChange={e => setRemarks(e.target.value)}
+                    placeholder="Enter remarks here"
+                    className="w-full bg-white border-green-300 text-green-800"
+                  />
                 </div>
-                {/* Quality Parameters Table */}
-                <div className="w-full max-w-2xl mx-auto mb-8">
-                  <Label className="block font-semibold mb-2 text-green-700">Quality Parameters (from Commodity & Variety)</Label>
+                {/* Quality Parameters Table - left aligned */}
+                <div className="w-full max-w-2xl mb-8" style={{ maxWidth: '900px' }}>
+                  <Label className="block font-semibold mb-2 text-green-700 text-left">Quality Parameters (from Commodity & Variety)</Label>
                   <div className="overflow-x-auto max-w-lg">
                     <table className="min-w-full border border-green-300 rounded-lg">
                       <thead className="bg-orange-100 text-orange-600 font-bold">
@@ -3411,15 +3834,17 @@ export default function InwardPage() {
                     </table>
                   </div>
                 </div>
-                {/* Footer Section */}
-                <div className="w-full max-w-2xl mx-auto flex justify-between items-end mt-8 mb-2">
+                {/* Footer Section - left and right aligned with space between */}
+                <div className="w-full max-w-2xl flex justify-between items-end mt-8 mb-2" style={{ maxWidth: '900px' }}>
                   <div className="text-xs font-semibold text-left">THE QUALITY OF GOODS IS AVERAGE</div>
                   <div className="flex flex-col items-end">
-                    <div className="text-xs font-bold mb-1">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
+                    {/* <div className="text-xs font-bold mb-1">Stamp</div> */}
+                   
                     <div className="w-40 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
-                      <span className="text-[10px] text-gray-400">Stamp</span>
+                      <span className="text-[10px] text-gray-400">Sign</span>
                     </div>
-                    <div className="text-[10px] font-semibold">AUTHORIZED SIGNATORY</div>
+ <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
+                    <div className="text-[10px] font-semibold text-green-700">AUTHORIZED SIGNATORY</div>
                   </div>
                 </div>
               </div>
@@ -3461,252 +3886,68 @@ export default function InwardPage() {
               {/* Hidden printRef for PDF export */}
               {isFormApproved && (
                 <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
-                  <div ref={printRef} style={{ width: 700, padding: 32, fontFamily: 'Arial, sans-serif', color: '#222', background: '#fff', borderRadius: 16, boxShadow: '0 2px 12px #e0f2e9' }}>
-                    {/* Header */}
-                    <div style={{ background: '#1aad4b', color: '#fff', borderRadius: 12, padding: '18px 0', textAlign: 'center', marginBottom: 24, fontSize: 28, fontWeight: 700, letterSpacing: 1 }}>{selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt' : 'Stock Receipt'}</div>
-                    {/* Top Row: CAD, SR/WR No, Date */}
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>CAD No</div>
-                        <div style={{ border: '1px solid #1aad4b', borderRadius: 8, padding: '0 12px', height: 40, lineHeight: '40px', marginBottom: 6, fontSize: 16, color: '#17803c', background: '#f8fff5', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', fontWeight: 600, textAlign: 'center' }}>{selectedRowForSR.cadNumber || ''}</div>
+                  <div ref={printRef}>
+                    <StorageReceipt
+                      data={{
+                        srNo: generateSRNo(selectedRowForSR),
+                        srGenerationDate: srGenerationDate || '-',
+                        dateOfIssue: selectedRowForSR?.dateOfInward || '',
+                        baseReceiptNo: selectedRowForSR?.baseReceiptNo || selectedRowForSR?.bankReceipt || '-',
+                        dateOfDeposit: selectedRowForSR?.dateOfInward || '',
+                        branch: selectedRowForSR?.branch || '-',
+                        warehouseName: selectedRowForSR?.warehouseName || '',
+                        warehouseAddress: selectedRowForSR?.warehouseAddress || '',
+                        client: selectedRowForSR?.client || '',
+                        clientAddress: selectedRowForSR?.clientAddress || '',
+                        commodity: selectedRowForSR?.commodity || '',
+                        totalBags: selectedRowForSR?.totalBags || '',
+                        netWeight: selectedRowForSR?.totalQuantity || '',
+                        grade: selectedRowForSR?.grade || '-',
+                        remarks: selectedRowForSR?.remarks || '-',
+                        marketRate: selectedRowForSR?.marketRate || '',
+                        valueOfCommodity: selectedRowForSR?.totalValue || '',
+                        hologramNumber: hologramNumber || '',
+                        insuranceDetails: [
+                          {
+                            policyNo: inspectionInsuranceData[0]?.firePolicyNumber || '-',
+                            company: inspectionInsuranceData[0]?.firePolicyCompanyName || '-',
+                            validFrom: inspectionInsuranceData[0]?.firePolicyStartDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyStartDate) : '-',
+                            validTo: inspectionInsuranceData[0]?.firePolicyEndDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyEndDate) : '-',
+                            sumInsured: inspectionInsuranceData[0]?.firePolicyAmount || '-',
+                          },
+                        ],
+                        bankName: selectedRowForSR?.bankName || '',
+                        date: selectedRowForSR?.dateOfInward || '',
+                        place: selectedRowForSR?.branch || '',
+                        cadNo: selectedRowForSR?.cadNumber || '',
+                        stockInwardDate: selectedRowForSR?.dateOfInward || '-',
+                        receiptType: selectedRowForSR?.receiptType || 'SR',
+                      }}
+                    />
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>{selectedRowForSR.receiptType === 'WR' ? 'WR No' : 'SR No'}</div>
-                        <div style={{ border: '1px solid #1aad4b', borderRadius: 8, padding: '0 12px', height: 40, lineHeight: '40px', marginBottom: 6, fontSize: 16, color: '#17803c', background: '#f8fff5', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', fontWeight: 600, textAlign: 'center' }}>{selectedRowForSR.srNo || `${selectedRowForSR.receiptType === 'WR' ? 'WR' : 'SR'}-${selectedRowForSR.inwardId || 'XXX'}-${selectedRowForSR.dateOfInward ? selectedRowForSR.dateOfInward.replace(/-/g, '') : ''}`}</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>{selectedRowForSR.receiptType === 'WR' ? 'WR Generation Date' : 'SR Generation Date'}</div>
-                        <div style={{ border: '1px solid #1aad4b', borderRadius: 8, padding: '0 12px', height: 40, lineHeight: '40px', marginBottom: 6, fontSize: 16, color: '#17803c', background: '#f8fff5', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', fontWeight: 600, textAlign: 'center' }}>{srGenerationDate || ''}</div>
-                      </div>
-                    </div>
-                    {/* Stock Inward Date */}
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Stock Inward Date</div>
-                      <div style={{ border: '1px solid #1aad4b', borderRadius: 8, padding: '0 12px', height: 40, lineHeight: '40px', fontSize: 16, color: '#17803c', background: '#f8fff5', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', fontWeight: 600, textAlign: 'center' }}>{selectedRowForSR.dateOfInward || ''}</div>
-                    </div>
-                    {/* Bank, Warehouse, Client, Commodity Details */}
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Bank Details</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px', marginBottom: 4 }}>{selectedRowForSR.bankName || ''}</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px', marginBottom: 4 }}>{selectedRowForSR.bankBranch || ''}</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px' }}>{selectedRowForSR.ifscCode || ''}</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Warehouse Details</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px', marginBottom: 4 }}>{selectedRowForSR.warehouseName || ''}</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px', marginBottom: 4 }}>{selectedRowForSR.warehouseCode || ''}</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px' }}>{selectedRowForSR.warehouseAddress || ''}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Client Details</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px', marginBottom: 4 }}>{selectedRowForSR.client || ''}</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px', marginBottom: 4 }}>{selectedRowForSR.clientCode || ''}</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px' }}>{selectedRowForSR.clientAddress || ''}</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Commodity Details</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px', marginBottom: 4 }}>{selectedRowForSR.commodity || ''}</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px' }}>{selectedRowForSR.varietyName || ''}</div>
-                      </div>
-                    </div>
-                    {/* Bags and Quantity */}
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>No. of Bags</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px' }}>{selectedRowForSR.totalBags || ''}</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Total Quantity (MT)</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px' }}>{selectedRowForSR.totalQuantity || ''}</div>
-                      </div>
-                    </div>
-                    {/* Validity Dates */}
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Validity Start Date</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px' }}>{selectedRowForSR.dateOfInward || ''}</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Validity End Date (Insurance End)</div>
-                        <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px' }}>{(() => {
-                          let earliestEndDate: Date | null = null;
-                          for (const insurance of inspectionInsuranceData) {
-                            const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : null;
-                            const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : null;
-                            if (fireEndDate && (!earliestEndDate || fireEndDate < earliestEndDate)) earliestEndDate = fireEndDate;
-                            if (burglaryEndDate && (!earliestEndDate || burglaryEndDate < earliestEndDate)) earliestEndDate = burglaryEndDate;
-                          }
-                          if (!earliestEndDate) {
-                            const fireEnd = selectedRowForSR.firePolicyEnd ? new Date(selectedRowForSR.firePolicyEnd) : null;
-                            const burglaryEnd = selectedRowForSR.burglaryPolicyEnd ? new Date(selectedRowForSR.burglaryPolicyEnd) : null;
-                            if (fireEnd && (!earliestEndDate || fireEnd < earliestEndDate)) earliestEndDate = fireEnd;
-                            if (burglaryEnd && (!earliestEndDate || burglaryEnd < earliestEndDate)) earliestEndDate = burglaryEnd;
-                          }
-                          return earliestEndDate ? earliestEndDate.toLocaleDateString() : '';
-                        })()}</div>
-                      </div>
-                    </div>
-                    {/* Hologram No */}
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Hologram No</div>
-                      <div style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: '6px 12px', fontWeight: 600 }}>{hologramNumber}</div>
-                    </div>
-                    {/* Insurance Details */}
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontWeight: 500, color: '#17803c', marginBottom: 2, fontSize: 13 }}>Insurance Details (from Inspection)</div>
-                      {inspectionInsuranceData.length > 0 ? (
-                        inspectionInsuranceData.map((insurance, index) => (
-                          <div key={insurance.id || index} style={{ border: '1px solid #b2e2c7', borderRadius: 8, padding: 12, marginBottom: 8, background: '#f8fff5' }}>
-                            <div style={{ fontWeight: 600, color: '#17803c', marginBottom: 4 }}>Entry {index + 1}</div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Insurance Taken By</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.insuranceTakenBy}</div>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Commodity</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.insuranceCommodity}</div>
-                                {insurance.insuranceTakenBy === 'client' && <><div style={{ fontWeight: 500, fontSize: 13 }}>Client Name</div><div style={{ fontWeight: 600 }}>{insurance.clientName}</div><div style={{ fontWeight: 500, fontSize: 13 }}>Client Address</div><div style={{ fontWeight: 600 }}>{insurance.clientAddress}</div></>}
-                                {insurance.insuranceTakenBy === 'bank' && <><div style={{ fontWeight: 500, fontSize: 13 }}>Bank Name</div><div style={{ fontWeight: 600 }}>{insurance.selectedBankName}</div></>}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Fire Policy Company</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.firePolicyCompanyName}</div>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Fire Policy Number</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.firePolicyNumber}</div>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Fire Policy Amount</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.firePolicyAmount}</div>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Fire Policy End Date</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate).toLocaleDateString() : ''}</div>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Burglary Policy Company</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.burglaryPolicyCompanyName}</div>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Burglary Policy Number</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.burglaryPolicyNumber}</div>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Burglary Policy Amount</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.burglaryPolicyAmount}</div>
-                                <div style={{ fontWeight: 500, fontSize: 13 }}>Burglary Policy End Date</div>
-                                <div style={{ fontWeight: 600 }}>{insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate).toLocaleDateString() : ''}</div>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div style={{ color: '#888' }}>No insurance data found in inspection</div>
-                      )}
-                    </div>
-                    {/* Margin and Dotted Line */}
-                    <div style={{ margin: '32px 0' }}>
-                      <hr style={{ borderTop: '2px dotted #888', width: '100%' }} />
-                    </div>
-                    {/* Agrogreen Logo and Test Certificate (PDF/Print View) */}
-                    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '32px 0 16px 0' }}>
-                      <img src="/AGlogo.webp" alt="Agrogreen Logo" style={{ width: 280, height: 'auto', marginBottom: 8 }} />
-                      <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', letterSpacing: 1, marginBottom: 32 }}>TEST CERTIFICATE</div>
-                      <img src="/AGlogo.webp" alt="Agrogreen Logo Small" style={{ width: 48, height: 'auto', position: 'absolute', right: 0, bottom: 0, opacity: 0.7 }} />
-                      {/* FROM SECTION */}
-                      <div style={{ width: '100%', maxWidth: 500, margin: '32px auto 16px auto', border: '1px solid #eee', borderRadius: 8, padding: 16, background: '#f8f8f8', fontSize: 12 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                          <div>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>Client Name</div>
-                            <div style={{ border: '1px solid #2ecc40', borderRadius: 6, padding: 6, background: '#fff', color: '#17803c' }}>{selectedRowForSR?.client || ''}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>Commodity Name</div>
-                            <div style={{ border: '1px solid #2ecc40', borderRadius: 6, padding: 6, background: '#fff', color: '#17803c' }}>{selectedRowForSR?.commodity || ''}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>Warehouse Name</div>
-                            <div style={{ border: '1px solid #2ecc40', borderRadius: 6, padding: 6, background: '#fff', color: '#17803c' }}>{selectedRowForSR?.warehouseName || ''}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>Warehouse Address</div>
-                            <div style={{ border: '1px solid #2ecc40', borderRadius: 6, padding: 6, background: '#fff', color: '#17803c' }}>{selectedRowForSR?.warehouseAddress || ''}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>Total Number of Bags</div>
-                            <div style={{ border: '1px solid #2ecc40', borderRadius: 6, padding: 6, background: '#fff', color: '#17803c' }}>{selectedRowForSR?.totalBags || ''}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>CAD No</div>
-                            <div style={{ border: '1px solid #2ecc40', borderRadius: 6, padding: 6, background: '#fff', color: '#17803c' }}>{selectedRowForSR?.cadNumber || ''}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>Date of Sampling</div>
-                            <div style={{ border: '1px solid #2ecc40', borderRadius: 6, padding: 6, background: '#fff', color: '#17803c' }}>{selectedRowForSR?.dateOfSampling || ''}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>Date of Testing</div>
-                            <div style={{ border: '1px solid #2ecc40', borderRadius: 6, padding: 6, background: '#fff', color: '#17803c' }}>{selectedRowForSR?.dateOfTesting || ''}</div>
-                          </div>
-                        </div>
-                      </div>
-                      {/* Disclaimer */}
-                      <div style={{ width: '100%', maxWidth: 500, margin: '0 auto 16px auto', fontSize: 10, color: '#666', textAlign: 'justify' }}>
-                        This Report is given to you on the base of best tesing ability. Any discrepancy found in the report should be brought to our notice  within 48 hours of Receipt of the report. The above results are valid for the date and time of sampling and testing only. Total liability or any claim arising out of this report is limited to the invoiced amount only.
-                      </div>
-                      {/* Analysis Statement */}
-                      <div style={{ width: '100%', maxWidth: 500, margin: '0 auto 16px auto', fontWeight: 600, fontSize: 12, textAlign: 'center' }}>
-                        THE ABOVE SAMPLE WAS ANALYZED BY US AND THE RESULTS ARE FOLLOWS
-                      </div>
-                      {/* Quality Parameters Table */}
-                      <div style={{ width: '100%', maxWidth: 500, margin: '0 auto 32px auto' }}>
-                        <div style={{ fontWeight: 600, color: '#17803c', marginBottom: 6 }}>Quality Parameters (from Commodity & Variety)</div>
-                        <table style={{ width: '100%', border: '1px solid #2ecc40', borderCollapse: 'collapse', fontSize: 11 }}>
-                          <thead>
-                            <tr style={{ background: '#fff5e6' }}>
-                              <th style={{ border: '1px solid #2ecc40', padding: 8, color: '#e67c1f', fontWeight: 700 }}>Parameter</th>
-                              <th style={{ border: '1px solid #2ecc40', padding: 8, color: '#e67c1f', fontWeight: 700 }}>Min %</th>
-                              <th style={{ border: '1px solid #2ecc40', padding: 8, color: '#e67c1f', fontWeight: 700 }}>Max %</th>
-                              <th style={{ border: '1px solid #2ecc40', padding: 8, color: '#e67c1f', fontWeight: 700 }}>Actual (%)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(() => {
-                              const commodity = commodities.find((c) => c.commodityName === selectedRowForSR?.commodity);
-                              const variety = commodity?.varieties?.find((v: any) => v.varietyName === selectedRowForSR?.varietyName);
-                              const particulars = variety?.particulars || [];
-                              return particulars.length > 0 ? (
-                                particulars.map((p: any, idx: number) => {
-                                  const actualValue = (selectedRowForSR?.labResults && selectedRowForSR.labResults[idx] !== undefined && selectedRowForSR.labResults[idx] !== null)
-                                    ? selectedRowForSR.labResults[idx]
-                                    : '';
-                                    // console.log(
-                                    //   actualValue
-                                    // );
-                                    
-                                  return (
-                                    <tr key={idx} style={{ color: '#17803c' }}>
-                                      <td style={{ border: '1px solid #2ecc40', padding: 8 }}>{p.name}</td>
-                                      <td style={{ border: '1px solid #2ecc40', padding: 8 }}>{p.minPercentage}</td>
-                                      <td style={{ border: '1px solid #2ecc40', padding: 8 }}>{p.maxPercentage}</td>
-                                      <td style={{ border: '1px solid #2ecc40', padding: 8 }}>
-                                        <div style={{ width: 60, border: '1px solid #2ecc40', borderRadius: 6, padding: 4, textAlign: 'center', background: '#fff', minHeight: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                          {actualValue}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })
-                              ) : (
-                                <tr><td colSpan={4} style={{ textAlign: 'center', color: '#bbb', padding: 8 }}>No quality parameters found for this variety.</td></tr>
-                              );
-                            })()}
-                          </tbody>
-                        </table>
-                      </div>
-                      {/* Footer Section */}
-                      <div style={{ width: '100%', maxWidth: 500, margin: '32px auto 0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                        <div style={{ fontSize: 10, fontWeight: 600, textAlign: 'left' }}>THE QUALITY OF GOODS IS AVERAGE</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4 }}>AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
-                          <div style={{ width: 120, height: 56, border: '2px dashed #bbb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
-                            <span style={{ fontSize: 8, color: '#bbb' }}>Stamp</span>
-                          </div>
-                          <div style={{ fontSize: 8, fontWeight: 600 }}>AUTHORIZED SIGNATORY</div>
-                        </div>
-                      </div>
-                    </div>
+                  <div ref={testCertRef}>
+                    <TestCertificate
+                      client={selectedRowForSR?.client || ''}
+                      clientAddress={selectedRowForSR?.clientAddress || ''}
+                      commodity={selectedRowForSR?.commodity || ''}
+                      varietyName={selectedRowForSR?.varietyName || ''}
+                      warehouseName={selectedRowForSR?.warehouseName || ''}
+                      warehouseAddress={selectedRowForSR?.warehouseAddress || ''}
+                      totalBags={selectedRowForSR?.totalBags || ''}
+                      dateOfSampling={selectedRowForSR?.dateOfSampling || ''}
+                      dateOfTesting={selectedRowForSR?.dateOfTesting || ''}
+                      qualityParameters={(() => {
+                        const commodity = commodities.find((c: any) => c.commodityName === selectedRowForSR?.commodity);
+                        const variety = commodity?.varieties?.find((v: any) => v.varietyName === selectedRowForSR?.varietyName);
+                        const particulars = variety?.particulars || [];
+                        return particulars.map((p: any, idx: number) => ({
+                          name: p.name,
+                          minPercentage: p.minPercentage,
+                          maxPercentage: p.maxPercentage,
+                          actual: selectedRowForSR?.labResults?.[idx] || '',
+                        }));
+                      })()}
+                    />
                   </div>
                 </div>
               )}

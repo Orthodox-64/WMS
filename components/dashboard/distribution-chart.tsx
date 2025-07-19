@@ -2,8 +2,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useAUM } from "@/lib/firestore";
+import { useRouter } from "next/navigation";
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { format } from 'date-fns';
+import WarehouseStatusTable from '@/components/WarehouseStatusTable';
+import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"];
 
@@ -20,11 +26,10 @@ const DUMMY_DISTRIBUTION_DATA = [
 function useDistributionData() {
   const { data: aumData, loading } = useAUM();
 
-  const distributionData = useMemo(() => {
-    if (!aumData || aumData.length === 0) {
-      return DUMMY_DISTRIBUTION_DATA;
-    }
-
+  let distributionData = [];
+  if (!aumData || aumData.length === 0) {
+    distributionData = DUMMY_DISTRIBUTION_DATA;
+  } else {
     // Process location data over time
     const locationData = aumData.reduce((acc, curr) => {
       const date = curr.date.split('T')[0].substring(0, 7); // Get YYYY-MM format
@@ -34,66 +39,118 @@ function useDistributionData() {
       acc[date][curr.state] = (acc[date][curr.state] || 0) + parseFloat(curr.aum);
       return acc;
     }, {} as Record<string, Record<string, number>>);
-
     const results = Object.entries(locationData)
       .map(([date, values]) => ({
-        date,
+        date: String(date),
         ...values
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(-6); // Get last 6 months
-
-    return results.length > 0 ? results : DUMMY_DISTRIBUTION_DATA;
-  }, [aumData]);
+    distributionData = results.length > 0 ? results : DUMMY_DISTRIBUTION_DATA;
+  }
 
   return { distributionData, loading };
 }
 
 export function DistributionChart() {
-  const distributionData = [
-    { date: 'Jan', Active: 25, Inactive: 8, Pending: 12 },
-    { date: 'Feb', Active: 28, Inactive: 7, Pending: 10 },
-    { date: 'Mar', Active: 30, Inactive: 6, Pending: 9 },
-    { date: 'Apr', Active: 32, Inactive: 5, Pending: 8 },
-    { date: 'May', Active: 35, Inactive: 4, Pending: 7 },
-    { date: 'Jun', Active: 38, Inactive: 3, Pending: 6 }
-  ];
+  const router = useRouter();
+  const [distributionData, setDistributionData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
 
-  const locations = Object.keys(distributionData[0]).filter(key => key !== 'date');
+  useEffect(() => {
+    const fetchInspections = async () => {
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, 'inspections'));
+        const inspections = snap.docs.map(doc => doc.data());
+        // Group by month and status
+        const monthStatusCount: Record<string, Record<string, number>> = {};
+        inspections.forEach(entry => {
+          // Use createdAt or status change date
+          let dateStr = entry.createdAt || entry.submittedAt || entry.activatedAt || entry.closedAt || entry.lastUpdated;
+          let status = (entry.status && entry.status.trim().toLowerCase()) || 'pending';
+          if (!dateStr) return;
+          let date = new Date(dateStr);
+          if (isNaN(date.getTime())) return;
+          const month = date.toISOString().slice(0, 7); // YYYY-MM
+          if (!monthStatusCount[month]) monthStatusCount[month] = {};
+          // Normalize status
+          if (["active", "activated"].includes(status)) status = "Active";
+          else if (["pending"].includes(status)) status = "Pending";
+          else if (["submitted"].includes(status)) status = "Submitted";
+          else if (["closed"].includes(status)) status = "Closed";
+          else if (["reactivated", "reactive"].includes(status)) status = "Reactive";
+          else status = status.charAt(0).toUpperCase() + status.slice(1);
+          monthStatusCount[month][status] = (monthStatusCount[month][status] || 0) + 1;
+        });
+        // Build chart data
+        const allStatuses = ["Active", "Pending", "Closed", "Rejected"];
+        const months = Object.keys(monthStatusCount).sort();
+        const chartData = months.map(month => {
+          const row: any = { date: format(new Date(month + '-01'), 'MMMM') };
+          allStatuses.forEach(status => {
+            if (status === 'Rejected') {
+              // Count all statuses that are exactly 'Rejected' (case-insensitive)
+              row[status] = monthStatusCount[month]['Rejected'] || monthStatusCount[month]['rejected'] || 0;
+            } else {
+              row[status] = monthStatusCount[month][status] || 0;
+            }
+          });
+          return row;
+        });
+        setDistributionData(chartData.slice(-6)); // Last 6 months
+      } catch {
+        setDistributionData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInspections();
+  }, []);
+
+  const statuses = ["Active", "Pending", "Closed", "Rejected"];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="inline-block w-fit border-b-2 border-green-500 pb-2">Warehouse Status</CardTitle>
-      </CardHeader>
-      <CardContent className="h-[400px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={distributionData}
-            margin={{
-              top: 20,
-              right: 30,
-              left: 20,
-              bottom: 5,
-            }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            {locations.map((location, index) => (
-              <Line
-                key={location}
-                type="monotone"
-                dataKey={location}
-                stroke={COLORS[index % COLORS.length]}
-                activeDot={{ r: 8 }}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Card className="cursor-pointer">
+          <CardHeader>
+            <CardTitle className="inline-block w-fit border-b-2 border-green-500 pb-2">Warehouse Status</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={distributionData}
+                margin={{
+                  top: 20,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                {statuses.map((status, index) => (
+                  <Line
+                    key={status}
+                    type="monotone"
+                    dataKey={status}
+                    stroke={status === 'Rejected' ? '#EF4444' : COLORS[index % COLORS.length]}
+                    activeDot={{ r: 8 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </DialogTrigger>
+      <DialogContent className="max-w-6xl w-full max-h-[80vh] overflow-y-auto">
+        <WarehouseStatusTable showHeader={true} />
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -10,13 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CalendarIcon, Upload, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { CalendarIcon, Upload, Plus, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { collection, getDocs, addDoc, query, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import InsurancePopup from '@/components/InsurancePopup';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface WarehouseInspectionFormProps {
   onClose: () => void;
@@ -110,6 +111,31 @@ interface FormDataType {
   [key: string]: any;
 }
 
+// Add at the top, after imports
+function formatDateDDMMYYYY(date: Date | null | undefined): string {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+// Add helper function for alert status
+function getInsuranceAlertStatus(insurance: any): 'none' | 'expiring' | 'expired' {
+  const today = new Date();
+  let soonestEnd: Date | null = null;
+  [insurance.firePolicyEndDate, insurance.burglaryPolicyEndDate].forEach(date => {
+    if (date instanceof Date && !isNaN(date.getTime())) {
+      if (!soonestEnd || date < soonestEnd) soonestEnd = date;
+    }
+  });
+  if (!soonestEnd) return 'none';
+  const diffDays = Math.ceil((soonestEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return 'expired';
+  if (diffDays <= 10) return 'expiring';
+  return 'none';
+}
+
 export default function WarehouseInspectionForm({ 
   onClose, 
   initialData, 
@@ -135,20 +161,33 @@ export default function WarehouseInspectionForm({
   };
 
   // Helper function to safely create Date objects
-  const safeCreateDate = (dateValue: any): Date | null => {
-    if (!dateValue) return null;
-    
-    try {
-      const date = new Date(dateValue);
-      if (isNaN(date.getTime())) {
-        return null;
+  function safeCreateDate(val: any): Date | null {
+    if (!val) return null;
+    if (val instanceof Date) return val;
+    // Firestore Timestamp object
+    if (typeof val === "object" && val.seconds !== undefined) {
+      // Firestore Timestamp: has .toDate() method
+      if (typeof val.toDate === "function") {
+        return val.toDate();
       }
-      return date;
-    } catch (error) {
-      console.error('Error creating date:', error);
-      return null;
+      // Or construct manually
+      return new Date(val.seconds * 1000);
     }
-  };
+    if (typeof val === "string") {
+      // Remove everything after the date part
+      let dateStr = val.replace(/\u202F/g, " "); // replace narrow no-break space
+      const match = dateStr.match(/^([A-Za-z]+ \d{1,2}, \d{4})/);
+      if (match) {
+        dateStr = match[1];
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) return d;
+      }
+      // Try fallback: parse as ISO if possible
+      const d2 = new Date(val);
+      if (!isNaN(d2.getTime())) return d2;
+    }
+    return null;
+  }
 
   // Form state
   const [formData, setFormData] = useState<FormDataType>({
@@ -926,7 +965,7 @@ export default function WarehouseInspectionForm({
             remainingBurglaryPolicyAmount: '',
             sourceDocumentId: insurance.sourceDocumentId,
             sourceCollection: insurance.sourceCollection,
-            insuranceId: insurance.insuranceId
+            insuranceId: insurance.insuranceId // <-- use the real insuranceId from agrogreen
           };
         });
 
@@ -954,6 +993,7 @@ export default function WarehouseInspectionForm({
         
     const newInsurance: InsuranceEntry = {
       id: newInsuranceId,
+      insuranceId: newInsuranceId,
           insuranceTakenBy: '', // Let user choose
       insuranceCommodity: '',
       clientName: '',
@@ -1613,8 +1653,8 @@ export default function WarehouseInspectionForm({
           actionMessage = 'Closed successfully';
           break;
         case 'reactivate':
-          newStatus = 'activated';
-          actionMessage = 'Reactivated successfully';
+          newStatus = 'reactivate';
+          actionMessage = 'Moved to Reactivate tab';
           break;
       }
 
@@ -2001,6 +2041,105 @@ export default function WarehouseInspectionForm({
         </CardTitle>
       </CardHeader>
     );
+  };
+
+  // Add state for insurance usage popup
+  const [showInsuranceUsagePopup, setShowInsuranceUsagePopup] = useState(false);
+  const [insuranceUsageList, setInsuranceUsageList] = useState<any[]>([]);
+  const [insuranceToCheck, setInsuranceToCheck] = useState<any>(null);
+
+  // Add state for editing insurance
+  const [showEditInsuranceModal, setShowEditInsuranceModal] = useState(false);
+  const [insuranceToEdit, setInsuranceToEdit] = useState<any>(null);
+  const [editInsuranceFields, setEditInsuranceFields] = useState<any>({});
+
+  // Handler to open edit modal
+  const handleEditInsurance = (insurance: any) => {
+    setInsuranceToEdit(insurance);
+    setEditInsuranceFields({
+      insuranceTakenBy: insurance.insuranceTakenBy,
+      insuranceCommodity: insurance.insuranceCommodity,
+      firePolicyStartDate: insurance.firePolicyStartDate,
+      firePolicyEndDate: insurance.firePolicyEndDate,
+      burglaryPolicyStartDate: insurance.burglaryPolicyStartDate,
+      burglaryPolicyEndDate: insurance.burglaryPolicyEndDate,
+    });
+    setShowEditInsuranceModal(true);
+  };
+
+  // Handler to save changes
+  const handleSaveEditInsurance = async () => {
+    if (!insuranceToEdit) return;
+    // Build the updated insurance fields, defaulting to '' or null
+    const updatedFields = {
+      ...editInsuranceFields,
+      firePolicyAmount: editInsuranceFields.firePolicyAmount ?? '',
+      firePolicyCompanyName: editInsuranceFields.firePolicyCompanyName ?? '',
+      firePolicyEndDate: editInsuranceFields.firePolicyEndDate ?? null,
+      firePolicyNumber: editInsuranceFields.firePolicyNumber ?? '',
+      firePolicyStartDate: editInsuranceFields.firePolicyStartDate ?? null,
+      burglaryPolicyAmount: editInsuranceFields.burglaryPolicyAmount ?? '',
+      burglaryPolicyCompanyName: editInsuranceFields.burglaryPolicyCompanyName ?? '',
+      burglaryPolicyEndDate: editInsuranceFields.burglaryPolicyEndDate ?? null,
+      burglaryPolicyNumber: editInsuranceFields.burglaryPolicyNumber ?? '',
+      burglaryPolicyStartDate: editInsuranceFields.burglaryPolicyStartDate ?? null,
+      insuranceCommodity: editInsuranceFields.insuranceCommodity ?? '',
+      insuranceTakenBy: editInsuranceFields.insuranceTakenBy ?? '',
+      clientName: editInsuranceFields.clientName ?? '',
+      clientAddress: editInsuranceFields.clientAddress ?? '',
+      selectedBankName: editInsuranceFields.selectedBankName ?? '',
+    };
+    // Update in inspection form state
+    setFormData(prev => ({
+      ...prev,
+      insuranceEntries: prev.insuranceEntries.map(entry =>
+        entry.id === insuranceToEdit.id
+          ? { ...entry, ...updatedFields }
+          : entry
+      )
+    }));
+    // Update in Firestore (inspection collection) by inspectionCode
+    if (formData.inspectionCode) {
+      const inspectionsRef = collection(db, 'inspections');
+      const q = query(inspectionsRef, where('inspectionCode', '==', formData.inspectionCode));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
+        await updateDoc(docRef, {
+          insuranceEntries: formData.insuranceEntries.map(entry =>
+            entry.id === insuranceToEdit.id
+              ? { ...entry, ...updatedFields }
+              : entry
+          )
+        });
+      }
+    }
+    // Update in all related inward docs
+    const inwardQuery = query(
+      collection(db, 'inward'),
+      where('selectedInsurance.insuranceId', '==', insuranceToEdit.insuranceId),
+      where('selectedInsurance.insuranceTakenBy', '==', insuranceToEdit.insuranceTakenBy)
+    );
+    const snapshot = await getDocs(inwardQuery);
+    for (const docSnap of snapshot.docs) {
+      const inwardRef = doc(db, 'inward', docSnap.id);
+      await updateDoc(inwardRef, {
+        'selectedInsurance.insuranceTakenBy': updatedFields.insuranceTakenBy,
+        'selectedInsurance.insuranceCommodity': updatedFields.insuranceCommodity,
+        'selectedInsurance.firePolicyStartDate': updatedFields.firePolicyStartDate,
+        'selectedInsurance.firePolicyEndDate': updatedFields.firePolicyEndDate,
+        'selectedInsurance.firePolicyAmount': updatedFields.firePolicyAmount,
+        'selectedInsurance.firePolicyCompanyName': updatedFields.firePolicyCompanyName,
+        'selectedInsurance.firePolicyNumber': updatedFields.firePolicyNumber,
+        'selectedInsurance.burglaryPolicyStartDate': updatedFields.burglaryPolicyStartDate,
+        'selectedInsurance.burglaryPolicyEndDate': updatedFields.burglaryPolicyEndDate,
+        'selectedInsurance.burglaryPolicyAmount': updatedFields.burglaryPolicyAmount,
+        'selectedInsurance.burglaryPolicyCompanyName': updatedFields.burglaryPolicyCompanyName,
+        'selectedInsurance.burglaryPolicyNumber': updatedFields.burglaryPolicyNumber,
+      });
+    }
+    setShowEditInsuranceModal(false);
+    setInsuranceToEdit(null);
   };
 
   return (
@@ -3483,48 +3622,70 @@ export default function WarehouseInspectionForm({
 
                     <div className="space-y-2">
                       <Label>Fire Policy Start Date</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start text-left font-normal"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {formData.firePolicyStartDate && formData.firePolicyStartDate instanceof Date && !isNaN(formData.firePolicyStartDate.getTime()) ? format(formData.firePolicyStartDate, "PPP") : "Pick start date"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={formData.firePolicyStartDate || undefined}
-                            onSelect={(date) => setFormData(prev => ({ ...prev, firePolicyStartDate: date || null }))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      {formData.firePolicyStartDate && formData.firePolicyStartDate instanceof Date && !isNaN(formData.firePolicyStartDate.getTime()) ? (
+                        <div className="p-2 bg-gray-50 rounded border text-green-700">{formatDateDDMMYYYY(formData.firePolicyStartDate)}</div>
+                      ) : (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              Pick start date
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.firePolicyStartDate || undefined}
+                              onSelect={(date) => {
+                                const updatedEntries = formData.insuranceEntries.map(entry =>
+                                  entry.id === insurance.id 
+                                    ? { ...entry, firePolicyStartDate: date || null }
+                                    : entry
+                                );
+                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
                     </div>
 
                     <div className="space-y-2">
                       <Label>Fire Policy End Date</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start text-left font-normal"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {formData.firePolicyEndDate && formData.firePolicyEndDate instanceof Date && !isNaN(formData.firePolicyEndDate.getTime()) ? format(formData.firePolicyEndDate, "PPP") : "Pick end date"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={formData.firePolicyEndDate || undefined}
-                            onSelect={(date) => setFormData(prev => ({ ...prev, firePolicyEndDate: date || null }))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      {formData.firePolicyEndDate && formData.firePolicyEndDate instanceof Date && !isNaN(formData.firePolicyEndDate.getTime()) ? (
+                        <div className="p-2 bg-gray-50 rounded border text-green-700">{formatDateDDMMYYYY(formData.firePolicyEndDate)}</div>
+                      ) : (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              Pick end date
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.firePolicyEndDate || undefined}
+                              onSelect={(date) => {
+                                const updatedEntries = formData.insuranceEntries.map(entry =>
+                                  entry.id === insurance.id 
+                                    ? { ...entry, firePolicyEndDate: date || null }
+                                    : entry
+                                );
+                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3568,48 +3729,70 @@ export default function WarehouseInspectionForm({
 
                     <div className="space-y-2">
                       <Label>Burglary Policy Start Date</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start text-left font-normal"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {formData.burglaryPolicyStartDate && formData.burglaryPolicyStartDate instanceof Date && !isNaN(formData.burglaryPolicyStartDate.getTime()) ? format(formData.burglaryPolicyStartDate, "PPP") : "Pick start date"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={formData.burglaryPolicyStartDate || undefined}
-                            onSelect={(date) => setFormData(prev => ({ ...prev, burglaryPolicyStartDate: date || null }))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      {formData.burglaryPolicyStartDate && formData.burglaryPolicyStartDate instanceof Date && !isNaN(formData.burglaryPolicyStartDate.getTime()) ? (
+                        <div className="p-2 bg-gray-50 rounded border text-green-700">{formatDateDDMMYYYY(formData.burglaryPolicyStartDate)}</div>
+                      ) : (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              Pick start date
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.burglaryPolicyStartDate || undefined}
+                              onSelect={(date) => {
+                                const updatedEntries = formData.insuranceEntries.map(entry =>
+                                  entry.id === insurance.id 
+                                    ? { ...entry, burglaryPolicyStartDate: date || null }
+                                    : entry
+                                );
+                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
                     </div>
 
                     <div className="space-y-2">
                       <Label>Burglary Policy End Date</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start text-left font-normal"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {formData.burglaryPolicyEndDate && formData.burglaryPolicyEndDate instanceof Date && !isNaN(formData.burglaryPolicyEndDate.getTime()) ? format(formData.burglaryPolicyEndDate, "PPP") : "Pick end date"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={formData.burglaryPolicyEndDate || undefined}
-                            onSelect={(date) => setFormData(prev => ({ ...prev, burglaryPolicyEndDate: date || null }))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      {formData.burglaryPolicyEndDate && formData.burglaryPolicyEndDate instanceof Date && !isNaN(formData.burglaryPolicyEndDate.getTime()) ? (
+                        <div className="p-2 bg-gray-50 rounded border text-green-700">{formatDateDDMMYYYY(formData.burglaryPolicyEndDate)}</div>
+                      ) : (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              Pick end date
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.burglaryPolicyEndDate || undefined}
+                              onSelect={(date) => {
+                                const updatedEntries = formData.insuranceEntries.map(entry =>
+                                  entry.id === insurance.id 
+                                    ? { ...entry, burglaryPolicyEndDate: date || null }
+                                    : entry
+                                );
+                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3635,16 +3818,80 @@ export default function WarehouseInspectionForm({
               <div key={insurance.id} className="border-t pt-4 mt-4">
                 <div className="flex justify-between items-center mb-4">
                   <h4 className="text-lg font-medium text-green-700">Additional Insurance #{index + 1}</h4>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removeInsuranceEntry(insurance.id)}
-                    className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Remove
-                  </Button>
+                  <div className="flex items-center space-x-2">
+                    {(() => {
+                      const status = getInsuranceAlertStatus(insurance);
+                      if (status === 'expiring') {
+                        return (
+                          <span className="ml-2" title="Policy expiring soon">
+                            <svg className="blinking-red" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <ellipse cx="16" cy="28" rx="10" ry="4" fill="#B0BEC5"/>
+                              <polygon points="16,4 18.5,13 28,13 20,18 22.5,27 16,21.5 9.5,27 12,18 4,13 13.5,13" fill="#FF5252" stroke="#FF8A65" strokeWidth="1.5"/>
+                              <polygon points="16,7 17.5,13 23,13 18,16 19.5,22 16,18.5 12.5,22 14,16 9,13 14.5,13" fill="#FFE0B2"/>
+                            </svg>
+                          </span>
+                        );
+                      }
+                      if (status === 'expired') {
+                        return (
+                          <>
+                            <span className="ml-2" title="Policy expired">
+                              <svg className="blinking-orange" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <ellipse cx="16" cy="28" rx="10" ry="4" fill="#B0BEC5"/>
+                                <polygon points="16,4 18.5,13 28,13 20,18 22.5,27 16,21.5 9.5,27 12,18 4,13 13.5,13" fill="#FF9800" stroke="#FFB300" strokeWidth="1.5"/>
+                                <polygon points="16,7 17.5,13 23,13 18,16 19.5,22 16,18.5 12.5,22 14,16 9,13 14.5,13" fill="#FFE0B2"/>
+                              </svg>
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="ml-2 text-blue-600 border-blue-400 hover:bg-blue-50"
+                              onClick={() => handleEditInsurance(insurance)}
+                            >
+                              Change
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              className="ml-1 text-orange-600 border-orange-400 hover:bg-orange-50"
+                              title="View inwards using this insurance"
+                              onClick={async () => {
+                                setInsuranceToCheck(insurance);
+                                setShowInsuranceUsagePopup(true);
+                                // Fetch inward docs using this insurance (nested fields)
+                                const inwardQuery = query(
+                                  collection(db, 'inward'),
+                                  where('selectedInsurance.insuranceId', '==', insurance.insuranceId),
+                                  where('selectedInsurance.insuranceTakenBy', '==', insurance.insuranceTakenBy)
+                                );
+                                const snapshot = await getDocs(inwardQuery);
+                                const usageList = snapshot.docs.map(doc => ({
+                                  id: doc.id,
+                                  ...doc.data()
+                                }));
+                                setInsuranceUsageList(usageList);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeInsuranceEntry(insurance.id)}
+                      className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Remove
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3743,13 +3990,13 @@ export default function WarehouseInspectionForm({
                                             firePolicyCompanyName: firstInsurance.firePolicyCompanyName || '',
                                             firePolicyNumber: firstInsurance.firePolicyNumber || '',
                                             firePolicyAmount: firstInsurance.firePolicyAmount || '',
-                                                                    firePolicyStartDate: safeCreateDate(firstInsurance.firePolicyStartDate),
-                        firePolicyEndDate: safeCreateDate(firstInsurance.firePolicyEndDate),
-                        burglaryPolicyCompanyName: firstInsurance.burglaryPolicyCompanyName || '',
-                        burglaryPolicyNumber: firstInsurance.burglaryPolicyNumber || '',
-                        burglaryPolicyAmount: firstInsurance.burglaryPolicyAmount || '',
-                        burglaryPolicyStartDate: safeCreateDate(firstInsurance.burglaryPolicyStartDate),
-                        burglaryPolicyEndDate: safeCreateDate(firstInsurance.burglaryPolicyEndDate),
+                                            firePolicyStartDate: safeCreateDate(firstInsurance.firePolicyStartDate),
+                                            firePolicyEndDate: safeCreateDate(firstInsurance.firePolicyEndDate),
+                                            burglaryPolicyCompanyName: firstInsurance.burglaryPolicyCompanyName || '',
+                                            burglaryPolicyNumber: firstInsurance.burglaryPolicyNumber || '',
+                                            burglaryPolicyAmount: firstInsurance.burglaryPolicyAmount || '',
+                                            burglaryPolicyStartDate: safeCreateDate(firstInsurance.burglaryPolicyStartDate),
+                                            burglaryPolicyEndDate: safeCreateDate(firstInsurance.burglaryPolicyEndDate),
                                           }
                                         : entry
                                     );
@@ -3902,62 +4149,70 @@ export default function WarehouseInspectionForm({
 
                         <div className="space-y-2">
                           <Label>Fire Policy Start Date</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="w-full justify-start text-left font-normal"
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {insurance.firePolicyStartDate && insurance.firePolicyStartDate instanceof Date && !isNaN(insurance.firePolicyStartDate.getTime()) ? format(insurance.firePolicyStartDate, "PPP") : "Pick start date"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={insurance.firePolicyStartDate || undefined}
-                                onSelect={(date) => {
-                                  const updatedEntries = formData.insuranceEntries.map(entry =>
-                                    entry.id === insurance.id 
-                                      ? { ...entry, firePolicyStartDate: date || null }
-                                      : entry
-                                  );
-                                  setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
-                                }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
+                          {insurance.firePolicyStartDate && insurance.firePolicyStartDate instanceof Date && !isNaN(insurance.firePolicyStartDate.getTime()) ? (
+                            <div className="p-2 bg-gray-50 rounded border text-green-700">{formatDateDDMMYYYY(insurance.firePolicyStartDate)}</div>
+                          ) : (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full justify-start text-left font-normal"
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  Pick start date
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={insurance.firePolicyStartDate || undefined}
+                                  onSelect={(date) => {
+                                    const updatedEntries = formData.insuranceEntries.map(entry =>
+                                      entry.id === insurance.id 
+                                        ? { ...entry, firePolicyStartDate: date || null }
+                                        : entry
+                                    );
+                                    setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                  }}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
 
                         <div className="space-y-2">
                           <Label>Fire Policy End Date</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="w-full justify-start text-left font-normal"
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {insurance.firePolicyEndDate && insurance.firePolicyEndDate instanceof Date && !isNaN(insurance.firePolicyEndDate.getTime()) ? format(insurance.firePolicyEndDate, "PPP") : "Pick end date"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={insurance.firePolicyEndDate || undefined}
-                                onSelect={(date) => {
-                                  const updatedEntries = formData.insuranceEntries.map(entry =>
-                                    entry.id === insurance.id 
-                                      ? { ...entry, firePolicyEndDate: date || null }
-                                      : entry
-                                  );
-                                  setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
-                                }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
+                          {insurance.firePolicyEndDate && insurance.firePolicyEndDate instanceof Date && !isNaN(insurance.firePolicyEndDate.getTime()) ? (
+                            <div className="p-2 bg-gray-50 rounded border text-green-700">{formatDateDDMMYYYY(insurance.firePolicyEndDate)}</div>
+                          ) : (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full justify-start text-left font-normal"
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  Pick end date
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={insurance.firePolicyEndDate || undefined}
+                                  onSelect={(date) => {
+                                    const updatedEntries = formData.insuranceEntries.map(entry =>
+                                      entry.id === insurance.id 
+                                        ? { ...entry, firePolicyEndDate: date || null }
+                                        : entry
+                                    );
+                                    setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                  }}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -4019,62 +4274,70 @@ export default function WarehouseInspectionForm({
 
                         <div className="space-y-2">
                           <Label>Burglary Policy Start Date</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="w-full justify-start text-left font-normal"
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {insurance.burglaryPolicyStartDate && insurance.burglaryPolicyStartDate instanceof Date && !isNaN(insurance.burglaryPolicyStartDate.getTime()) ? format(insurance.burglaryPolicyStartDate, "PPP") : "Pick start date"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={insurance.burglaryPolicyStartDate || undefined}
-                                onSelect={(date) => {
-                                  const updatedEntries = formData.insuranceEntries.map(entry =>
-                                    entry.id === insurance.id 
-                                      ? { ...entry, burglaryPolicyStartDate: date || null }
-                                      : entry
-                                  );
-                                  setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
-                                }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
+                          {insurance.burglaryPolicyStartDate && insurance.burglaryPolicyStartDate instanceof Date && !isNaN(insurance.burglaryPolicyStartDate.getTime()) ? (
+                            <div className="p-2 bg-gray-50 rounded border text-green-700">{formatDateDDMMYYYY(insurance.burglaryPolicyStartDate)}</div>
+                          ) : (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full justify-start text-left font-normal"
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  Pick start date
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={insurance.burglaryPolicyStartDate || undefined}
+                                  onSelect={(date) => {
+                                    const updatedEntries = formData.insuranceEntries.map(entry =>
+                                      entry.id === insurance.id 
+                                        ? { ...entry, burglaryPolicyStartDate: date || null }
+                                        : entry
+                                    );
+                                    setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                  }}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
 
                         <div className="space-y-2">
                           <Label>Burglary Policy End Date</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="w-full justify-start text-left font-normal"
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {insurance.burglaryPolicyEndDate && insurance.burglaryPolicyEndDate instanceof Date && !isNaN(insurance.burglaryPolicyEndDate.getTime()) ? format(insurance.burglaryPolicyEndDate, "PPP") : "Pick end date"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={insurance.burglaryPolicyEndDate || undefined}
-                                onSelect={(date) => {
-                                  const updatedEntries = formData.insuranceEntries.map(entry =>
-                                    entry.id === insurance.id 
-                                      ? { ...entry, burglaryPolicyEndDate: date || null }
-                                      : entry
-                                  );
-                                  setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
-                                }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
+                          {insurance.burglaryPolicyEndDate && insurance.burglaryPolicyEndDate instanceof Date && !isNaN(insurance.burglaryPolicyEndDate.getTime()) ? (
+                            <div className="p-2 bg-gray-50 rounded border text-green-700">{formatDateDDMMYYYY(insurance.burglaryPolicyEndDate)}</div>
+                          ) : (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full justify-start text-left font-normal"
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  Pick end date
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={insurance.burglaryPolicyEndDate || undefined}
+                                  onSelect={(date) => {
+                                    const updatedEntries = formData.insuranceEntries.map(entry =>
+                                      entry.id === insurance.id 
+                                        ? { ...entry, burglaryPolicyEndDate: date || null }
+                                        : entry
+                                    );
+                                    setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                  }}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -5104,6 +5367,282 @@ export default function WarehouseInspectionForm({
         }}
         action={pendingAction || 'activate'}
       />
+
+      {/* Insurance Usage Popup */}
+      <Dialog open={showInsuranceUsagePopup} onOpenChange={setShowInsuranceUsagePopup}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Inward Documents Using This Insurance</DialogTitle>
+          </DialogHeader>
+          <div>
+            {insuranceUsageList.length === 0 ? (
+              <div>No inward documents found using this insurance.</div>
+            ) : (
+              <>
+                {(() => {
+                  // Try to sum inward.totalValue, inward.value, or inward.amount
+                  const getValue = (inward: any) => {
+                    if (typeof inward.totalValue === 'number') return inward.totalValue;
+                    if (typeof inward.totalValue === 'string') return parseFloat(inward.totalValue);
+                    if (typeof inward.value === 'number') return inward.value;
+                    if (typeof inward.value === 'string') return parseFloat(inward.value);
+                    if (typeof inward.amount === 'number') return inward.amount;
+                    if (typeof inward.amount === 'string') return parseFloat(inward.amount);
+                    return 0;
+                  };
+                  const totalValue = insuranceUsageList.reduce((sum, inward) => sum + (getValue(inward) || 0), 0);
+                  // Get insurance policy amounts
+                  const fireAmount = parseFloat(insuranceToCheck?.firePolicyAmount || '0');
+                  const burglaryAmount = parseFloat(insuranceToCheck?.burglaryPolicyAmount || '0');
+                  // Format currency
+                  const formatCurrency = (val: number) => `₹${val.toLocaleString('en-IN')}`;
+                  // Applicability logic
+                  const isApplicable = totalValue < fireAmount && totalValue < burglaryAmount;
+                  return (
+                    <div className="mb-4 space-y-2">
+                      <div><b>Total Value of Inwards:</b> {formatCurrency(totalValue)}</div>
+                      <div><b>Fire Policy Amount:</b> {formatCurrency(fireAmount)}</div>
+                      <div><b>Burglary Policy Amount:</b> {formatCurrency(burglaryAmount)}</div>
+                      <Button
+                        type="button"
+                        disabled={!isApplicable}
+                        className={isApplicable ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}
+                      >
+                        {isApplicable ? 'Applicable' : 'Not Applicable'}
+                      </Button>
+                    </div>
+                  );
+                })()}
+                <ul>
+                  {insuranceUsageList.map(inward => (
+                    <li key={inward.id}>
+                      Inward ID: <b>{inward.inwardId || '-'}</b> | Warehouse Name: <b>{inward.warehouseName || '-'}</b>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Insurance Modal */}
+      <Dialog open={showEditInsuranceModal} onOpenChange={setShowEditInsuranceModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Insurance Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Insurance Taken By</Label>
+              <Select
+                value={editInsuranceFields.insuranceTakenBy}
+                onValueChange={val => {
+                  setEditInsuranceFields(f => ({ ...f, insuranceTakenBy: val, clientName: '', selectedPolicy: null }));
+                }}
+              >
+                <SelectTrigger className="text-orange-600">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="warehouse owner">Warehouse Owner</SelectItem>
+                  <SelectItem value="client">Client</SelectItem>
+                  <SelectItem value="bank">Bank</SelectItem>
+                  <SelectItem value="agrogreen">Agrogreen</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* If client, show client name and policy select */}
+            {editInsuranceFields.insuranceTakenBy === 'client' && (
+              <>
+                <div>
+                  <Label>Client Name</Label>
+                  <Select
+                    value={editInsuranceFields.clientName || ''}
+                    onValueChange={async val => {
+                      setEditInsuranceFields(f => ({ ...f, clientName: val, selectedPolicy: null }));
+                      // Fetch client insurance data for the selected client
+                      try {
+                        const clientDoc = await getDocs(query(collection(db, 'clients'), where('firmName', '==', val)));
+                        if (!clientDoc.empty) {
+                          const clientData = clientDoc.docs[0].data();
+                          const insurances = clientData.insurances || [];
+                          setClientInsuranceData(insurances);
+                        } else {
+                          setClientInsuranceData([]);
+                        }
+                      } catch (error) {
+                        setClientInsuranceData([]);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="text-orange-600">
+                      <SelectValue placeholder="Select Client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientsData.map(client => (
+                        <SelectItem key={client.id} value={client.firmName}>{client.firmName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Show client insurance policies if client selected */}
+                {editInsuranceFields.clientName && clientInsuranceData.length > 0 && (
+                  <div>
+                    <Label>Select Client Insurance Policies</Label>
+                    <Select
+                      value={editInsuranceFields.selectedPolicy || ''}
+                      onValueChange={val => {
+                        const selected = clientInsuranceData.find(i => i.insuranceId === val);
+                        if (selected) {
+                          setEditInsuranceFields(f => ({
+                            ...f,
+                            selectedPolicy: val,
+                            insuranceCommodity: selected.commodity || '',
+                            firePolicyStartDate: safeCreateDate(selected.firePolicyStartDate),
+                            firePolicyEndDate: safeCreateDate(selected.firePolicyEndDate),
+                            burglaryPolicyStartDate: safeCreateDate(selected.burglaryPolicyStartDate),
+                            burglaryPolicyEndDate: safeCreateDate(selected.burglaryPolicyEndDate),
+                            burglaryPolicyAmount: selected.burglaryPolicyAmount || '',
+                            burglaryPolicyCompanyName: selected.burglaryPolicyCompanyName || '',
+                            firePolicyAmount: selected.firePolicyAmount || '',
+                            firePolicyCompanyName: selected.firePolicyCompanyName || '',
+                            firePolicyNumber: selected.firePolicyNumber || '',
+                            burglaryPolicyNumber: selected.burglaryPolicyNumber || '',
+                          }));
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="text-orange-600">
+                        <SelectValue placeholder="Select Policy" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientInsuranceData.map(policy => (
+                          <SelectItem key={policy.insuranceId} value={policy.insuranceId}>
+                            {policy.insuranceId} - {policy.commodity}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
+            )}
+            {/* If agrogreen, show agrogreen policy select */}
+            {editInsuranceFields.insuranceTakenBy === 'agrogreen' && (
+              <div>
+                <Label>Select Agrogreen Insurance Policies</Label>
+                <Select
+                  value={editInsuranceFields.selectedPolicy || ''}
+                  onOpenChange={async (open) => {
+                    if (open && agrogreenInsuranceData.length === 0) {
+                      try {
+                        const agrogreenDocs = await getDocs(collection(db, 'agrogreen'));
+                        if (!agrogreenDocs.empty) {
+                          const agrogreenInsurances = agrogreenDocs.docs.map(doc => ({
+                            ...doc.data(),
+                            insuranceId: doc.data().insuranceId || doc.id,
+                            commodity: doc.data().commodity || '',
+                            firePolicyStartDate: doc.data().firePolicyStartDate,
+                            firePolicyEndDate: doc.data().firePolicyEndDate,
+                            burglaryPolicyStartDate: doc.data().burglaryPolicyStartDate,
+                            burglaryPolicyEndDate: doc.data().burglaryPolicyEndDate,
+                          }));
+                          setAgrogreenInsuranceData(agrogreenInsurances);
+                        } else {
+                          setAgrogreenInsuranceData([]);
+                        }
+                      } catch (error) {
+                        setAgrogreenInsuranceData([]);
+                      }
+                    }
+                  }}
+                  onValueChange={val => {
+                    const selected = agrogreenInsuranceData.find(i => i.insuranceId === val);
+                    if (selected) {
+                      setEditInsuranceFields(f => ({
+                        ...f,
+                        selectedPolicy: val,
+                        insuranceCommodity: selected.commodity || '',
+                        firePolicyStartDate: safeCreateDate(selected.firePolicyStartDate),
+                        firePolicyEndDate: safeCreateDate(selected.firePolicyEndDate),
+                        burglaryPolicyStartDate: safeCreateDate(selected.burglaryPolicyStartDate),
+                        burglaryPolicyEndDate: safeCreateDate(selected.burglaryPolicyEndDate),
+                        burglaryPolicyAmount: selected.burglaryPolicyAmount || '',
+                        burglaryPolicyCompanyName: selected.burglaryPolicyCompanyName || '',
+                        firePolicyAmount: selected.firePolicyAmount || '',
+                        firePolicyCompanyName: selected.firePolicyCompanyName || '',
+                        firePolicyNumber: selected.firePolicyNumber || '',
+                        burglaryPolicyNumber: selected.burglaryPolicyNumber || '',
+                      }));
+                    }
+                  }}
+                >
+                  <SelectTrigger className="text-orange-600">
+                    <SelectValue placeholder="Select Policy" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agrogreenInsuranceData.map(policy => (
+                      <SelectItem key={policy.insuranceId} value={policy.insuranceId}>
+                        {policy.insuranceId} - {policy.commodity}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {/* Manual fields if not autofilled by policy selection */}
+            {(!editInsuranceFields.selectedPolicy || editInsuranceFields.insuranceTakenBy === 'warehouse owner' || editInsuranceFields.insuranceTakenBy === 'bank') && (
+              <>
+                <div>
+                  <Label>Commodity</Label>
+                  <Input
+                    value={editInsuranceFields.insuranceCommodity || ''}
+                    onChange={e => setEditInsuranceFields(f => ({ ...f, insuranceCommodity: e.target.value }))}
+                    className="text-orange-600"
+                    placeholder="Enter commodity name"
+                  />
+                </div>
+                <div>
+                  <Label>Fire Policy Start Date</Label>
+                  <Input
+                    type="date"
+                    value={editInsuranceFields.firePolicyStartDate ? format(editInsuranceFields.firePolicyStartDate, 'yyyy-MM-dd') : ''}
+                    onChange={e => setEditInsuranceFields(f => ({ ...f, firePolicyStartDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Fire Policy End Date</Label>
+                  <Input
+                    type="date"
+                    value={editInsuranceFields.firePolicyEndDate ? format(editInsuranceFields.firePolicyEndDate, 'yyyy-MM-dd') : ''}
+                    onChange={e => setEditInsuranceFields(f => ({ ...f, firePolicyEndDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Burglary Policy Start Date</Label>
+                  <Input
+                    type="date"
+                    value={editInsuranceFields.burglaryPolicyStartDate ? format(editInsuranceFields.burglaryPolicyStartDate, 'yyyy-MM-dd') : ''}
+                    onChange={e => setEditInsuranceFields(f => ({ ...f, burglaryPolicyStartDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Burglary Policy End Date</Label>
+                  <Input
+                    type="date"
+                    value={editInsuranceFields.burglaryPolicyEndDate ? format(editInsuranceFields.burglaryPolicyEndDate, 'yyyy-MM-dd') : ''}
+                    onChange={e => setEditInsuranceFields(f => ({ ...f, burglaryPolicyEndDate: e.target.value }))}
+                  />
+                </div>
+              </>
+            )}
+            <Button type="button" className="bg-green-600 hover:bg-green-700 text-white w-full" onClick={handleSaveEditInsurance}>
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

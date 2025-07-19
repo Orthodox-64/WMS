@@ -61,6 +61,8 @@ export default function ResubmittedWarehousePage() {
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        // Only include documents with 'resubmitted' status
+        if (data.status === 'resubmitted') {
         inspectionData.push({
           id: doc.id,
           inspectionCode: data.inspectionCode || '',
@@ -79,12 +81,8 @@ export default function ResubmittedWarehousePage() {
           createdAt: data.createdAt || '',
           warehouseInspectionData: data.warehouseInspectionData || {}
         });
+        }
       });
-      
-      // Filter for resubmitted status - you can modify this logic based on your business rules
-      // Status filtering now done in forEach loop above
-        data.status === 'resubmitted'
-      );
       
       setInspections(inspectionData);
     } catch (error) {

@@ -11,14 +11,16 @@ const roleBasedRoutes: Record<string, Set<string>> = {
     '/inward',
     '/outward',
     '/commodity-summary',
-    '/aum-summary'
+    '/aum-summary',
+    '/warehouse-status', // Allow warehouse status for maker
   ]),
   checker: new Set([
     '/dashboard',
     '/surveys',
     '/reports',
     '/commodity-summary',
-    '/aum-summary'
+    '/aum-summary',
+    '/warehouse-status', // Allow warehouse status for checker
   ]),
   admin: new Set([
     '/dashboard',
@@ -33,7 +35,8 @@ const roleBasedRoutes: Record<string, Set<string>> = {
     '/outward',
     '/ro',
     '/commodity-summary',
-    '/aum-summary'
+    '/aum-summary',
+    '/warehouse-status', // Allow warehouse status for admin
   ]),
 };
 
