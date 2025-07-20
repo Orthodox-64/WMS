@@ -319,11 +319,219 @@ export default function InwardPage() {
           const receiptType = await getReceiptTypeFromInspection(data.warehouseName);
           console.log('Receipt type for inward', data.inwardId, ':', receiptType);
           
-          return { ...data, id: doc.id, receiptType };
+          // Fetch insurance data for this inward entry from inspection collection based on selectedInsurance
+          let insuranceData = {
+            firePolicyAmount: '-',
+            burglaryPolicyAmount: '-',
+            firePolicyStartDate: '-',
+            firePolicyEndDate: '-',
+            burglaryPolicyStartDate: '-',
+            burglaryPolicyEndDate: '-',
+            firePolicyName: '-',
+            burglaryPolicyName: '-',
+            bankFundedBy: '-'
+          };
+
+          // Check if this inward entry has selectedInsurance data
+          if (data.selectedInsurance && data.selectedInsurance.insuranceId && data.selectedInsurance.insuranceTakenBy) {
+            console.log('Processing selectedInsurance for inward:', data.inwardId, data.selectedInsurance);
+            
+            try {
+              // First try to find insurance data in inspection collection
+              if (data.warehouseName) {
+                const inspectionsCollection = collection(db, 'inspections');
+                const q = query(inspectionsCollection, where('warehouseName', '==', data.warehouseName));
+                const querySnapshot = await getDocs(q);
+                
+                if (!querySnapshot.empty) {
+                  const inspectionData = querySnapshot.docs[0].data();
+                  let insuranceEntries: any[] = [];
+                  
+                  // Check multiple possible locations for insurance data
+                  if (inspectionData.insuranceEntries && Array.isArray(inspectionData.insuranceEntries)) {
+                    insuranceEntries = inspectionData.insuranceEntries;
+                  } else if (inspectionData.warehouseInspectionData?.insuranceEntries && Array.isArray(inspectionData.warehouseInspectionData.insuranceEntries)) {
+                    insuranceEntries = inspectionData.warehouseInspectionData.insuranceEntries;
+                  } else if (inspectionData.warehouseInspectionData) {
+                    // Legacy format - convert to new format
+                    const legacyData = inspectionData.warehouseInspectionData;
+                    if (legacyData.firePolicyNumber || legacyData.burglaryPolicyNumber) {
+                      insuranceEntries = [{
+                        id: `legacy_${Date.now()}`,
+                        insuranceTakenBy: legacyData.insuranceTakenBy || '',
+                        insuranceCommodity: legacyData.insuranceCommodity || '',
+                        clientName: legacyData.clientName || '',
+                        clientAddress: legacyData.clientAddress || '',
+                        selectedBankName: legacyData.selectedBankName || '',
+                        firePolicyCompanyName: legacyData.firePolicyCompanyName || '',
+                        firePolicyNumber: legacyData.firePolicyNumber || '',
+                        firePolicyAmount: legacyData.firePolicyAmount || '',
+                        firePolicyStartDate: legacyData.firePolicyStartDate || null,
+                        firePolicyEndDate: legacyData.firePolicyEndDate || null,
+                        burglaryPolicyCompanyName: legacyData.burglaryPolicyCompanyName || '',
+                        burglaryPolicyNumber: legacyData.burglaryPolicyNumber || '',
+                        burglaryPolicyAmount: legacyData.burglaryPolicyAmount || '',
+                        burglaryPolicyStartDate: legacyData.burglaryPolicyStartDate || null,
+                        burglaryPolicyEndDate: legacyData.burglaryPolicyEndDate || null,
+                        createdAt: new Date(legacyData.createdAt || Date.now())
+                      }];
+                    }
+                  }
+
+                  // Find matching insurance entry based on selectedInsurance
+                  const matchingInsurance = insuranceEntries.find((ins: any) => 
+                    ins.insuranceId === data.selectedInsurance.insuranceId &&
+                    ins.insuranceTakenBy === data.selectedInsurance.insuranceTakenBy
+                  );
+
+                  if (matchingInsurance) {
+                    console.log('Found matching insurance for inward:', data.inwardId, matchingInsurance);
+                    console.log('Extracting insurance data from inspection collection for inward:', data.inwardId);
+                    console.log('Raw date values from matchingInsurance:', {
+                      firePolicyStartDate: matchingInsurance.firePolicyStartDate,
+                      firePolicyEndDate: matchingInsurance.firePolicyEndDate,
+                      burglaryPolicyStartDate: matchingInsurance.burglaryPolicyStartDate,
+                      burglaryPolicyEndDate: matchingInsurance.burglaryPolicyEndDate,
+                      firePolicyStartDateType: typeof matchingInsurance.firePolicyStartDate,
+                      firePolicyEndDateType: typeof matchingInsurance.firePolicyEndDate,
+                      burglaryPolicyStartDateType: typeof matchingInsurance.burglaryPolicyStartDate,
+                      burglaryPolicyEndDateType: typeof matchingInsurance.burglaryPolicyEndDate
+                    });
+                    
+                    // Extract all required insurance fields from inspection collection
+                    insuranceData = {
+                      firePolicyAmount: matchingInsurance.firePolicyAmount || '-',           // From inspection collection
+                      burglaryPolicyAmount: matchingInsurance.burglaryPolicyAmount || '-',   // From inspection collection
+                      firePolicyStartDate: (() => {
+                        const date = matchingInsurance.firePolicyStartDate;
+                        console.log('Processing firePolicyStartDate:', date, 'type:', typeof date);
+                        if (date) {
+                          if (typeof date === 'string' || typeof date === 'number') {
+                            const formatted = new Date(date).toLocaleDateString();
+                            console.log('Formatted firePolicyStartDate:', formatted);
+                            return formatted;
+                          } else if (date instanceof Date) {
+                            const formatted = date.toLocaleDateString();
+                            console.log('Formatted firePolicyStartDate (Date object):', formatted);
+                            return formatted;
+                          } else if (date && typeof date === 'object' && date.toDate) {
+                            // Handle Firestore Timestamp
+                            const formatted = date.toDate().toLocaleDateString();
+                            console.log('Formatted firePolicyStartDate (Firestore Timestamp):', formatted);
+                            return formatted;
+                          }
+                        }
+                        console.log('FirePolicyStartDate returning "-"');
+                        return '-';
+                      })(),  // From inspection collection
+                      firePolicyEndDate: (() => {
+                        const date = matchingInsurance.firePolicyEndDate;
+                        console.log('Processing firePolicyEndDate:', date, 'type:', typeof date);
+                        if (date) {
+                          if (typeof date === 'string' || typeof date === 'number') {
+                            const formatted = new Date(date).toLocaleDateString();
+                            console.log('Formatted firePolicyEndDate:', formatted);
+                            return formatted;
+                          } else if (date instanceof Date) {
+                            const formatted = date.toLocaleDateString();
+                            console.log('Formatted firePolicyEndDate (Date object):', formatted);
+                            return formatted;
+                          } else if (date && typeof date === 'object' && date.toDate) {
+                            // Handle Firestore Timestamp
+                            const formatted = date.toDate().toLocaleDateString();
+                            console.log('Formatted firePolicyEndDate (Firestore Timestamp):', formatted);
+                            return formatted;
+                          }
+                        }
+                        console.log('FirePolicyEndDate returning "-"');
+                        return '-';
+                      })(),    // From inspection collection
+                      burglaryPolicyStartDate: (() => {
+                        const date = matchingInsurance.burglaryPolicyStartDate;
+                        console.log('Processing burglaryPolicyStartDate:', date, 'type:', typeof date);
+                        if (date) {
+                          if (typeof date === 'string' || typeof date === 'number') {
+                            const formatted = new Date(date).toLocaleDateString();
+                            console.log('Formatted burglaryPolicyStartDate:', formatted);
+                            return formatted;
+                          } else if (date instanceof Date) {
+                            const formatted = date.toLocaleDateString();
+                            console.log('Formatted burglaryPolicyStartDate (Date object):', formatted);
+                            return formatted;
+                          } else if (date && typeof date === 'object' && date.toDate) {
+                            // Handle Firestore Timestamp
+                            const formatted = date.toDate().toLocaleDateString();
+                            console.log('Formatted burglaryPolicyStartDate (Firestore Timestamp):', formatted);
+                            return formatted;
+                          }
+                        }
+                        console.log('BurglaryPolicyStartDate returning "-"');
+                        return '-';
+                      })(),  // From inspection collection
+                      burglaryPolicyEndDate: (() => {
+                        const date = matchingInsurance.burglaryPolicyEndDate;
+                        console.log('Processing burglaryPolicyEndDate:', date, 'type:', typeof date);
+                        if (date) {
+                          if (typeof date === 'string' || typeof date === 'number') {
+                            const formatted = new Date(date).toLocaleDateString();
+                            console.log('Formatted burglaryPolicyEndDate:', formatted);
+                            return formatted;
+                          } else if (date instanceof Date) {
+                            const formatted = date.toLocaleDateString();
+                            console.log('Formatted burglaryPolicyEndDate (Date object):', formatted);
+                            return formatted;
+                          } else if (date && typeof date === 'object' && date.toDate) {
+                            // Handle Firestore Timestamp
+                            const formatted = date.toDate().toLocaleDateString();
+                            console.log('Formatted burglaryPolicyEndDate (Firestore Timestamp):', formatted);
+                            return formatted;
+                          }
+                        }
+                        console.log('BurglaryPolicyEndDate returning "-"');
+                        return '-';
+                      })(),    // From inspection collection
+                      firePolicyName: matchingInsurance.firePolicyCompanyName || '-',        // From inspection collection
+                      burglaryPolicyName: matchingInsurance.burglaryPolicyCompanyName || '-', // From inspection collection
+                      bankFundedBy: matchingInsurance.selectedBankName || '-'                // From inspection collection
+                    };
+                    
+                    console.log('Insurance data extracted from inspection collection for inward:', data.inwardId, {
+                      firePolicyAmount: insuranceData.firePolicyAmount,
+                      burglaryPolicyAmount: insuranceData.burglaryPolicyAmount,
+                      firePolicyStartDate: insuranceData.firePolicyStartDate,
+                      firePolicyEndDate: insuranceData.firePolicyEndDate,
+                      burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate,
+                      burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate,
+                      firePolicyName: insuranceData.firePolicyName,
+                      burglaryPolicyName: insuranceData.burglaryPolicyName,
+                      bankFundedBy: insuranceData.bankFundedBy
+                    });
+                  } else {
+                    console.log('No matching insurance found for inward:', data.inwardId, 'selectedInsurance:', data.selectedInsurance);
+                    console.log('Available insurance entries in inspection:', insuranceEntries.map(ins => ({
+                      insuranceId: ins.insuranceId,
+                      insuranceTakenBy: ins.insuranceTakenBy
+                    })));
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error fetching insurance data for inward entry:', data.inwardId, error);
+            }
+          } else {
+            console.log('No selectedInsurance data for inward:', data.inwardId);
+          }
+          
+          return { 
+            ...data, 
+            id: doc.id, 
+            receiptType,
+            ...insuranceData
+          };
         })
       );
       
-      console.log('Final inward data with receipt types:', inwardDataWithReceiptType);
+      console.log('Final inward data with receipt types and insurance data:', inwardDataWithReceiptType);
       setInwardData(inwardDataWithReceiptType);
 
       // States from branches
@@ -880,19 +1088,7 @@ export default function InwardPage() {
     }
     // Debug log
     console.log('DEBUG: Selected insurance entry:', debugSelectedInsurance);
-    // If insurance type is selected, require a valid insurance entry
-    if ((selectedInsuranceInfoIndex !== null || selectedInsuranceIndex !== null) && (!selectedInsuranceMeta || !selectedInsuranceMeta.insuranceTakenBy || !selectedInsuranceMeta.insuranceId)) {
-      let missingFields = [];
-      if (!selectedInsuranceMeta?.insuranceTakenBy) missingFields.push('insuranceTakenBy');
-      if (!selectedInsuranceMeta?.insuranceId) missingFields.push('insuranceId');
-      toast({
-        title: "Error",
-        description: `Please select a valid insurance entry for the selected insurance type. Missing: ${missingFields.join(', ')}. Check your inspection insurance data in Firestore if this persists.`,
-        variant: "destructive",
-      });
-      setIsUploading(false);
-      return;
-    }
+    // Insurance validation removed - allowing updates without insurance selection
 
     // --- Ensure all date fields are strings ---
     allEntries = allEntries.map(entry => ({
@@ -930,11 +1126,23 @@ export default function InwardPage() {
       
       if (isEditMode && editingRow) {
         // Update existing document
+        console.log('Starting update for editingRow:', editingRow.inwardId);
         const q = query(inwardCollection, where('inwardId', '==', editingRow.inwardId));
         const querySnapshot = await getDocs(q);
         
+        console.log('Query result:', querySnapshot.empty ? 'No documents found' : `${querySnapshot.docs.length} documents found`);
+        
         if (!querySnapshot.empty) {
           const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+          console.log('Document reference:', docRef.path);
+          
+          // Check if document exists before updating
+          const docSnap = await getDoc(docRef);
+          if (!docSnap.exists()) {
+            throw new Error(`Document with ID ${querySnapshot.docs[0].id} does not exist`);
+          }
+          console.log('Document exists, proceeding with update');
+          
           const { id, labResultsValidation, ...entryData } = allEntries[0]; // remove client-side id and validation state
 
           // Replace empty string fields with a hyphen
@@ -945,19 +1153,54 @@ export default function InwardPage() {
             ])
           );
 
-          await updateDoc(docRef, {
-            ...sanitizedData,
+          console.log('Sanitized data keys:', Object.keys(sanitizedData));
+          console.log('Selected insurance meta:', selectedInsuranceMeta);
+
+          // Clean selectedInsurance to remove undefined values
+          const cleanSelectedInsurance = selectedInsuranceMeta ? {
+            insuranceTakenBy: selectedInsuranceMeta.insuranceTakenBy || null,
+            insuranceId: selectedInsuranceMeta.insuranceId || null,
+          } : null;
+
+          // Remove insurance-related fields from update data to prevent insurance data changes
+          const { 
+            insuranceManagedBy,
+            firePolicyNumber,
+            firePolicyAmount,
+            firePolicyStart,
+            firePolicyEnd,
+            burglaryPolicyNumber,
+            burglaryPolicyAmount,
+            burglaryPolicyStart,
+            burglaryPolicyEnd,
+            firePolicyCompanyName,
+            burglaryPolicyCompanyName,
+            firePolicyBalance,
+            burglaryPolicyBalance,
+            bankFundedBy,
+            ...nonInsuranceData
+          } = sanitizedData;
+
+          const updateData = {
+            ...nonInsuranceData,
             attachmentUrl: uploadedFileUrl,
             updatedAt: new Date().toISOString(),
             labResults: allEntries[0].labResults || [],
-            selectedInsurance: selectedInsuranceMeta,
-          });
+            // Keep the existing selectedInsurance without changes
+            selectedInsurance: editingRow.selectedInsurance || null,
+          };
+
+          console.log('About to update document with data:', updateData);
+          await updateDoc(docRef, updateData);
+          console.log('Document updated successfully');
           
           toast({
             title: "Success",
             description: "Inward entry updated successfully.",
             variant: "default",
           });
+        } else {
+          throw new Error(`No document found with inwardId: ${editingRow.inwardId}`);
         }
       } else {
         // Create new documents
@@ -973,13 +1216,19 @@ export default function InwardPage() {
             ])
           );
 
+          // Clean selectedInsurance to remove undefined values
+          const cleanSelectedInsurance = selectedInsuranceMeta ? {
+            insuranceTakenBy: selectedInsuranceMeta.insuranceTakenBy || null,
+            insuranceId: selectedInsuranceMeta.insuranceId || null,
+          } : null;
+
           await addDoc(inwardCollection, {
             ...sanitizedData,
             attachmentUrl: uploadedFileUrl,
             inwardId,
             createdAt: new Date().toISOString(),
             labResults: entry.labResults || [],
-            selectedInsurance: selectedInsuranceMeta,
+            selectedInsurance: cleanSelectedInsurance,
             status: 'pending', // <-- set default status
           });
         }
@@ -991,18 +1240,8 @@ export default function InwardPage() {
         });
       }
       
-      handleModalClose();
-      setDataVersion(v => v + 1);
-    } catch (error) {
-      console.error('Error saving inward entries to Firebase:', error);
-      toast({
-        title: "Error",
-        description: "Error saving inward entries to Firebase. Please try again.",
-        variant: "destructive",
-      });
-    }
-
-    // After saving inward entry, update inspection insurance entry
+      // After saving inward entry, update inspection insurance entry (moved inside try-catch)
+      try {
     if (selectedInsuranceIndex !== null) {
       const ins = insuranceEntries[selectedInsuranceIndex];
       const newRemainingFire = (parseFloat(initialRemainingFire) - parseFloat(baseForm.totalValue || '0')).toFixed(2);
@@ -1055,11 +1294,8 @@ export default function InwardPage() {
       
       // Update source collections (clients or agrogreen) based on sourceDocumentId and insuranceId
       if (ins.sourceDocumentId && ins.insuranceId) {
-        try {
           if (ins.sourceCollection === 'clients') {
             // Update client insurance
-            try {
-              // Use the sourceDocumentId directly as the document ID
               const clientDocRef = doc(db, 'clients', ins.sourceDocumentId);
               const clientDocSnap = await getDoc(clientDocRef);
               
@@ -1067,85 +1303,37 @@ export default function InwardPage() {
                 const clientData = clientDocSnap.data() as any;
                 const insurances = clientData.insurances || [];
                 
-                // Debug the current data structure
-                await debugClientInsuranceData(ins.sourceDocumentId, ins.insuranceId);
-                
                 // Find and update the specific insurance
                 const updatedInsurances = insurances.map((insurance: any) => {
                   if (insurance.insuranceId === ins.insuranceId) {
-                    console.log('=== UPDATING CLIENT INSURANCE ===');
-                    console.log('Insurance ID:', insurance.insuranceId);
-                    console.log('BEFORE UPDATE - Current values:');
-                    console.log('  firePolicyAmount:', insurance.firePolicyAmount);
-                    console.log('  burglaryPolicyAmount:', insurance.burglaryPolicyAmount);
-                    console.log('  remainingFirePolicyAmount:', insurance.remainingFirePolicyAmount);
-                    console.log('  remainingBurglaryPolicyAmount:', insurance.remainingBurglaryPolicyAmount);
-                    console.log('NEW VALUES TO SET:');
-                    console.log('  firePolicyAmount ->', newRemainingFire);
-                    console.log('  burglaryPolicyAmount ->', newRemainingBurglary);
-                    
-                    const updatedInsurance = {
+                    return {
                       ...insurance,
-                      // DIRECT UPDATE: Set original policy amounts to calculated remaining amounts
                       firePolicyAmount: newRemainingFire,
                       burglaryPolicyAmount: newRemainingBurglary,
-                      // Also update remaining amounts for consistency
                       remainingFirePolicyAmount: newRemainingFire,
                       remainingBurglaryPolicyAmount: newRemainingBurglary,
                     };
-                    
-                    console.log('AFTER UPDATE - New values:');
-                    console.log('  firePolicyAmount:', updatedInsurance.firePolicyAmount);
-                    console.log('  burglaryPolicyAmount:', updatedInsurance.burglaryPolicyAmount);
-                    console.log('  remainingFirePolicyAmount:', updatedInsurance.remainingFirePolicyAmount);
-                    console.log('  remainingBurglaryPolicyAmount:', updatedInsurance.remainingBurglaryPolicyAmount);
-                    console.log('=== END UPDATE ===');
-                    
-                    return updatedInsurance;
                   }
                   return insurance;
                 });
                 
-                console.log('Total insurances in array:', updatedInsurances.length);
-                console.log('Updated insurances array:', updatedInsurances);
-                
-                // Perform the database update
-                console.log('Updating client document with new insurance data...');
                 await updateDoc(clientDocRef, {
                   insurances: updatedInsurances
                 });
-                console.log('✅ Database update completed successfully');
-              } else {
-                console.error('Client document not found with ID:', ins.sourceDocumentId);
-              }
-            } catch (error) {
-              console.error('Error updating client insurance:', error);
             }
           } else if (ins.sourceCollection === 'agrogreen') {
             // Update Agrogreen insurance
-            try {
-              // Use the sourceDocumentId directly as the document ID
               const agrogreenDocRef = doc(db, 'agrogreen', ins.sourceDocumentId);
               const agrogreenDocSnap = await getDoc(agrogreenDocRef);
               
               if (agrogreenDocSnap.exists()) {
                 await updateDoc(agrogreenDocRef, {
-                  // Update both the original policy amounts and remaining amounts
                   firePolicyAmount: newRemainingFire,
                   burglaryPolicyAmount: newRemainingBurglary,
                   remainingFirePolicyAmount: newRemainingFire,
                   remainingBurglaryPolicyAmount: newRemainingBurglary,
                 });
-                console.log('Successfully updated Agrogreen insurance policy and remaining amounts');
-              } else {
-                console.error('Agrogreen document not found with ID:', ins.sourceDocumentId);
               }
-            } catch (error) {
-              console.error('Error updating Agrogreen insurance:', error);
-            }
-          }
-        } catch (error) {
-          console.error('Error updating source insurance:', error);
         }
       }
       
@@ -1172,6 +1360,45 @@ export default function InwardPage() {
         });
         await updateDoc(docRef, { insuranceEntries: updatedList });
       }
+        }
+      } catch (insuranceError) {
+        console.error('Error updating insurance data:', insuranceError);
+        // Don't fail the entire operation if insurance update fails
+        toast({
+          title: "Warning",
+          description: "Inward entry saved successfully, but there was an issue updating insurance data.",
+          variant: "default",
+        });
+      }
+      
+      handleModalClose();
+      setDataVersion(v => v + 1);
+    } catch (error: any) {
+      console.error('Error saving inward entries to Firebase:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack
+      });
+      
+      // More specific error messages based on error type
+      let errorMessage = "Error saving inward entries to Firebase. Please try again.";
+      
+      if (error?.code === 'permission-denied') {
+        errorMessage = "Permission denied. Please check your authentication.";
+      } else if (error?.code === 'unavailable') {
+        errorMessage = "Firebase service is temporarily unavailable. Please try again.";
+      } else if (error?.code === 'not-found') {
+        errorMessage = "Document not found. Please refresh and try again.";
+      } else if (error?.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
   };
 
@@ -1522,7 +1749,25 @@ export default function InwardPage() {
     { accessorKey: "ifscCode", header: "IFSC Code" },
     { accessorKey: "bankReceipt", header: "Base Receipt" },
     // Insurance details
-    { accessorKey: "insuranceManagedBy", header: "Insurance Managed By" },
+    { 
+      accessorKey: "selectedInsurance", 
+      header: "Insurance Managed By",
+      cell: ({ row }: any) => {
+        const selectedInsurance = row.original.selectedInsurance;
+        if (selectedInsurance && selectedInsurance.insuranceTakenBy) {
+          return selectedInsurance.insuranceTakenBy;
+        }
+        return row.original.insuranceManagedBy || '-';
+      }
+    },
+    { accessorKey: "firePolicyAmount", header: "Fire Policy Amount" },
+    { accessorKey: "burglaryPolicyAmount", header: "Burglary Policy Amount" },
+    { accessorKey: "firePolicyStartDate", header: "Fire Policy Start Date" },
+    { accessorKey: "firePolicyEndDate", header: "Fire Policy End Date" },
+    { accessorKey: "burglaryPolicyStartDate", header: "Burglary Policy Start Date" },
+    { accessorKey: "burglaryPolicyEndDate", header: "Burglary Policy End Date" },
+    { accessorKey: "firePolicyName", header: "Fire Policy Name" },
+    { accessorKey: "burglaryPolicyName", header: "Burglary Policy Name" },
     { accessorKey: "bankFundedBy", header: "Bank Funded By" },
     // Add status column
     {
@@ -1624,6 +1869,22 @@ export default function InwardPage() {
       }
       if (accessorKey === 'labResults' && Array.isArray(value)) {
         return value.join(', ');
+      }
+      // Handle insurance data that might be undefined
+      if (accessorKey === 'firePolicyAmount' || accessorKey === 'burglaryPolicyAmount' || 
+          accessorKey === 'firePolicyStartDate' || accessorKey === 'firePolicyEndDate' ||
+          accessorKey === 'burglaryPolicyStartDate' || accessorKey === 'burglaryPolicyEndDate' ||
+          accessorKey === 'firePolicyName' || accessorKey === 'burglaryPolicyName' ||
+          accessorKey === 'bankFundedBy') {
+        return value ?? '-';
+      }
+      // Handle selectedInsurance column
+      if (accessorKey === 'selectedInsurance') {
+        const selectedInsurance = row.selectedInsurance;
+        if (selectedInsurance && selectedInsurance.insuranceTakenBy) {
+          return selectedInsurance.insuranceTakenBy;
+        }
+        return row.insuranceManagedBy || '-';
       }
       return value ?? '';
     };
@@ -1847,6 +2108,18 @@ export default function InwardPage() {
           ins.insuranceId === row.selectedInsurance.insuranceId &&
           ins.insuranceTakenBy === row.selectedInsurance.insuranceTakenBy
       );
+      
+      console.log('=== EDIT MODE INSURANCE DEBUG ===');
+      console.log('Row selectedInsurance:', row.selectedInsurance);
+      console.log('Found insurance match:', match);
+      console.log('Insurance data types:', {
+        firePolicyAmount: match?.firePolicyAmount,
+        firePolicyAmountType: typeof match?.firePolicyAmount,
+        burglaryPolicyAmount: match?.burglaryPolicyAmount,
+        burglaryPolicyAmountType: typeof match?.burglaryPolicyAmount
+      });
+      console.log('=== END EDIT MODE INSURANCE DEBUG ===');
+      
       setYourInsurance(match || null);
     } else {
       setYourInsurance(null);
@@ -1891,6 +2164,11 @@ export default function InwardPage() {
     setSelectedRowForSR(row);
     setShowSRForm(true);
     setRemarks(row.remarks || '');
+    if (row.srGenerationDate) {
+      setSrGenerationDate(row.srGenerationDate);
+    } else {
+      setSrGenerationDate('');
+    }
     
     // Fetch insurance data from inspection collection
     try {
@@ -1958,20 +2236,22 @@ export default function InwardPage() {
       });
       return;
     }
-    // Update status in Firestore
+    // Update status and srGenerationDate in Firestore
+    const today = new Date();
+    const todayISO = today.toISOString().slice(0, 10);
     try {
       const inwardCollection = collection(db, 'inward');
       const q = query(inwardCollection, where('inwardId', '==', sr.inwardId));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'approve' });
+        await updateDoc(docRef, { status: 'approve', srGenerationDate: todayISO });
       }
     } catch (error) {
       console.error('Error updating status to approve:', error);
     }
     setIsFormApproved(true);
-    setSrGenerationDate(new Date().toLocaleDateString());
+    setSrGenerationDate(todayISO);
     toast({
       title: 'Approved Successfully',
       description: 'The receipt has been approved and is now ready for printing.',
@@ -2140,6 +2420,12 @@ export default function InwardPage() {
     setSelectedInsuranceInfoIndex(idx);
     const ins = filteredInsuranceInfoEntries[idx];
     
+    console.log('=== INSURANCE SELECTION DEBUG ===');
+    console.log('Selected insurance index:', idx);
+    console.log('Selected insurance data:', ins);
+    console.log('Fire Policy Amount (raw):', ins?.firePolicyAmount, 'Type:', typeof ins?.firePolicyAmount);
+    console.log('Burglary Policy Amount (raw):', ins?.burglaryPolicyAmount, 'Type:', typeof ins?.burglaryPolicyAmount);
+    
     try {
       let foundInsurance = null;
       
@@ -2168,6 +2454,9 @@ export default function InwardPage() {
                 const initialFire = foundInsurance.remainingFirePolicyAmount || foundInsurance.firePolicyAmount || ins.firePolicyAmount || '';
                 const initialBurglary = foundInsurance.remainingBurglaryPolicyAmount || foundInsurance.burglaryPolicyAmount || ins.burglaryPolicyAmount || '';
                 
+                console.log('Client insurance - Initial Fire:', initialFire, 'Type:', typeof initialFire);
+                console.log('Client insurance - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
+                
                 setInitialRemainingFire(initialFire);
                 setInitialRemainingBurglary(initialBurglary);
               } else {
@@ -2193,6 +2482,9 @@ export default function InwardPage() {
                 // Use remaining amounts from Agrogreen insurance if available, otherwise use policy amounts
                 const initialFire = foundInsurance.remainingFirePolicyAmount || foundInsurance.firePolicyAmount || ins.firePolicyAmount || '';
                 const initialBurglary = foundInsurance.remainingBurglaryPolicyAmount || foundInsurance.burglaryPolicyAmount || ins.burglaryPolicyAmount || '';
+                
+                console.log('Agrogreen insurance - Initial Fire:', initialFire, 'Type:', typeof initialFire);
+                console.log('Agrogreen insurance - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
                 
                 setInitialRemainingFire(initialFire);
                 setInitialRemainingBurglary(initialBurglary);
@@ -2221,9 +2513,14 @@ export default function InwardPage() {
           }
           const firestoreIns = insuranceList.find((i: any) => i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber);
           
+          console.log('Found Firestore insurance:', firestoreIns);
+          
           // Use remaining values if they exist, otherwise use policy amounts
           const initialFire = firestoreIns?.remainingFirePolicyAmount || ins.firePolicyAmount || '';
           const initialBurglary = firestoreIns?.remainingBurglaryPolicyAmount || ins.burglaryPolicyAmount || '';
+          
+          console.log('Fallback - Initial Fire:', initialFire, 'Type:', typeof initialFire);
+          console.log('Fallback - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
           
           setInitialRemainingFire(initialFire);
           setInitialRemainingBurglary(initialBurglary);
@@ -2231,6 +2528,9 @@ export default function InwardPage() {
           // If no Firestore data, use policy amounts
           const initialFire = ins.firePolicyAmount || '';
           const initialBurglary = ins.burglaryPolicyAmount || '';
+          
+          console.log('No Firestore data - Initial Fire:', initialFire, 'Type:', typeof initialFire);
+          console.log('No Firestore data - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
           
           setInitialRemainingFire(initialFire);
           setInitialRemainingBurglary(initialBurglary);
@@ -2242,9 +2542,13 @@ export default function InwardPage() {
       const initialFire = ins.firePolicyAmount || '';
       const initialBurglary = ins.burglaryPolicyAmount || '';
       
+      console.log('Error fallback - Initial Fire:', initialFire, 'Type:', typeof initialFire);
+      console.log('Error fallback - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
+      
       setInitialRemainingFire(initialFire);
       setInitialRemainingBurglary(initialBurglary);
     }
+    console.log('=== END INSURANCE SELECTION DEBUG ===');
   };
 
   // Debug function to examine client insurance data structure
@@ -2289,6 +2593,24 @@ export default function InwardPage() {
     } catch (error) {
       console.error('Error debugging client insurance data:', error);
     }
+  };
+
+  // Helper function to format amount values
+  const formatAmount = (amount: any): string => {
+    if (amount === null || amount === undefined || amount === '') {
+      return '0.00';
+    }
+    
+    // Convert to number if it's a string
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+    
+    // Check if it's a valid number
+    if (isNaN(numAmount)) {
+      console.warn('Invalid amount value:', amount, 'Type:', typeof amount);
+      return '0.00';
+    }
+    
+    return numAmount.toFixed(2);
   };
 
   // Recalculate remaining amounts when total value or initial amounts change
@@ -2519,6 +2841,24 @@ export default function InwardPage() {
                         console.error('Error fetching insurance data from inspection:', error);
                       }
                     }
+                    
+                    // Debug insurance entries before setting
+                    console.log('=== INSURANCE ENTRIES DEBUG ===');
+                    console.log('Warehouse:', warehouseName);
+                    console.log('Insurance entries count:', insuranceEntries.length);
+                    insuranceEntries.forEach((entry: any, index: number) => {
+                      console.log(`Entry ${index + 1}:`, {
+                        id: entry.id,
+                        insuranceId: entry.insuranceId,
+                        firePolicyAmount: entry.firePolicyAmount,
+                        firePolicyAmountType: typeof entry.firePolicyAmount,
+                        burglaryPolicyAmount: entry.burglaryPolicyAmount,
+                        burglaryPolicyAmountType: typeof entry.burglaryPolicyAmount,
+                        firePolicyNumber: entry.firePolicyNumber,
+                        burglaryPolicyNumber: entry.burglaryPolicyNumber
+                      });
+                    });
+                    console.log('=== END INSURANCE ENTRIES DEBUG ===');
                     
                     setInsuranceEntries(insuranceEntries);
                     console.log('Insurance entries set for warehouse:', warehouseName, insuranceEntries);
@@ -2800,69 +3140,8 @@ export default function InwardPage() {
               </div>
             )}
 
-            {/* Your Insurance Section */}
-            {isEditMode && (
-              <div className="border-t pt-6 mb-6">
-                <h3 className="text-xl font-semibold mb-4 text-blue-700">Your Insurance</h3>
-                {yourInsurance ? (
-                  <div className="border border-blue-200 rounded-lg p-6 bg-blue-50">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-lg font-medium text-blue-700">Insurance ID: {yourInsurance.insuranceId}</h4>
-                      <div className="text-sm text-blue-600 font-medium">
-                        {yourInsurance.insuranceTakenBy} - {yourInsurance.insuranceCommodity}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <Label className="block font-semibold mb-1">Insurance Taken By</Label>
-                        <Input value={yourInsurance.insuranceTakenBy || ''} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Commodity</Label>
-                        <Input value={yourInsurance.insuranceCommodity || ''} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy Number</Label>
-                        <Input value={yourInsurance.firePolicyNumber || ''} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
-                        <Input value={yourInsurance.firePolicyAmount || ''} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
-                        <Input value={normalizeDate(yourInsurance.firePolicyStartDate)} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
-                        <Input value={normalizeDate(yourInsurance.firePolicyEndDate)} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
-                        <Input value={yourInsurance.burglaryPolicyNumber || ''} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
-                        <Input value={yourInsurance.burglaryPolicyAmount || ''} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
-                        <Input value={normalizeDate(yourInsurance.burglaryPolicyStartDate)} readOnly />
-                      </div>
-                      <div>
-                        <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
-                        <Input value={normalizeDate(yourInsurance.burglaryPolicyEndDate)} readOnly />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-gray-500">No insurance found for this inward entry.</div>
-                )}
-              </div>
-            )}
-
-            {/* Insurance Information */}
-            {insuranceEntries.length > 0 && (
+            {/* Insurance Information (From Inspection Module) */}
+            {!isEditMode && insuranceEntries.length > 0 && (
               <div className="border-t pt-6">
                 <h3 className="text-xl font-semibold mb-6 text-orange-700">Insurance Information (From Inspection Module)</h3>
                 
@@ -2898,7 +3177,7 @@ export default function InwardPage() {
                       <SelectContent>
                         {filteredInsuranceInfoEntries.map((ins: any, idx: number) => (
                           <SelectItem key={ins.id || idx} value={String(idx)}>
-                            {ins.insuranceId || 'N/A'} - {ins.firePolicyNumber} / {ins.burglaryPolicyNumber} (Fire: {ins.firePolicyAmount}, Burglary: {ins.burglaryPolicyAmount})
+                            {ins.insuranceId || 'N/A'} - {ins.firePolicyNumber} / {ins.burglaryPolicyNumber} (Fire: {formatAmount(ins.firePolicyAmount)}, Burglary: {formatAmount(ins.burglaryPolicyAmount)})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2965,7 +3244,7 @@ export default function InwardPage() {
                                 </div>
                                 <div>
                                   <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
-                                  <Input value={insurance.firePolicyAmount || ''} readOnly placeholder="Auto-filled from inspection" />
+                                  <Input value={formatAmount(insurance.firePolicyAmount)} readOnly placeholder="Auto-filled from inspection" />
                                 </div>
                                 <div>
                                   <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
@@ -2979,7 +3258,7 @@ export default function InwardPage() {
                                   <>
                                     <div>
                                       <Label className="block font-semibold mb-1">Remaining Fire Policy Amount</Label>
-                                      <Input value={initialRemainingFire || '0'} readOnly className="bg-green-50" />
+                                      <Input value={formatAmount(initialRemainingFire)} readOnly className="bg-green-50" />
                                     </div>
                                     <div>
                                       <Label className="block font-semibold mb-1">Update Remaining Fire Policy Amount</Label>
@@ -3001,7 +3280,7 @@ export default function InwardPage() {
                                 </div>
                                 <div>
                                   <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
-                                  <Input value={insurance.burglaryPolicyAmount || ''} readOnly placeholder="Auto-filled from inspection" />
+                                  <Input value={formatAmount(insurance.burglaryPolicyAmount)} readOnly placeholder="Auto-filled from inspection" />
                                 </div>
                                 <div>
                                   <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
@@ -3015,7 +3294,7 @@ export default function InwardPage() {
                                   <>
                                     <div>
                                       <Label className="block font-semibold mb-1">Remaining Burglary Policy Amount</Label>
-                                      <Input value={initialRemainingBurglary || '0'} readOnly className="bg-green-50" />
+                                      <Input value={formatAmount(initialRemainingBurglary)} readOnly className="bg-green-50" />
                                     </div>
                                     <div>
                                       <Label className="block font-semibold mb-1">Update Remaining Burglary Policy Amount</Label>
@@ -3043,6 +3322,80 @@ export default function InwardPage() {
                 )}
               </div>
             )}
+
+            {!isEditMode && form.commodity && insuranceEntries.length === 0 && (
+              <div className="border-t pt-4">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-yellow-800 text-sm">
+                    <strong>Note:</strong> No insurance data found for this warehouse in the inspection module. 
+                    Please ensure insurance data exists in the Warehouse Inspection section.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Your Insurance Section */}
+            {isEditMode && (
+              <div className="border-t pt-6 mb-6">
+                <h3 className="text-xl font-semibold mb-4 text-blue-700">Your Insurance</h3>
+                {yourInsurance ? (
+                  <div className="border border-blue-200 rounded-lg p-6 bg-blue-50">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-medium text-blue-700">Insurance ID: {yourInsurance.insuranceId}</h4>
+                      <div className="text-sm text-blue-600 font-medium">
+                        {yourInsurance.insuranceTakenBy} - {yourInsurance.insuranceCommodity}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <Label className="block font-semibold mb-1">Insurance Taken By</Label>
+                        <Input value={yourInsurance.insuranceTakenBy || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Commodity</Label>
+                        <Input value={yourInsurance.insuranceCommodity || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Number</Label>
+                        <Input value={yourInsurance.firePolicyNumber || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
+                        <Input value={formatAmount(yourInsurance.firePolicyAmount)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
+                        <Input value={normalizeDate(yourInsurance.firePolicyStartDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
+                        <Input value={normalizeDate(yourInsurance.firePolicyEndDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
+                        <Input value={yourInsurance.burglaryPolicyNumber || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
+                        <Input value={formatAmount(yourInsurance.burglaryPolicyAmount)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
+                        <Input value={normalizeDate(yourInsurance.burglaryPolicyStartDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
+                        <Input value={normalizeDate(yourInsurance.burglaryPolicyEndDate)} readOnly />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500">No insurance found for this inward entry.</div>
+                )}
+              </div>
+            )}
+
+
 
             {form.commodity && insuranceEntries.length === 0 && (
               <div className="border-t pt-4">
@@ -3488,22 +3841,18 @@ export default function InwardPage() {
               603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
             </div>
             <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
-              Stock Receipt
+              {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt' : 'Storage Receipt'}
             </div>
           </div>
           <DialogHeader>
             <DialogTitle className="text-green-700 text-xl">
-              {/* {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt View' : 'Stock Receipt View'} */}
+              {/* {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt View' : 'Storage Receipt View'} */}
             </DialogTitle>
           </DialogHeader>
           {selectedRowForSR && (
             <div className="space-y-4">
               {/* CAD No and SR/WR No */}
               <div className="flex gap-4">
-                <div className="flex-1">
-                  <Label className="font-semibold">CAD No</Label>
-                  <Input value={selectedRowForSR.cadNumber || ''} readOnly />
-                </div>
                 <div className="flex-1">
                   <Label className="font-semibold">{selectedRowForSR.receiptType === 'WR' ? 'WR No' : 'SR No'}</Label>
                   <Input value={selectedRowForSR.srNo || `${selectedRowForSR.receiptType === 'WR' ? 'WR' : 'SR'}-${selectedRowForSR.inwardId || 'XXX'}-${selectedRowForSR.dateOfInward ? selectedRowForSR.dateOfInward.replace(/-/g, '') : ''}`} readOnly />
@@ -3512,77 +3861,158 @@ export default function InwardPage() {
                   <Label className="font-semibold">{selectedRowForSR.receiptType === 'WR' ? 'WR Generation Date' : 'SR Generation Date'}</Label>
                   <Input value={selectedRowForSR.srGenerationDate || ''} readOnly placeholder="Auto-set on Approve" />
                 </div>
+                <div className="flex-1">
+                  <Label className="font-semibold">CAD No</Label>
+                  <Input value={selectedRowForSR.cadNumber || ''} readOnly />
+                </div>
               </div>
               {/* Stock Inward Date */}
               <div>
-                <Label className="font-semibold">Stock Inward Date</Label>
+                <Label className="font-semibold">Date of deposite</Label>
                 <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
               </div>
               {/* Bank, Warehouse, Client, Commodity Details */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="mt-6">
+                <Label className="font-semibold text-orange-500">Bank Details</Label>
+                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+                <div className="flex flex-wrap gap-4 items-center">
                 <div>
-                  <Label className="font-semibold">Bank Details</Label>
-                  <Input value={`Bank Name - ${selectedRowForSR.bankName || ''}`} readOnly className="mb-1" />
-                  <Input value={`Bank Branch - ${selectedRowForSR.bankBranch || ''}`} readOnly className="mb-1" />
-                  <Input value={`IFSC Code - ${selectedRowForSR.ifscCode || ''}`} readOnly />
+                    <Label className="text-sm font-medium">Bank Name</Label>
+                    <Input value={selectedRowForSR?.bankName || ''} readOnly className="text-sm mt-1 bg-white w-48" />
                 </div>
                 <div>
-                  <Label className="font-semibold">Warehouse Details</Label>
-                  <Input value={`Warehouse Name - ${selectedRowForSR.warehouseName || ''}`} readOnly className="mb-1" />
-                  <Input value={`Warehouse Code - ${selectedRowForSR.warehouseCode || ''}`} readOnly className="mb-1" />
-                  <Input value={`Warehouse Address - ${selectedRowForSR.warehouseAddress || ''}`} readOnly />
+                    <Label className="text-sm font-medium">Bank Branch</Label>
+                    <Input value={selectedRowForSR?.bankBranch || ''} readOnly className="text-sm mt-1 bg-white w-48" />
                 </div>
                 <div>
-                  <Label className="font-semibold">Client Details</Label>
-                  <Input value={`Client Name - ${selectedRowForSR.client || ''}`} readOnly className="mb-1" />
-                  <Input value={`Client Code - ${selectedRowForSR.clientCode || ''}`} readOnly className="mb-1" />
-                  <Input value={`Client Address - ${selectedRowForSR.clientAddress || ''}`} readOnly />
+                    <Label className="text-sm font-medium">IFSC Code</Label>
+                    <Input value={selectedRowForSR?.ifscCode || ''} readOnly className="text-sm mt-1 bg-white w-48" />
                 </div>
+                </div>
+                </div>
+              </div>
+              <div className="mt-6">
+                <Label className="font-semibold text-orange-500">Warehouse Details</Label>
+                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+                <div className="flex flex-wrap gap-4 items-center">
                 <div>
-                  <Label className="font-semibold">Commodity Details</Label>
-                  <Input value={`Commodity - ${selectedRowForSR.commodity || ''}`} readOnly className="mb-1" />
-                  <Input value={`Variety - ${selectedRowForSR.varietyName || ''}`} readOnly />
+                    <Label className="text-sm font-medium">Warehouse Name</Label>
+                    <Input value={selectedRowForSR?.warehouseName || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Warehouse Code</Label>
+                    <Input value={selectedRowForSR?.warehouseCode || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Warehouse Address</Label>
+                    <Input value={selectedRowForSR?.warehouseAddress || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+                  </div>
+                </div>
+                </div>
+              </div>
+              <div className="mt-6">
+                <Label className="font-semibold text-orange-500">Client Details</Label>
+                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+                <div className="flex flex-wrap gap-4 items-center">
+                  <div>
+                    <Label className="text-sm font-medium">Client Name</Label>
+                    <Input value={selectedRowForSR?.client || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Client Code</Label>
+                    <Input value={selectedRowForSR?.clientCode || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Client Address</Label>
+                    <Input value={selectedRowForSR?.clientAddress || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+                  </div>
+                </div>
+                </div>
+              </div>
+              <div className="mt-6">
+                <Label className="font-semibold text-orange-500">Commodity Details</Label>
+                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium">Commodity</Label>
+                      <Input value={selectedRowForSR?.commodity || ''} readOnly className="text-sm mt-1 bg-white w-72" />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Variety</Label>
+                      <Input value={selectedRowForSR?.varietyName || ''} readOnly className="text-sm mt-1 bg-white w-72" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold">No. of Bags/Bales</Label>
+                      <Input value={selectedRowForSR.totalBags || ''} readOnly />
+                    </div>
+                    <div>
+                      <Label className="font-semibold">Total Quantity (MT)</Label>
+                      <Input value={selectedRowForSR.totalQuantity || ''} readOnly />
+                    </div>
+                    <div>
+                      <Label className="font-semibold">Total Value (Rs/MT)</Label>
+                      <Input value={`${selectedRowForSR.totalValue || ''}`} readOnly />
+                    </div>
+                    <div>
+                      <Label className="font-semibold">Market Rate (Rs/MT)</Label>
+                      <Input value={`${selectedRowForSR.marketRate || ''}`} readOnly />
+                    </div>
+                    <div>
+                      <Label className="font-semibold">Base Receipt Number</Label>
+                      <Input value={selectedRowForSR.bankReceipt || ''} readOnly />
+                                  </div>
+                    <div>
+                      <Label className="font-semibold">Value of Commodities (in words)</Label>
+                      <Input value={numberToWords(selectedRowForSR.totalValue)} readOnly />
+                    </div>
+                  </div>
                 </div>
               </div>
               {/* Bags and Quantity */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="font-semibold">No. of Bags</Label>
-                  <Input value={selectedRowForSR.totalBags || ''} readOnly />
-                </div>
-                <div>
-                  <Label className="font-semibold">Total Quantity (MT)</Label>
-                  <Input value={selectedRowForSR.totalQuantity || ''} readOnly />
-                </div>
-              </div>
+
               {/* Validity Dates */}
+             
+              
+              <div className="mt-4"></div>
+              <Label className="font-semibold text-orange-500">Stock Validity</Label>
               <div className="grid grid-cols-2 gap-4">
+                
                 <div>
                   <Label className="font-semibold">Validity Start Date</Label>
-                  <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
+                  <Input value={srGenerationDate || selectedRowForSR.srGenerationDate || ''} readOnly placeholder="Auto-set on Approve" />
                 </div>
                 <div>
-                  <Label className="font-semibold">Validity End Date (Insurance End)</Label>
-                  <Input value={(() => {
-                    // Get the earliest insurance end date from inspection data
-                    let dates: Date[] = [];
-                    for (const insurance of inspectionInsuranceData) {
-                      const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : null;
-                      const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : null;
-                      if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime())) dates.push(fireEndDate);
-                      if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime())) dates.push(burglaryEndDate);
+                  <Label className="font-semibold">Validity End Date</Label>
+                  <Input
+                    value={(() => {
+                      // Find insurance match
+                      let insurance = null;
+                      if (selectedRowForSR?.selectedInsurance && inspectionInsuranceData.length) {
+                        insurance = inspectionInsuranceData.find(
+                          (ins: any) =>
+                            ins.insuranceId === selectedRowForSR.selectedInsurance.insuranceId &&
+                            ins.insuranceTakenBy === selectedRowForSR.selectedInsurance.insuranceTakenBy
+                        );
                       }
-                    // Fallback to inward data if no inspection insurance found
-                    if (dates.length === 0) {
-                      const fireEnd = selectedRowForSR.firePolicyEnd ? new Date(selectedRowForSR.firePolicyEnd) : null;
-                      const burglaryEnd = selectedRowForSR.burglaryPolicyEnd ? new Date(selectedRowForSR.burglaryPolicyEnd) : null;
-                      if (fireEnd instanceof Date && !isNaN(fireEnd.getTime())) dates.push(fireEnd);
-                      if (burglaryEnd instanceof Date && !isNaN(burglaryEnd.getTime())) dates.push(burglaryEnd);
-                    }
-                    if (dates.length === 0) return '';
-                    const earliest = new Date(Math.min(...dates.map(d => d.getTime())));
-                    return earliest.toISOString().slice(0, 10);
-                  })()} readOnly placeholder="Auto-set on Approve" />
+                      // If insurance taken by bank, 9 months after WR Generation Date
+                      if (insurance && insurance.insuranceTakenBy === 'bank') {
+                        if (selectedRowForSR.srGenerationDate) {
+                          const start = new Date(selectedRowForSR.srGenerationDate);
+                          start.setMonth(start.getMonth() + 9);
+                          return start.toISOString().slice(0, 10);
+                        }
+                        return '';
+                      }
+                      // Otherwise, use fire policy end date
+                      if (insurance && insurance.firePolicyEndDate) {
+                        return normalizeDate(insurance.firePolicyEndDate);
+                      }
+                      // Fallback: empty
+                      return '';
+                    })()}
+                    readOnly
+                    placeholder="Auto-set on Approve"
+                  />
                 </div>
               </div>
               {/* Insurance Expiry Check */}
@@ -3591,29 +4021,21 @@ export default function InwardPage() {
                   Insurance is expired. Please update the end date before approval.
                 </div>
               )}
-                 <div className="grid grid-cols-2 gap-4 mt-2">
-                <div>
-                  <Label className="font-semibold">Total Value</Label>
-                  <Input value={`Total Value - ${selectedRowForSR.totalValue || ''}`} readOnly />
-                </div>
-                <div>
-                  <Label className="font-semibold">Total Rate</Label>
-                  <Input value={`Total Rate - ${selectedRowForSR.marketRate || ''}`} readOnly />
-                </div>
-              </div>
+                 
             
               {/* Hologram No and QR space */}
               <div className="flex items-center gap-4">
-                <div className="flex-1">
+                <div className="flex-1 max-w-xs">
                   <Label className="font-semibold">Hologram No</Label>
                   <Input 
                     placeholder="Enter Hologram No"
                     value={hologramNumber}
                     onChange={e => setHologramNumber(e.target.value)}
                     readOnly={isFormApproved}
+                    className="w-32"
                   />
                 </div>
-                <div className="w-40 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center ml-4">
+                <div className="w-64 h-32 border-2 border-dashed border-gray-400 flex items-center justify-center ml-4">
                   <span className="text-xs text-gray-400">QR Sticker Space</span>
                 </div>
               </div>
@@ -3633,7 +4055,7 @@ export default function InwardPage() {
                     return <div className="text-gray-500 text-sm">No insurance data found in inspection</div>;
                   }
                   return (
-                    <div className="border border-gray-200 rounded-lg p-4 mb-4">
+                    <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
                       {/* <h6 className="font-medium text-blue-600 mb-2">Insurance Entry</h6> */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -3703,7 +4125,18 @@ export default function InwardPage() {
                   );
                 })()}
                 {/* Signature block for Stock Receipt only, right after insurance details */}
-                {selectedRowForSR?.receiptType !== 'WR' && (
+                <div className="w-full flex justify-end mt-8 mb-2">
+                    <div className="flex flex-col items-end">
+                      <div className="w-56 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
+
+                        <span className="text-[10px] text-gray-400">Sign/Stamp</span>
+                      </div>
+                                                                    <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
+
+                      <div className="text-[10px] font-semibold">AUTHORIZED SIGNATORY</div>
+                    </div>
+                  </div>
+                {/* {selectedRowForSR?.receiptType !== 'WR' && (
                   <div className="w-full flex justify-end mt-8 mb-2">
                     <div className="flex flex-col items-end">
                       <div className="w-56 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
@@ -3715,7 +4148,7 @@ export default function InwardPage() {
                       <div className="text-[10px] font-semibold">AUTHORIZED SIGNATORY</div>
                     </div>
                   </div>
-                )}
+                )} */}
               </div>
               {/* Margin and Dotted Line */}
               <div className="my-8">
@@ -3841,7 +4274,7 @@ export default function InwardPage() {
                     {/* <div className="text-xs font-bold mb-1">Stamp</div> */}
                    
                     <div className="w-40 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
-                      <span className="text-[10px] text-gray-400">Sign</span>
+                      <span className="text-[10px] text-gray-400">Sign/Stamp</span>
                     </div>
  <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
                     <div className="text-[10px] font-semibold text-green-700">AUTHORIZED SIGNATORY</div>
@@ -3849,40 +4282,61 @@ export default function InwardPage() {
                 </div>
               </div>
               {/* Approve/Reject/Resubmit Buttons */}
-              {!isFormApproved && (
-                <div className="flex gap-4 mt-4 justify-end">
-                <Button
-                  onClick={() => handleApproveSR(selectedRowForSR)}
-                  disabled={isInsuranceExpired(selectedRowForSR)}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                      {selectedRowForSR.receiptType === 'WR' ? 'Proceed to WR' : 'Proceed to SR'}
-                </Button>
-                <Button
-                  onClick={() => handleRejectSR(selectedRowForSR)}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  Reject
-                </Button>
-                <Button
-                  onClick={() => handleResubmitSR(selectedRowForSR)}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
-                >
-                  Resubmit
-                </Button>
-              </div>
-              )}
-              {/* Print Button - Only show after approval */}
-              {isFormApproved && (
-                <div className="flex justify-end mt-4">
-                  <Button
-                    onClick={handlePrint}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
-                  >
-                    Print Receipt
-                  </Button>
-                </div>
-              )}
+              {(() => {
+                const status = selectedRowForSR?.status;
+                if (isFormApproved || status === 'approve') {
+                  return (
+                    <div className="flex justify-end mt-4">
+                      <Button
+                        onClick={handlePrint}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
+                      >
+                        Print Receipt
+                      </Button>
+                    </div>
+                  );
+                } else if (status === 'rejected') {
+                  return (
+                    <div className="flex justify-end mt-4">
+                      <Button disabled className="bg-red-600 text-white px-4 py-2 text-sm opacity-70 cursor-not-allowed">
+                        Rejected
+                      </Button>
+                    </div>
+                  );
+                } else if (status === 'resubmited') {
+                  return (
+                    <div className="flex justify-end mt-4">
+                      <Button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 text-sm">
+                        Your {selectedRowForSR?.receiptType === 'WR' ? 'WR' : 'SR'} needs to be updated
+                      </Button>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="flex gap-4 mt-4 justify-end">
+                      <Button
+                        onClick={() => handleApproveSR(selectedRowForSR)}
+                        disabled={isInsuranceExpired(selectedRowForSR)}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {selectedRowForSR.receiptType === 'WR' ? 'Proceed to WR' : 'Proceed to SR'}
+                      </Button>
+                      <Button
+                        onClick={() => handleRejectSR(selectedRowForSR)}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        onClick={() => handleResubmitSR(selectedRowForSR)}
+                        className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                      >
+                        Resubmit
+                      </Button>
+                    </div>
+                  );
+                }
+              })()}
               {/* Hidden printRef for PDF export */}
               {isFormApproved && (
                 <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
@@ -3966,10 +4420,76 @@ export default function InwardPage() {
               <div className="w-full max-w-2xl mx-auto text-xs text-gray-600 mt-8 mb-2 text-justify border-t pt-4">
                 This Report is given to you on the base of best tesing ability. Any discrepancy found in the report should be brought to our notice within 48 hours of Receipt of the report. The above results are valid for the date and time of sampling and testing only. Total liability or any claim arising out of this report is limited to the invoiced amount only.
               </div>
+              {/* Stock Validity section */}
+              {/* <div className="mt-4">
+                <Label className="font-semibold text-orange-500">Stock Validity</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="font-semibold">Validity Start Date</Label>
+                    <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
+                  </div>
+                  <div>
+                    <Label className="font-semibold">Validity End Date</Label>
+                    <Input value={(() => {
+                      // If insurance taken by bank, 9 months after start date
+                      if (selectedRowForSR.selectedInsurance?.insuranceTakenBy === 'bank') {
+                        const start = selectedRowForSR.dateOfInward ? new Date(selectedRowForSR.dateOfInward) : null;
+                        if (start && !isNaN(start.getTime())) {
+                          start.setMonth(start.getMonth() + 9);
+                          return start.toISOString().slice(0, 10);
+                        }
+                      }
+                      // Otherwise, use Fire Policy End Date
+                      const fireEnd = selectedRowForSR.firePolicyEnd || (inspectionInsuranceData.find(i => i.insuranceTakenBy !== 'bank')?.firePolicyEndDate);
+                      return fireEnd || '';
+                    })()} readOnly />
+                  </div>
+                </div>
+              </div> */}
             </div>
           )}
         </DialogContent>
       </Dialog>
     </DashboardLayout>
   );
+}
+
+// Add numberToWords helper at the top of the file
+function numberToWords(num: string | number): string {
+  if (!num) return '';
+  const n = parseInt(num.toString().replace(/,/g, ''));
+  if (isNaN(n)) return '';
+  if (n === 0) return 'zero';
+  const a = [
+    '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'
+  ];
+  const b = [
+    '', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'
+  ];
+  const g = [
+    '', 'thousand', 'million', 'billion', 'trillion'
+  ];
+  function chunk(num: number): number[] {
+    let arr: number[] = [];
+    while (num > 0) {
+      arr.push(num % 1000);
+      num = Math.floor(num / 1000);
+    }
+    return arr;
+  }
+  function inWords(num: number): string {
+    if (num === 0) return '';
+    if (num < 20) return a[num];
+    if (num < 100) return b[Math.floor(num / 10)] + (num % 10 ? ' ' + a[num % 10] : '');
+    return a[Math.floor(num / 100)] + ' hundred' + (num % 100 ? ' ' + inWords(num % 100) : '');
+  }
+  const chunks = chunk(n);
+  let str = '';
+  for (let i = 0; i < chunks.length; i++) {
+    if (chunks[i]) {
+      str = inWords(chunks[i]) + (g[i] ? ' ' + g[i] : '') + (str ? ' ' + str : '');
+    }
+  }
+  return str.trim() + ' only';
 }

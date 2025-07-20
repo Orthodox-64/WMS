@@ -12,25 +12,25 @@ const columns = [
   {
     accessorKey: "commodity",
     header: "Commodity",
-    cell: ({ row }: { row: Row<any> }) => <span className="font-semibold text-green-800">{row.getValue("commodity")}</span>,
+    cell: ({ row }: { row: Row<any> }) => <span className="font-semibold text-green-800 text-center w-full block">{row.getValue("commodity")}</span>,
   },
   {
     accessorKey: "variety",
     header: "Variety",
-    cell: ({ row }: { row: Row<any> }) => <span className="text-green-800">{row.getValue("variety")}</span>,
+    cell: ({ row }: { row: Row<any> }) => <span className="text-green-800 text-center w-full block">{row.getValue("variety")}</span>,
   },
   {
     accessorKey: "quantity",
     header: "Quantity (MT)",
-    cell: ({ row }: { row: Row<any> }) => <span className="text-green-800">{row.getValue("quantity")}</span>,
+    cell: ({ row }: { row: Row<any> }) => <span className="text-green-800 text-center w-full block">{row.getValue("quantity")}</span>,
   },
   {
     accessorKey: "aum",
-    header: "AUM (₹/MT)",
+    header: "AUM (Rs/MT)",
     cell: ({ row }: { row: Row<any> }) => {
       const amount = parseFloat(row.getValue("aum"));
       const formatted = amount.toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
-      return <span className="text-green-800">{formatted}</span>;
+      return <span className="text-green-800 text-center w-full block">{formatted}</span>;
     },
   },
 ];
@@ -139,12 +139,12 @@ export default function CommoditySummaryTable({ showHeader = false }) {
         <CardContent className="p-0">
             <DataTable
               columns={columns}
-            data={summaryRows}
+              data={summaryRows}
               isLoading={loading}
-            error={error || undefined}
-            wrapperClassName="border-green-300"
-            headClassName="bg-orange-100 text-orange-600 font-bold"
-            cellClassName="text-green-800"
+              error={error || undefined}
+              wrapperClassName="border-green-300"
+              headClassName="bg-orange-100 text-orange-600 font-bold text-center"
+              cellClassName="text-green-800 text-center"
             />
           </CardContent>
         </Card>

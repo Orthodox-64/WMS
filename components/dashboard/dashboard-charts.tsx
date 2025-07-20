@@ -105,7 +105,7 @@ function CustomTooltip({ active, payload }: any) {
     return (
       <div className="bg-white border border-gray-200 rounded-md p-2 shadow text-xs">
         <div><span className="font-semibold">{name}</span></div>
-        <div>Quantity: <span className="font-semibold">{value}</span></div>
+        <div>Quantity: <span className="font-semibold">{value} (MT)</span></div>
         {varieties && varieties.length > 0 && (
           <div>Varieties: <span className="text-green-700">{varieties.join(", ")}</span></div>
         )}
@@ -121,7 +121,7 @@ function CustomAUMTooltip({ active, payload }: any) {
     return (
       <div className="bg-white border border-gray-200 rounded-md p-2 shadow text-xs">
         <div><span className="font-semibold">{name}</span></div>
-        <div>AUM: <span className="font-semibold">{value}</span></div>
+        <div>AUM: <span className="font-semibold">{value} (Rs/MT)</span></div>
         {commodities && commodities.length > 0 && (
           <div>Commodities: <span className="text-green-700">{commodities.join(", ")}</span></div>
         )}
@@ -164,7 +164,7 @@ function PieChartCard({ title, data, showVarietiesTooltip = false }: { title: st
           </CardContent>
         </Card>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl w-full">
+      <DialogContent className="max-w-6xl w-full max-h-[80vh] overflow-y-auto">
         <CommoditySummaryTable showHeader={true} />
       </DialogContent>
     </Dialog>
@@ -236,7 +236,7 @@ export function DashboardCharts() {
             </CardContent>
           </Card>
         </DialogTrigger>
-        <DialogContent className="max-w-6xl w-full">
+        <DialogContent className="max-w-6xl w-full max-h-[80vh] overflow-y-auto">
           <AUMSummaryTable showHeader={true} />
         </DialogContent>
       </Dialog>
