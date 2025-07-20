@@ -83,90 +83,86 @@ const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
         <div style={{ fontSize: 22, fontWeight: 700, color: '#1aad4b', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
         <div style={{ fontSize: 14, fontWeight: 500, color: '#e67c1f', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
       </div>
-      {/* Centered STORAGE RECEIPT title with margin */}
+      {/* Centered STORAGE RECEIPT/WAREHOUSE RECEIPT title with margin */}
       <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '36px auto 36px auto' }}>
         <span style={{ fontSize: 15, fontWeight: 700, color: borderColor, textAlign: 'center' }}>
-          STORAGE RECEIPT
+          {receiptTitle}
         </span>
-      </div>
-      {/* Main Info Section - Faint green, two-column grid, label above input */}
-      <div style={{ background: '#f6fef9', borderRadius: 12, padding: 24, marginBottom: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Client Name</div>
-            <input value={data.client} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Commodity Name</div>
-            <input value={data.commodity} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Commodity Variety Name</div>
-            <input value={data.varietyName || ''} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Client Address</div>
-            <input value={data.clientAddress} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Warehouse Name</div>
-            <input value={data.warehouseName} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Warehouse Address</div>
-            <input value={data.warehouseAddress} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Total Number of Bags</div>
-            <input value={data.totalBags} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>CAD No</div>
-            <input value={data.cadNo || data.cadNumber || ''} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Date of Sampling</div>
-            <input value={data.dateOfSampling || ''} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>Date of Testing</div>
-            <input value={data.dateOfTesting || ''} readOnly style={{ width: '100%', border: '1px solid #a7f3d0', borderRadius: 6, padding: 8, background: '#fff', color: '#16a34a', fontWeight: 500 }} />
-          </div>
-        </div>
       </div>
       {/* Info Table - two column, bordered, orange style */}
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
         <tbody>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>SR No.</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>{noLabel}</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{srNo}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>SR Generation Date</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Generation Date</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{srGenerationDate}</td>
           </tr>
           <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Client Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.client}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Client Address</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.clientAddress}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Commodity</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.commodity}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Variety Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.varietyName}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Warehouse Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.warehouseName}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Warehouse Address</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.warehouseAddress}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Total Bags</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.totalBags}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Net Weight</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.netWeight}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Total Value (Rs/MT)</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.valueOfCommodity}</td>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Issue</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfIssue}</td>
+          </tr>
+          <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Deposit</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfDeposit}</td>
-          </tr>
-          <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Branch Name</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.branch}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Base Receipt/Licenses No.</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.baseReceiptNo}</td>
           </tr>
           <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Base Receipt/Licenses No.</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.baseReceiptNo}</td>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Market Rate</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.marketRate}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Value of Commodity</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.valueOfCommodity}</td>
           </tr>
           <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Hologram Number</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.hologramNumber}</td>
-            {/* Remove Sticker/Stamp Area cell */}
-            <td style={{ border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, background: headerBg }}></td>
-            <td style={{ border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}></td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Bank Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.bankName}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Place</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.place}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Deposit</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfDeposit}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Receipt Type</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.receiptType}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>CAD No</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{cadNo}</td>
+          </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Sampling</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfSampling}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Testing</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfTesting}</td>
           </tr>
         </tbody>
       </table>

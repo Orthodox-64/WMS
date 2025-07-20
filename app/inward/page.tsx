@@ -1824,18 +1824,30 @@ export default function InwardPage() {
     },
   ];
 
+  // ... inside InwardPage component, after other useState hooks ...
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const sortColumn = 'inwardId';
+
+  // ... update filteredData to sort by sortColumn and sortDirection ...
   const filteredData = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    
-    // Sort data by Inward ID
+    // Sort data by Inward Code and direction
     const sortedData = [...inwardData].sort((a, b) => {
-      const idA = parseInt(a.inwardId?.split('-')[1] || '0', 10);
-      const idB = parseInt(b.inwardId?.split('-')[1] || '0', 10);
-      return idA - idB;
+      let aVal = a[sortColumn];
+      let bVal = b[sortColumn];
+      // If value is number, compare as number
+      if (!isNaN(Number(aVal)) && !isNaN(Number(bVal))) {
+        aVal = Number(aVal);
+        bVal = Number(bVal);
+      } else {
+        aVal = (aVal || '').toString().toLowerCase();
+        bVal = (bVal || '').toString().toLowerCase();
+      }
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
     });
-
     if (!term) return sortedData;
-
     return sortedData.filter((item: any) => {
       const lowerCaseSearchTerm = term.toLowerCase();
       return (
@@ -1847,7 +1859,7 @@ export default function InwardPage() {
         item.receiptType?.toLowerCase().includes(lowerCaseSearchTerm)
       );
     });
-  }, [searchTerm, inwardData]);
+  }, [searchTerm, inwardData, sortDirection]);
 
   const handleExportCSV = () => {
     const dataToExport = filteredData;
@@ -2164,6 +2176,7 @@ export default function InwardPage() {
     setSelectedRowForSR(row);
     setShowSRForm(true);
     setRemarks(row.remarks || '');
+    setHologramNumber(row.hologramNumber || '');
     if (row.srGenerationDate) {
       setSrGenerationDate(row.srGenerationDate);
     } else {
@@ -2236,7 +2249,7 @@ export default function InwardPage() {
       });
       return;
     }
-    // Update status and srGenerationDate in Firestore
+    // Update status, srGenerationDate, and hologramNumber in Firestore
     const today = new Date();
     const todayISO = today.toISOString().slice(0, 10);
     try {
@@ -2245,7 +2258,7 @@ export default function InwardPage() {
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'approve', srGenerationDate: todayISO });
+        await updateDoc(docRef, { status: 'approve', srGenerationDate: todayISO, hologramNumber });
       }
     } catch (error) {
       console.error('Error updating status to approve:', error);
@@ -2348,33 +2361,36 @@ export default function InwardPage() {
 
   // Print handler using html2canvas and jsPDF
   const handlePrint = async () => {
-    if (!printRef.current || !testCertRef.current) return;
+    console.log('Print button clicked');
+    if (!printRef.current || !testCertRef.current) {
+      toast({ title: 'Error', description: 'Print refs not available. Please try again.', variant: 'destructive' });
+      return;
+    }
+    setIsPrinting(true);
+    try {
     const html2canvas = (await import('html2canvas')).default;
     const jsPDF = (await import('jspdf')).default;
-
-    // Page 1: Storage Receipt
+      await new Promise((resolve) => setTimeout(resolve, 300));
     const canvas1 = await html2canvas(printRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
     const imgData1 = canvas1.toDataURL('image/png');
-
-    // Page 2: Test Certificate
     const canvas2 = await html2canvas(testCertRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
     const imgData2 = canvas2.toDataURL('image/png');
-
     const pdf = new jsPDF('p', 'mm', 'a4');
     const imgWidth = 210;
     const pageHeight = 295;
-
-    // Add first page
     const imgHeight1 = (canvas1.height * imgWidth) / canvas1.width;
-    pdf.addImage(imgData1, 'PNG', 0, 0, imgWidth, imgHeight1);
-
-    // Add second page
+      pdf.addImage(imgData1, 'PNG', 0, 0, imgWidth, imgHeight1 > pageHeight ? pageHeight : imgHeight1);
       pdf.addPage();
     const imgHeight2 = (canvas2.height * imgWidth) / canvas2.width;
-    pdf.addImage(imgData2, 'PNG', 0, 0, imgWidth, imgHeight2);
-
+      pdf.addImage(imgData2, 'PNG', 0, 0, imgWidth, imgHeight2 > pageHeight ? pageHeight : imgHeight2);
     pdf.save('storage-receipt-and-test-certificate.pdf');
-    toast({ title: 'PDF Generated', description: 'The PDF with both pages has been downloaded successfully.', variant: 'default' });
+      toast({ title: 'PDF Generated', description: 'The PDF with both Storage Receipt and Test Certificate has been downloaded successfully.', variant: 'default' });
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      toast({ title: 'Error', description: 'Failed to generate PDF. See console for details.', variant: 'destructive' });
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   // Update insurance selection logic to fetch and display remaining values from Firestore
@@ -2631,6 +2647,93 @@ export default function InwardPage() {
   // Add remarks state in InwardPage component
   const [remarks, setRemarks] = useState('');
 
+  // ... inside InwardPage component, after other useState hooks ...
+  const [isPrinting, setIsPrinting] = useState(false);
+  // ... rest of the code unchanged ...
+
+  // ... inside InwardPage component, after other useState hooks ...
+  const [showPrintDebug, setShowPrintDebug] = useState(false);
+  // ...
+  // Add a toggle button for debug mode above the DialogContent/modal rendering:
+  <div className="flex justify-end mb-2">
+    <Button onClick={() => setShowPrintDebug(v => !v)} className="bg-gray-400 hover:bg-gray-500 text-white px-4 py-1 text-xs">
+      {showPrintDebug ? 'Hide Print Debug' : 'Show Print Debug'}
+    </Button>
+  </div>
+  // ...
+  // Render the print area visibly if debug is on, otherwise keep it hidden as before:
+  {(isFormApproved || selectedRowForSR?.status === 'approve') && (
+    <div style={showPrintDebug ? { position: 'static', margin: '32px 0', zIndex: 1000, background: '#fff' } : { position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
+      <div ref={printRef}>
+        <StorageReceipt
+          data={{
+            srNo: generateSRNo(selectedRowForSR),
+            srGenerationDate: srGenerationDate || '-',
+            dateOfIssue: selectedRowForSR?.dateOfInward || '',
+            baseReceiptNo: selectedRowForSR?.baseReceiptNo || selectedRowForSR?.bankReceipt || '-',
+            cadNo: selectedRowForSR?.cadNo || selectedRowForSR?.cadNumber || '',
+            dateOfDeposit: selectedRowForSR?.dateOfInward || '',
+            branch: selectedRowForSR?.branch || '-',
+            warehouseName: selectedRowForSR?.warehouseName || '',
+            warehouseAddress: selectedRowForSR?.warehouseAddress || '',
+            client: selectedRowForSR?.client || '',
+            clientAddress: selectedRowForSR?.clientAddress || '',
+            commodity: selectedRowForSR?.commodity || '',
+            totalBags: selectedRowForSR?.totalBags || '',
+            netWeight: selectedRowForSR?.totalQuantity || '',
+            grade: selectedRowForSR?.grade || '-',
+            remarks: selectedRowForSR?.remarks || '-',
+            marketRate: selectedRowForSR?.marketRate || '',
+            valueOfCommodity: selectedRowForSR?.totalValue || '',
+            hologramNumber: hologramNumber || '',
+            insuranceDetails: [
+              {
+                policyNo: inspectionInsuranceData[0]?.firePolicyNumber || '-',
+                company: inspectionInsuranceData[0]?.firePolicyCompanyName || '-',
+                validFrom: inspectionInsuranceData[0]?.firePolicyStartDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyStartDate) : '-',
+                validTo: inspectionInsuranceData[0]?.firePolicyEndDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyEndDate) : '-',
+                sumInsured: inspectionInsuranceData[0]?.firePolicyAmount || '-',
+              },
+            ],
+            bankName: selectedRowForSR?.bankName || '',
+            date: selectedRowForSR?.dateOfInward || '',
+            place: selectedRowForSR?.branch || '',
+            stockInwardDate: selectedRowForSR?.dateOfInward || '-',
+            receiptType: selectedRowForSR?.receiptType || 'SR',
+            varietyName: selectedRowForSR?.varietyName || '',
+            dateOfSampling: selectedRowForSR?.dateOfSampling || '',
+            dateOfTesting: selectedRowForSR?.dateOfTesting || '',
+          }}
+        />
+      </div>
+      <div ref={testCertRef}>
+        <TestCertificate
+          client={selectedRowForSR?.client || ''}
+          clientAddress={selectedRowForSR?.clientAddress || ''}
+          commodity={selectedRowForSR?.commodity || ''}
+          varietyName={selectedRowForSR?.varietyName || ''}
+          warehouseName={selectedRowForSR?.warehouseName || ''}
+          warehouseAddress={selectedRowForSR?.warehouseAddress || ''}
+          totalBags={selectedRowForSR?.totalBags || ''}
+          dateOfSampling={selectedRowForSR?.dateOfSampling || ''}
+          dateOfTesting={selectedRowForSR?.dateOfTesting || ''}
+          qualityParameters={(() => {
+            const commodity = commodities.find((c: any) => c.commodityName === selectedRowForSR?.commodity);
+            const variety = commodity?.varieties?.find((v: any) => v.varietyName === selectedRowForSR?.varietyName);
+            const particulars = variety?.particulars || [];
+            return particulars.map((p: any, idx: number) => ({
+              name: p.name,
+              minPercentage: p.minPercentage,
+              maxPercentage: p.maxPercentage,
+              actual: selectedRowForSR?.labResults?.[idx] || '',
+            }));
+          })()}
+        />
+      </div>
+    </div>
+  )}
+  // ... rest unchanged ...
+
   return (
     <DashboardLayout>
       {/* Module title and dashboard button row */}
@@ -2689,14 +2792,26 @@ export default function InwardPage() {
             <CardTitle className="text-green-700 text-xl">Inward Entries</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            {/* Above the DataTable, render the sort dropdown and arrow button */}
+            <div className="flex items-center gap-2 mb-2">
+              <label className="font-semibold text-sm">Sort by Inward Code:</label>
+              <button
+                onClick={() => setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'))}
+                className="ml-1 px-2 py-1 border rounded text-lg"
+                title={sortDirection === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
+                type="button"
+              >
+                {sortDirection === 'asc' ? '▲' : '▼'}
+              </button>
+            </div>
             <DataTable
               columns={columns}
               data={filteredData}
               isLoading={loading}
               error={error || undefined}
               wrapperClassName="border-green-300"
-              headClassName="bg-orange-100 text-orange-600 font-bold"
-              cellClassName="text-green-800"
+              headClassName="text-center bg-orange-100 text-orange-600 font-bold"
+              cellClassName="text-center"
             />
           </CardContent>
         </Card>
@@ -4281,7 +4396,7 @@ export default function InwardPage() {
                   </div>
                 </div>
               </div>
-              {/* Approve/Reject/Resubmit Buttons */}
+              {/* Approve/Reject/Resubmit Buttons and Print Button */}
               {(() => {
                 const status = selectedRowForSR?.status;
                 if (isFormApproved || status === 'approve') {
@@ -4290,8 +4405,9 @@ export default function InwardPage() {
                       <Button
                         onClick={handlePrint}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
+                        disabled={isPrinting}
                       >
-                        Print Receipt
+                        {isPrinting ? 'Generating PDF...' : 'Print Receipt'}
                       </Button>
                     </div>
                   );
@@ -4338,8 +4454,8 @@ export default function InwardPage() {
                 }
               })()}
               {/* Hidden printRef for PDF export */}
-              {isFormApproved && (
-                <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
+              {(isFormApproved || selectedRowForSR?.status === 'approve') && (
+                <div style={showPrintDebug ? { position: 'static', margin: '32px 0', zIndex: 1000, background: '#fff' } : { position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
                   <div ref={printRef}>
                     <StorageReceipt
                       data={{
@@ -4347,6 +4463,7 @@ export default function InwardPage() {
                         srGenerationDate: srGenerationDate || '-',
                         dateOfIssue: selectedRowForSR?.dateOfInward || '',
                         baseReceiptNo: selectedRowForSR?.baseReceiptNo || selectedRowForSR?.bankReceipt || '-',
+                        cadNo: selectedRowForSR?.cadNo || selectedRowForSR?.cadNumber || '',
                         dateOfDeposit: selectedRowForSR?.dateOfInward || '',
                         branch: selectedRowForSR?.branch || '-',
                         warehouseName: selectedRowForSR?.warehouseName || '',
@@ -4373,9 +4490,11 @@ export default function InwardPage() {
                         bankName: selectedRowForSR?.bankName || '',
                         date: selectedRowForSR?.dateOfInward || '',
                         place: selectedRowForSR?.branch || '',
-                        cadNo: selectedRowForSR?.cadNumber || '',
                         stockInwardDate: selectedRowForSR?.dateOfInward || '-',
                         receiptType: selectedRowForSR?.receiptType || 'SR',
+                        varietyName: selectedRowForSR?.varietyName || '',
+                        dateOfSampling: selectedRowForSR?.dateOfSampling || '',
+                        dateOfTesting: selectedRowForSR?.dateOfTesting || '',
                       }}
                     />
                       </div>
