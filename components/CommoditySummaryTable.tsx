@@ -26,7 +26,7 @@ const columns = [
   },
   {
     accessorKey: "aum",
-    header: "AUM (Rs/MT)",
+    header: "AUM-Asset Under Management(Rs/MT)",
     cell: ({ row }: { row: Row<any> }) => {
       const amount = parseFloat(row.getValue("aum"));
       const formatted = amount.toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });

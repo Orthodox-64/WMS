@@ -20,6 +20,7 @@ import React from 'react';
 import StorageReceipt from '@/components/StorageReceipt';
 import TestCertificate from '@/components/TestCertificate';
 import PrintableWarehouseReceipt from '@/components/PrintableWarehouseReceipt';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 
 // Move normalizeDate to top-level scope (before export default function InwardPage)
 function normalizeDate(val: any) {
@@ -2768,6 +2769,16 @@ export default function InwardPage() {
   )}
   // ... rest unchanged ...
 
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map(col => col.accessorKey));
+
+  // Helper to get all column keys (excluding action/alert if you want to always show them)
+  const allColumnKeys = columns.map(col => col.accessorKey);
+
+  // Filter columns based on visibleColumnKeys
+  const visibleColumns = useMemo(() => {
+    return columns.filter(col => visibleColumnKeys.includes(col.accessorKey));
+  }, [columns, visibleColumnKeys]);
+
   return (
     <DashboardLayout>
       {/* Module title and dashboard button row */}
@@ -2826,20 +2837,56 @@ export default function InwardPage() {
             <CardTitle className="text-green-700 text-xl">Inward Entries</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {/* Above the DataTable, render the sort dropdown and arrow button */}
-            <div className="flex items-center gap-2 mb-2">
-              <label className="font-semibold text-sm">Sort by Inward Code:</label>
-              <button
-                onClick={() => setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'))}
-                className="ml-1 px-2 py-1 border rounded text-lg"
-                title={sortDirection === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
-                type="button"
-              >
-                {sortDirection === 'asc' ? '▲' : '▼'}
-              </button>
+            <div className="flex items-center gap-4 mb-2">
+              <div className="flex items-center gap-2">
+                <label className="font-semibold text-sm">Sort by Inward Code:</label>
+                <button
+                  onClick={() => setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'))}
+                  className="ml-1 px-2 py-1 border rounded text-lg"
+                  title={sortDirection === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
+                  type="button"
+                >
+                  {sortDirection === 'asc' ? '▲' : '▼'}
+                </button>
+              </div>
+              {/* Column Visibility Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="ml-2">Columns</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Show/Hide Columns</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={visibleColumnKeys.length === allColumnKeys.length}
+                    onCheckedChange={checked => {
+                      if (checked) setVisibleColumnKeys(allColumnKeys);
+                      else setVisibleColumnKeys([]);
+                    }}
+                  >
+                    Select All
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                  {columns.map(col => (
+                    <DropdownMenuCheckboxItem
+                      key={col.accessorKey}
+                      checked={visibleColumnKeys.includes(col.accessorKey)}
+                      onCheckedChange={checked => {
+                        setVisibleColumnKeys(prev =>
+                          checked
+                            ? [...prev, col.accessorKey]
+                            : prev.filter(k => k !== col.accessorKey)
+                        );
+                      }}
+                    >
+                      {typeof col.header === 'string' ? col.header : col.accessorKey}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <DataTable
-              columns={columns}
+              columns={visibleColumns}
               data={filteredData}
               isLoading={loading}
               error={error || undefined}
@@ -4017,7 +4064,7 @@ export default function InwardPage() {
               </div>
               {/* Stock Inward Date */}
               <div>
-                <Label className="font-semibold">Date of deposite</Label>
+                <Label className="font-semibold">Date of deposit</Label>
                 <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
               </div>
               {/* Bank, Warehouse, Client, Commodity Details */}

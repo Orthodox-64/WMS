@@ -29,7 +29,7 @@ const columns = [
   },
   {
     accessorKey: "aum",
-    header: "AUM-asset under management(Rs/MT)",
+    header: "AUM-Asset Under Management(Rs/MT)",
     cell: ({ row }: { row: Row<any> }) => {
       const amount = parseFloat(row.getValue("aum"));
       const formatted = amount.toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
