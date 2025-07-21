@@ -19,6 +19,7 @@ import { uploadToCloudinary } from '@/lib/cloudinary';
 import React from 'react';
 import StorageReceipt from '@/components/StorageReceipt';
 import TestCertificate from '@/components/TestCertificate';
+import PrintableWarehouseReceipt from '@/components/PrintableWarehouseReceipt';
 
 // Move normalizeDate to top-level scope (before export default function InwardPage)
 function normalizeDate(val: any) {
@@ -216,6 +217,7 @@ export default function InwardPage() {
   const [srGenerationDate, setSrGenerationDate] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
   const testCertRef = useRef<HTMLDivElement>(null);
+  const printableReceiptRef = useRef<HTMLDivElement>(null);
   // Add state for initial remaining values from Firestore
   const [initialRemainingFire, setInitialRemainingFire] = useState('');
   const [initialRemainingBurglary, setInitialRemainingBurglary] = useState('');
@@ -1954,16 +1956,20 @@ export default function InwardPage() {
 
   // Helper to get particulars for selected commodity and variety
   const getSelectedVarietyParticulars = () => {
+    // Use selectedRowForSR if available (for PDF generation), otherwise use form data
+    const commodityName = selectedRowForSR?.commodity || form.commodity;
+    const varietyName = selectedRowForSR?.varietyName || form.varietyName;
+    
     console.log('getSelectedVarietyParticulars called with:', { 
-      commodity: form.commodity, 
-      varietyName: form.varietyName,
+      commodity: commodityName, 
+      varietyName: varietyName,
       commoditiesCount: commodities.length 
     });
     
-    const commodity = commodities.find((c: any) => c.commodityName === form.commodity);
+    const commodity = commodities.find((c: any) => c.commodityName === commodityName);
     console.log('Found commodity:', commodity);
     
-    const variety = commodity?.varieties?.find((v: any) => v.varietyName === form.varietyName);
+    const variety = commodity?.varieties?.find((v: any) => v.varietyName === varietyName);
     console.log('Found variety:', variety);
     
     const particulars = variety?.particulars || [];
@@ -2359,32 +2365,60 @@ export default function InwardPage() {
     setRemainingBurglaryPolicy((burglaryPolicyAmt - totalInwardValue).toFixed(2));
   };
 
-  // Print handler using html2canvas and jsPDF
+  // Print handler using html2canvas and jsPDF with new layout
   const handlePrint = async () => {
     console.log('Print button clicked');
-    if (!printRef.current || !testCertRef.current) {
-      toast({ title: 'Error', description: 'Print refs not available. Please try again.', variant: 'destructive' });
+    if (!printableReceiptRef.current) {
+      toast({ title: 'Error', description: 'Print ref not available. Please try again.', variant: 'destructive' });
       return;
     }
     setIsPrinting(true);
     try {
-    const html2canvas = (await import('html2canvas')).default;
-    const jsPDF = (await import('jspdf')).default;
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    const canvas1 = await html2canvas(printRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
-    const imgData1 = canvas1.toDataURL('image/png');
-    const canvas2 = await html2canvas(testCertRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
-    const imgData2 = canvas2.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgWidth = 210;
-    const pageHeight = 295;
-    const imgHeight1 = (canvas1.height * imgWidth) / canvas1.width;
-      pdf.addImage(imgData1, 'PNG', 0, 0, imgWidth, imgHeight1 > pageHeight ? pageHeight : imgHeight1);
-      pdf.addPage();
-    const imgHeight2 = (canvas2.height * imgWidth) / canvas2.width;
-      pdf.addImage(imgData2, 'PNG', 0, 0, imgWidth, imgHeight2 > pageHeight ? pageHeight : imgHeight2);
-    pdf.save('storage-receipt-and-test-certificate.pdf');
-      toast({ title: 'PDF Generated', description: 'The PDF with both Storage Receipt and Test Certificate has been downloaded successfully.', variant: 'default' });
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+      
+      // Wait a moment for the component to render
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      
+      const canvas = await html2canvas(printableReceiptRef.current, { 
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#fff',
+        logging: true,
+        allowTaint: false,
+        height: printableReceiptRef.current.scrollHeight,
+        width: printableReceiptRef.current.scrollWidth
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 295; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      // Add additional pages if needed
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      const receiptType = selectedRowForSR?.receiptType === 'WR' ? 'warehouse' : 'storage';
+      pdf.save(`${receiptType}-receipt-${selectedRowForSR?.inwardId || 'document'}.pdf`);
+      
+      toast({ 
+        title: 'PDF Generated', 
+        description: `The ${receiptType} receipt PDF has been downloaded successfully.`, 
+        variant: 'default' 
+      });
     } catch (err) {
       console.error('PDF generation error:', err);
       toast({ title: 'Error', description: 'Failed to generate PDF. See console for details.', variant: 'destructive' });
@@ -4453,10 +4487,19 @@ export default function InwardPage() {
                   );
                 }
               })()}
-              {/* Hidden printRef for PDF export */}
+              {/* Hidden printRef for PDF export - New Layout */}
               {(isFormApproved || selectedRowForSR?.status === 'approve') && (
                 <div style={showPrintDebug ? { position: 'static', margin: '32px 0', zIndex: 1000, background: '#fff' } : { position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
-                  <div ref={printRef}>
+                  <div ref={printableReceiptRef}>
+                    <PrintableWarehouseReceipt
+                      selectedRowForSR={selectedRowForSR}
+                      hologramNumber={hologramNumber}
+                      srGenerationDate={srGenerationDate}
+                      getSelectedVarietyParticulars={getSelectedVarietyParticulars}
+                    />
+                  </div>
+                  {/* Keep original components for backward compatibility */}
+                  <div ref={printRef} style={{ display: 'none' }}>
                     <StorageReceipt
                       data={{
                         srNo: generateSRNo(selectedRowForSR),
@@ -4497,8 +4540,8 @@ export default function InwardPage() {
                         dateOfTesting: selectedRowForSR?.dateOfTesting || '',
                       }}
                     />
-                      </div>
-                  <div ref={testCertRef}>
+                  </div>
+                  <div ref={testCertRef} style={{ display: 'none' }}>
                     <TestCertificate
                       client={selectedRowForSR?.client || ''}
                       clientAddress={selectedRowForSR?.clientAddress || ''}

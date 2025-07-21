@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Blinking animations for insurance alerts */
+@keyframes blink-red {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes blink-orange {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0.3;
+  }
+}
+
+.blinking-red {
+  animation: blink-red 1s infinite;
+}
+
+.blinking-orange {
+  animation: blink-orange 1s infinite;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 255, 255, 255;
