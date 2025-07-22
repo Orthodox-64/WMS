@@ -552,7 +552,7 @@ export default function InwardPage() {
       const warehouseMap = new Map();
       inspectionsSnap.docs.forEach(doc => {
         const data = doc.data();
-        if (data.warehouseName && data.status === 'activated') {
+        if (data.warehouseName && (data.status === 'activated'||data.status === 'reactivate')) {
           // Use warehouse name as key to ensure uniqueness
           if (!warehouseMap.has(data.warehouseName)) {
             // Extract insurance data from the inspection

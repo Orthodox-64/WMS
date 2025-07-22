@@ -101,7 +101,7 @@ export default function InsuranceMasterPage() {
     const insuranceEntries: any[] = [];
     snap.docs.forEach(doc => {
       const data = doc.data();
-      if (data.status === 'activated') {
+      if (data.status === 'activated'||data.status === 'reactivate') {
         // Helper to get state/branch/location robustly
         const getField = (field: string) =>
           data[field] || (data.warehouseInspectionData && data.warehouseInspectionData[field]) || '';
