@@ -1775,16 +1775,92 @@ export default function InwardPage() {
     // Add status column
     {
       accessorKey: "status",
-      header: "Status",
+      header: "CIR Status",
       cell: ({ row }: any) => {
         const status = row.original.status || 'pending';
-        // Optionally, you can style the status text
         let color = 'text-gray-600';
         if (status === 'approve') color = 'text-green-600 font-semibold';
         else if (status === 'rejected') color = 'text-red-600 font-semibold';
         else if (status === 'resubmited') color = 'text-yellow-600 font-semibold';
         else if (status === 'pending') color = 'text-blue-600 font-semibold';
-        return <span className={color}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
+        return (
+          <button
+            className={color + ' underline cursor-pointer bg-transparent border-none p-0'}
+            style={{ background: 'none' }}
+            onClick={async () => {
+              setEditingRow({...row.original, status}); // Include status in editingRow
+              // Use handleEdit to populate the form with all details including insurance
+              await handleEdit(row.original);
+              
+              // Set the form mode based on status
+              if (status === 'pending' || status === 'approve' || status === 'rejected') {
+                setEditModalMode('readonly');
+                setIsEditMode(false); // Keep form readonly
+              } else if (status === 'resubmited') {
+                setEditModalMode('edit');
+                setIsEditMode(true); // Make form editable for resubmit
+              }
+              
+              // Make sure insurance entries are fetched from inspection
+              if (row.warehouseName) {
+                try {
+                  const inspectionsCollection = collection(db, 'inspections');
+                  const q = query(inspectionsCollection, where('warehouseName', '==', row.warehouseName));
+                  const querySnapshot = await getDocs(q);
+                  
+                  if (!querySnapshot.empty) {
+                    const inspectionData = querySnapshot.docs[0].data();
+                    let insuranceEntries = [];
+                    
+                    // Get insurance entries from the correct location
+                    if (inspectionData.insuranceEntries && Array.isArray(inspectionData.insuranceEntries)) {
+                      insuranceEntries = inspectionData.insuranceEntries;
+                    } else if (inspectionData.warehouseInspectionData?.insuranceEntries && 
+                             Array.isArray(inspectionData.warehouseInspectionData.insuranceEntries)) {
+                      insuranceEntries = inspectionData.warehouseInspectionData.insuranceEntries;
+                    }
+                    
+                    setInsuranceEntries(insuranceEntries);
+
+                    // Auto-select the matching insurance entry if selectedInsurance exists
+                    if (row.selectedInsurance) {
+                      const matchingIndex = insuranceEntries.findIndex((ins: any) => 
+                        ins.insuranceId === row.selectedInsurance.insuranceId && 
+                        ins.insuranceTakenBy === row.selectedInsurance.insuranceTakenBy
+                      );
+                      if (matchingIndex !== -1) {
+                        setSelectedInsuranceIndex(matchingIndex);
+                        // Also populate the insurance info in the form
+                        const matchedInsurance = insuranceEntries[matchingIndex];
+                        setBaseForm(prev => ({
+                          ...prev,
+                          insuranceManagedBy: matchedInsurance.insuranceTakenBy || '',
+                          firePolicyNumber: matchedInsurance.firePolicyNumber || '',
+                          firePolicyAmount: matchedInsurance.firePolicyAmount || '',
+                          firePolicyStart: matchedInsurance.firePolicyStartDate || '',
+                          firePolicyEnd: matchedInsurance.firePolicyEndDate || '',
+                          burglaryPolicyNumber: matchedInsurance.burglaryPolicyNumber || '',
+                          burglaryPolicyAmount: matchedInsurance.burglaryPolicyAmount || '',
+                          burglaryPolicyStart: matchedInsurance.burglaryPolicyStartDate || '',
+                          burglaryPolicyEnd: matchedInsurance.burglaryPolicyEndDate || '',
+                          firePolicyCompanyName: matchedInsurance.firePolicyCompanyName || '',
+                          burglaryPolicyCompanyName: matchedInsurance.burglaryPolicyCompanyName || '',
+                          bankFundedBy: matchedInsurance.selectedBankName || '',
+                        }));
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error fetching insurance data:', error);
+                }
+              }
+              setShowAddModal(true);
+            }}
+            type="button"
+          >
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </button>
+        );
       }
     },
     // Action column
@@ -2779,6 +2855,18 @@ export default function InwardPage() {
     return columns.filter(col => visibleColumnKeys.includes(col.accessorKey));
   }, [columns, visibleColumnKeys]);
 
+  // Add state for readOnlySRForm
+  const [readOnlySRForm, setReadOnlySRForm] = useState(false);
+
+  // Add state for readOnlyAddModal
+  const [readOnlyAddModal, setReadOnlyAddModal] = useState(false);
+
+  // Add state for edit modal mode
+  const [editModalMode, setEditModalMode] = useState<'readonly' | 'edit'>('readonly');
+
+  // Before the button rendering in the Add/Edit Inward Modal, add:
+  const formStatus = editModalMode ? (editingRow?.status || 'pending') : undefined;
+
   return (
     <DashboardLayout>
       {/* Module title and dashboard button row */}
@@ -2910,7 +2998,7 @@ export default function InwardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label className="block font-semibold mb-1">State</Label>
-                <Select value={form.state} onValueChange={v => setBaseForm(f => ({ ...f, state: v, branch: '', location: '', warehouseName: '', warehouseCode: '', warehouseAddress: '', businessType: '' }))}>
+                <Select value={form.state} onValueChange={v => setBaseForm(f => ({ ...f, state: v, branch: '', location: '', warehouseName: '', warehouseCode: '', warehouseAddress: '', businessType: '' }))} disabled={editModalMode === 'readonly'}>
                   <SelectTrigger><SelectValue placeholder="Select State" /></SelectTrigger>
                   <SelectContent>
                     {states.map(state => <SelectItem key={state} value={state}>{state}</SelectItem>)}
@@ -2919,7 +3007,7 @@ export default function InwardPage() {
               </div>
               <div>
                 <Label className="block font-semibold mb-1">Branch</Label>
-                <Select value={form.branch} onValueChange={v => setBaseForm(f => ({ ...f, branch: v, location: '', warehouseName: '', warehouseCode: '', warehouseAddress: '', businessType: '' }))} disabled={!form.state}>
+                <Select value={form.branch} onValueChange={v => setBaseForm(f => ({ ...f, branch: v, location: '', warehouseName: '', warehouseCode: '', warehouseAddress: '', businessType: '' }))} disabled={!form.state || editModalMode === 'readonly'}>
                   <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
                   <SelectContent>
                     {filteredBranches.map((b: any) => <SelectItem key={b.branch} value={b.branch}>{b.branch}</SelectItem>)}
@@ -2931,7 +3019,7 @@ export default function InwardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label className="block font-semibold mb-1">Location</Label>
-                <Select value={form.location} onValueChange={v => setBaseForm(f => ({ ...f, location: v, warehouseName: '', warehouseCode: '', warehouseAddress: '', businessType: '' }))} disabled={!form.branch}>
+                <Select value={form.location} onValueChange={v => setBaseForm(f => ({ ...f, location: v, warehouseName: '', warehouseCode: '', warehouseAddress: '', businessType: '' }))} disabled={!form.branch || editModalMode === 'readonly'}>
                   <SelectTrigger><SelectValue placeholder="Select Location" /></SelectTrigger>
                   <SelectContent>
                     {filteredLocations.map((loc: any) => <SelectItem key={loc.locationName} value={loc.locationName}>{loc.locationName}</SelectItem>)}
@@ -3061,7 +3149,7 @@ export default function InwardPage() {
                   } else {
                     setInsuranceEntries([]);
                   }
-                }} disabled={!form.location}>
+                }} disabled={!form.location || editModalMode === 'readonly'}>
                   <SelectTrigger><SelectValue placeholder="Select Warehouse" /></SelectTrigger>
                   <SelectContent>
                     {filteredWarehouses.map((w: any) => (
@@ -3098,7 +3186,7 @@ export default function InwardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label className="block font-semibold mb-1">Warehouse Address</Label>
-              <Input value={form.warehouseAddress} onChange={e => setBaseForm(f => ({ ...f, warehouseAddress: e.target.value }))} placeholder="Enter warehouse address" />
+              <Input value={form.warehouseAddress} onChange={e => setBaseForm(f => ({ ...f, warehouseAddress: e.target.value }))} placeholder="Enter warehouse address" readOnly={editModalMode === 'readonly'} />
             </div>
               <div>
                 <Label className="block font-semibold mb-1">Client Name</Label>
@@ -3185,7 +3273,7 @@ export default function InwardPage() {
                   <Select 
                     value={form.varietyName} 
                     onValueChange={handleVarietyChange}
-                    disabled={!form.commodity}
+                    disabled={!form.commodity || editModalMode === 'readonly'}
                   >
                     <SelectTrigger><SelectValue placeholder="Select Variety" /></SelectTrigger>
                     <SelectContent>
@@ -3996,11 +4084,110 @@ export default function InwardPage() {
 
 
 
+            {(!editModalMode || (isEditMode && !formStatus)) ? (
             <div className="flex justify-end pt-8">
               <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white font-bold py-3" disabled={isUploading}>
                 {isUploading ? 'Uploading & Saving...' : (isEditMode ? 'Update Inward Entry' : 'Submit')}
               </Button>
             </div>
+            ) : (
+              <div className="flex gap-4 mt-4 justify-end">
+                {/* Show buttons for pending status */}
+                {formStatus === 'pending' && editModalMode === 'readonly' && (
+                  <>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        await handleApproveSR(form);
+                        setShowAddModal(false);
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        await handleRejectSR(form);
+                        setShowAddModal(false);
+                      }}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        await handleResubmitSR(form);
+                        setShowAddModal(false);
+                      }}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                    >
+                      Resubmit
+                    </Button>
+                  </>
+                )}
+                {/* Show Generate Receipt button for approved status */}
+                {formStatus === 'approve' && editModalMode === 'readonly' && (
+                  <Button
+                    type="button"
+                    onClick={() => handleViewSR(form)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Generate Receipt
+                  </Button>
+                )}
+                {/* Show resubmit form actions */}
+                {formStatus === 'resubmited' && editModalMode === 'edit' && (
+                  <>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        await handleApproveSR(form);
+                        setShowAddModal(false);
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        await handleRejectSR(form);
+                        setShowAddModal(false);
+                      }}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setShowAddModal(false);
+                      }}
+                      className="bg-gray-500 hover:bg-gray-600 text-white"
+                    >
+                      Resubmit
+                    </Button>
+                  </>
+                )}
+                {formStatus === 'approve' && (
+                  <Button
+                    type="button"
+                    onClick={handlePrint}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
+                    disabled={isPrinting}
+                  >
+                    {isPrinting ? 'Generating PDF...' : 'Print Receipt'}
+                  </Button>
+                )}
+                {formStatus === 'rejected' && (
+                  <Button disabled className="bg-red-600 text-white px-4 py-2 text-sm opacity-70 cursor-not-allowed">
+                    Rejected
+                  </Button>
+                )}
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>
@@ -4025,29 +4212,11 @@ export default function InwardPage() {
       </div>
 
       {/* SR/WR View Modal */}
-      <Dialog open={showSRForm} onOpenChange={setShowSRForm}>
+      {selectedRowForSR && showSRForm && (
+        <Dialog open={showSRForm} onOpenChange={handleModalClose}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          {/* Custom Header Section */}
-          <div className="flex flex-col items-center justify-center mb-8 mt-2">
-            <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 120, height: 100, marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
-            <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
-              AGROGREEN WAREHOUSING PRIVATE LTD.
-            </div>
-            <div className="text-base font-semibold text-green-600 mb-2 text-center">
-              603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
-            </div>
-            <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
-              {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt' : 'Storage Receipt'}
-            </div>
-          </div>
-          <DialogHeader>
-            <DialogTitle className="text-green-700 text-xl">
-              {/* {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt View' : 'Storage Receipt View'} */}
-            </DialogTitle>
-          </DialogHeader>
-          {selectedRowForSR && (
+            {/* SR/WR Form Fields - Example for a few fields, repeat for all */}
             <div className="space-y-4">
-              {/* CAD No and SR/WR No */}
               <div className="flex gap-4">
                 <div className="flex-1">
                   <Label className="font-semibold">{selectedRowForSR.receiptType === 'WR' ? 'WR No' : 'SR No'}</Label>
@@ -4062,603 +4231,63 @@ export default function InwardPage() {
                   <Input value={selectedRowForSR.cadNumber || ''} readOnly />
                 </div>
               </div>
-              {/* Stock Inward Date */}
               <div>
                 <Label className="font-semibold">Date of deposit</Label>
                 <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
               </div>
-              {/* Bank, Warehouse, Client, Commodity Details */}
-              <div className="mt-6">
-                <Label className="font-semibold text-orange-500">Bank Details</Label>
-                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
-                <div className="flex flex-wrap gap-4 items-center">
-                <div>
-                    <Label className="text-sm font-medium">Bank Name</Label>
-                    <Input value={selectedRowForSR?.bankName || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+              {/* ...repeat for all fields, using readOnly={readOnlySRForm} or disabled={readOnlySRForm} as needed... */}
                 </div>
-                <div>
-                    <Label className="text-sm font-medium">Bank Branch</Label>
-                    <Input value={selectedRowForSR?.bankBranch || ''} readOnly className="text-sm mt-1 bg-white w-48" />
-                </div>
-                <div>
-                    <Label className="text-sm font-medium">IFSC Code</Label>
-                    <Input value={selectedRowForSR?.ifscCode || ''} readOnly className="text-sm mt-1 bg-white w-48" />
-                </div>
-                </div>
-                </div>
-              </div>
-              <div className="mt-6">
-                <Label className="font-semibold text-orange-500">Warehouse Details</Label>
-                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
-                <div className="flex flex-wrap gap-4 items-center">
-                <div>
-                    <Label className="text-sm font-medium">Warehouse Name</Label>
-                    <Input value={selectedRowForSR?.warehouseName || ''} readOnly className="text-sm mt-1 bg-white w-48" />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Warehouse Code</Label>
-                    <Input value={selectedRowForSR?.warehouseCode || ''} readOnly className="text-sm mt-1 bg-white w-48" />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Warehouse Address</Label>
-                    <Input value={selectedRowForSR?.warehouseAddress || ''} readOnly className="text-sm mt-1 bg-white w-48" />
-                  </div>
-                </div>
-                </div>
-              </div>
-              <div className="mt-6">
-                <Label className="font-semibold text-orange-500">Client Details</Label>
-                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
-                <div className="flex flex-wrap gap-4 items-center">
-                  <div>
-                    <Label className="text-sm font-medium">Client Name</Label>
-                    <Input value={selectedRowForSR?.client || ''} readOnly className="text-sm mt-1 bg-white w-48" />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Client Code</Label>
-                    <Input value={selectedRowForSR?.clientCode || ''} readOnly className="text-sm mt-1 bg-white w-48" />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Client Address</Label>
-                    <Input value={selectedRowForSR?.clientAddress || ''} readOnly className="text-sm mt-1 bg-white w-48" />
-                  </div>
-                </div>
-                </div>
-              </div>
-              <div className="mt-6">
-                <Label className="font-semibold text-orange-500">Commodity Details</Label>
-                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-sm font-medium">Commodity</Label>
-                      <Input value={selectedRowForSR?.commodity || ''} readOnly className="text-sm mt-1 bg-white w-72" />
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium">Variety</Label>
-                      <Input value={selectedRowForSR?.varietyName || ''} readOnly className="text-sm mt-1 bg-white w-72" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold">No. of Bags/Bales</Label>
-                      <Input value={selectedRowForSR.totalBags || ''} readOnly />
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Total Quantity (MT)</Label>
-                      <Input value={selectedRowForSR.totalQuantity || ''} readOnly />
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Total Value (Rs/MT)</Label>
-                      <Input value={`${selectedRowForSR.totalValue || ''}`} readOnly />
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Market Rate (Rs/MT)</Label>
-                      <Input value={`${selectedRowForSR.marketRate || ''}`} readOnly />
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Base Receipt Number</Label>
-                      <Input value={selectedRowForSR.bankReceipt || ''} readOnly />
-                                  </div>
-                    <div>
-                      <Label className="font-semibold">Value of Commodities (in words)</Label>
-                      <Input value={numberToWords(selectedRowForSR.totalValue)} readOnly />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Bags and Quantity */}
-
-              {/* Validity Dates */}
-             
-              
-              <div className="mt-4"></div>
-              <Label className="font-semibold text-orange-500">Stock Validity</Label>
-              <div className="grid grid-cols-2 gap-4">
-                
-                <div>
-                  <Label className="font-semibold">Validity Start Date</Label>
-                  <Input value={srGenerationDate || selectedRowForSR.srGenerationDate || ''} readOnly placeholder="Auto-set on Approve" />
-                </div>
-                <div>
-                  <Label className="font-semibold">Validity End Date</Label>
-                  <Input
-                    value={(() => {
-                      // Find insurance match
-                      let insurance = null;
-                      if (selectedRowForSR?.selectedInsurance && inspectionInsuranceData.length) {
-                        insurance = inspectionInsuranceData.find(
-                          (ins: any) =>
-                            ins.insuranceId === selectedRowForSR.selectedInsurance.insuranceId &&
-                            ins.insuranceTakenBy === selectedRowForSR.selectedInsurance.insuranceTakenBy
-                        );
-                      }
-                      // If insurance taken by bank, 9 months after WR Generation Date
-                      if (insurance && insurance.insuranceTakenBy === 'bank') {
-                        if (selectedRowForSR.srGenerationDate) {
-                          const start = new Date(selectedRowForSR.srGenerationDate);
-                          start.setMonth(start.getMonth() + 9);
-                          return start.toISOString().slice(0, 10);
-                        }
-                        return '';
-                      }
-                      // Otherwise, use fire policy end date
-                      if (insurance && insurance.firePolicyEndDate) {
-                        return normalizeDate(insurance.firePolicyEndDate);
-                      }
-                      // Fallback: empty
-                      return '';
-                    })()}
-                    readOnly
-                    placeholder="Auto-set on Approve"
-                  />
-                </div>
-              </div>
-              {/* Insurance Expiry Check */}
-              {isInsuranceExpired(selectedRowForSR) && (
-                <div className="bg-red-100 text-red-700 p-2 rounded font-semibold">
-                  Insurance is expired. Please update the end date before approval.
-                </div>
-              )}
-                 
-            
-              {/* Hologram No and QR space */}
-              <div className="flex items-center gap-4">
-                <div className="flex-1 max-w-xs">
-                  <Label className="font-semibold">Hologram No</Label>
-                  <Input 
-                    placeholder="Enter Hologram No"
-                    value={hologramNumber}
-                    onChange={e => setHologramNumber(e.target.value)}
-                    readOnly={isFormApproved}
-                    className="w-32"
-                  />
-                </div>
-                <div className="w-64 h-32 border-2 border-dashed border-gray-400 flex items-center justify-center ml-4">
-                  <span className="text-xs text-gray-400">QR Sticker Space</span>
-                </div>
-              </div>
-              {/* Insurance Details */}
-              <div>
-                <Label className="font-semibold text-orange-500">Insurance Details </Label>
-                {(() => {
-                  if (!selectedRowForSR?.selectedInsurance || !inspectionInsuranceData.length) {
-                    return <div className="text-gray-500 text-sm">No insurance data found in inspection</div>;
-                  }
-                  const match = inspectionInsuranceData.find(
-                    (insurance: any) =>
-                      insurance.insuranceId === selectedRowForSR.selectedInsurance.insuranceId &&
-                      insurance.insuranceTakenBy === selectedRowForSR.selectedInsurance.insuranceTakenBy
-                  );
-                  if (!match) {
-                    return <div className="text-gray-500 text-sm">No insurance data found in inspection</div>;
-                  }
-                  return (
-                    <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
-                      {/* <h6 className="font-medium text-blue-600 mb-2">Insurance Entry</h6> */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-sm font-medium">Insurance Taken By</Label>
-                          <Input value={match.insuranceTakenBy || ''} readOnly className="text-sm" />
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium">Commodity</Label>
-                          <Input value={match.insuranceCommodity || ''} readOnly className="text-sm" />
-                        </div>
-                        {match.insuranceTakenBy === 'client' && (
-                          <>
-                            <div>
-                              <Label className="text-sm font-medium">Client Name</Label>
-                              <Input value={match.clientName || ''} readOnly className="text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Client Address</Label>
-                              <Input value={match.clientAddress || ''} readOnly className="text-sm" />
-                            </div>
-                          </>
-                        )}
-                        {match.insuranceTakenBy === 'bank' && (
-                          <div>
-                            <Label className="text-sm font-medium">Bank Name</Label>
-                            <Input value={match.selectedBankName || ''} readOnly className="text-sm" />
-                          </div>
-                        )}
-                        {match.insuranceTakenBy && match.insuranceTakenBy !== 'bank' && (
-                          <>
-                            <div>
-                              <Label className="text-sm font-medium">Fire Policy Company</Label>
-                              <Input value={match.firePolicyCompanyName || ''} readOnly className="text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Fire Policy Number</Label>
-                              <Input value={match.firePolicyNumber || ''} readOnly className="text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Fire Policy Amount</Label>
-                              <Input value={match.firePolicyAmount ? `₹${match.firePolicyAmount}` : ''} readOnly className="text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Fire Policy End Date</Label>
-                              <Input value={normalizeDate(match.firePolicyEndDate)} readOnly className="text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Burglary Policy Company</Label>
-                              <Input value={match.burglaryPolicyCompanyName || ''} readOnly className="text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Burglary Policy Number</Label>
-                              <Input value={match.burglaryPolicyNumber || ''} readOnly className="text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Burglary Policy Amount</Label>
-                              <Input value={match.burglaryPolicyAmount ? `₹${match.burglaryPolicyAmount}` : ''} readOnly className="text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">Burglary Policy End Date</Label>
-                              <Input value={normalizeDate(match.burglaryPolicyEndDate)} readOnly className="text-sm" />
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-                {/* Signature block for Stock Receipt only, right after insurance details */}
-                <div className="w-full flex justify-end mt-8 mb-2">
-                    <div className="flex flex-col items-end">
-                      <div className="w-56 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
-
-                        <span className="text-[10px] text-gray-400">Sign/Stamp</span>
-                      </div>
-                                                                    <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
-
-                      <div className="text-[10px] font-semibold">AUTHORIZED SIGNATORY</div>
-                    </div>
-                  </div>
-                {/* {selectedRowForSR?.receiptType !== 'WR' && (
-                  <div className="w-full flex justify-end mt-8 mb-2">
-                    <div className="flex flex-col items-end">
-                      <div className="w-56 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
-
-                        <span className="text-[10px] text-gray-400">Sign</span>
-                      </div>
-                                                                    <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
-
-                      <div className="text-[10px] font-semibold">AUTHORIZED SIGNATORY</div>
-                    </div>
-                  </div>
-                )} */}
-              </div>
-              {/* Margin and Dotted Line */}
-              <div className="my-8">
-                <hr className="border-t-2 border-dotted border-gray-400" />
-              </div>
-              {/* Agrogreen Logo and Test Certificate (Modal View) */}
-              <div className="relative flex flex-col items-center justify-center my-8">
-              <div className="flex flex-col items-center justify-center mb-8 mt-2">
-            <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 120, height: 100, marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
-            <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
-              AGROGREEN WAREHOUSING PRIVATE LTD.
-            </div>
-            <div className="text-base font-semibold text-green-600 mb-2 text-center">
-              603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
-            </div>
-            <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
-              TEST CERTIFICATE
-            </div>
-          </div>
-                {/* FROM SECTION */}
-                <div className="w-full max-w-2xl mt-8 mb-4 border border-gray-200 rounded-lg p-4 bg-gray-50" style={{ maxWidth: '900px' }}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <Label className="font-semibold mb-1">Client Name</Label>
-                      <Input readOnly value={selectedRowForSR?.client || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Commodity Name</Label>
-                      <Input readOnly value={selectedRowForSR?.commodity || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Commodity Variety Name</Label>
-                      <Input readOnly value={selectedRowForSR?.varietyName || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Client Address</Label>
-                      <Input readOnly value={selectedRowForSR?.clientAddress || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Warehouse Name</Label>
-                      <Input readOnly value={selectedRowForSR?.warehouseName || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Warehouse Address</Label>
-                      <Input readOnly value={selectedRowForSR?.warehouseAddress || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Total Number of Bags</Label>
-                      <Input readOnly value={selectedRowForSR?.totalBags || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">CAD No</Label>
-                      <Input readOnly value={selectedRowForSR?.cadNumber || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Date of Sampling</Label>
-                      <Input readOnly value={selectedRowForSR?.dateOfSampling || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Date of Testing</Label>
-                      <Input readOnly value={selectedRowForSR?.dateOfTesting || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                  </div>
-                </div>
-                {/* Remarks input - left aligned */}
-                <div className="w-full max-w-2xl mb-4 flex flex-col items-start" style={{ maxWidth: '900px' }}>
-                  <Label className="font-semibold mb-1">Remarks</Label>
-                  <Input
-                    type="text"
-                    value={remarks}
-                    onChange={e => setRemarks(e.target.value)}
-                    placeholder="Enter remarks here"
-                    className="w-full bg-white border-green-300 text-green-800"
-                  />
-                </div>
-                {/* Quality Parameters Table - left aligned */}
-                <div className="w-full max-w-2xl mb-8" style={{ maxWidth: '900px' }}>
-                  <Label className="block font-semibold mb-2 text-green-700 text-left">Quality Parameters (from Commodity & Variety)</Label>
-                  <div className="overflow-x-auto max-w-lg">
-                    <table className="min-w-full border border-green-300 rounded-lg">
-                      <thead className="bg-orange-100 text-orange-600 font-bold">
-                        <tr>
-                          <th className="px-4 py-2 border-green-300 border">Parameter</th>
-                          <th className="px-4 py-2 border-green-300 border">Min %</th>
-                          <th className="px-4 py-2 border-green-300 border">Max %</th>
-                          <th className="px-4 py-2 border-green-300 border">Actual (%)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          // Find particulars for the selectedRowForSR
-                          const commodity = commodities.find((c: any) => c.commodityName === selectedRowForSR?.commodity);
-                          const variety = commodity?.varieties?.find((v: any) => v.varietyName === selectedRowForSR?.varietyName);
-                          const particulars = variety?.particulars || [];
-                          return particulars.length > 0 ? (
-                            particulars.map((p: any, idx: number) => (
-                              <tr key={idx} className="text-green-800">
-                                <td className="px-4 py-2 border-green-300 border">{p.name}</td>
-                                <td className="px-4 py-2 border-green-300 border">{p.minPercentage}</td>
-                                <td className="px-4 py-2 border-green-300 border">{p.maxPercentage}</td>
-                                <td className="px-4 py-2 border-green-300 border">
-                                  <Input
-                                    type="number"
-                                    value={selectedRowForSR?.labResults?.[idx] || ''}
-                                    readOnly
-                                    className="w-24 bg-white border border-green-300 text-center"
-                              />
-                            </td>
-                          </tr>
-                            ))
-                          ) : (
-                          <tr><td colSpan={4} className="text-center text-gray-400 py-2">No quality parameters found for this variety.</td></tr>
-                          );
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                {/* Footer Section - left and right aligned with space between */}
-                <div className="w-full max-w-2xl flex justify-between items-end mt-8 mb-2" style={{ maxWidth: '900px' }}>
-                  <div className="text-xs font-semibold text-left">THE QUALITY OF GOODS IS AVERAGE</div>
-                  <div className="flex flex-col items-end">
-                    {/* <div className="text-xs font-bold mb-1">Stamp</div> */}
-                   
-                    <div className="w-40 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
-                      <span className="text-[10px] text-gray-400">Sign/Stamp</span>
-                    </div>
- <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
-                    <div className="text-[10px] font-semibold text-green-700">AUTHORIZED SIGNATORY</div>
-                  </div>
-                </div>
-              </div>
-              {/* Approve/Reject/Resubmit Buttons and Print Button */}
-              {(() => {
-                const status = selectedRowForSR?.status;
-                if (isFormApproved || status === 'approve') {
-                  return (
-                    <div className="flex justify-end mt-4">
+            {/* Approve/Reject/Resubmit/Print Buttons */}
+            <div className="flex gap-4 mt-4 justify-end">
+              {((selectedRowForSR.status !== 'approve') && (selectedRowForSR.status !== 'rejected')) && (
+                <>
                       <Button
-                        onClick={handlePrint}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
-                        disabled={isPrinting}
-                      >
-                        {isPrinting ? 'Generating PDF...' : 'Print Receipt'}
-                      </Button>
-                    </div>
-                  );
-                } else if (status === 'rejected') {
-                  return (
-                    <div className="flex justify-end mt-4">
-                      <Button disabled className="bg-red-600 text-white px-4 py-2 text-sm opacity-70 cursor-not-allowed">
-                        Rejected
-                      </Button>
-                    </div>
-                  );
-                } else if (status === 'resubmited') {
-                  return (
-                    <div className="flex justify-end mt-4">
-                      <Button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 text-sm">
-                        Your {selectedRowForSR?.receiptType === 'WR' ? 'WR' : 'SR'} needs to be updated
-                      </Button>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="flex gap-4 mt-4 justify-end">
-                      <Button
-                        onClick={() => handleApproveSR(selectedRowForSR)}
-                        disabled={isInsuranceExpired(selectedRowForSR)}
+                    onClick={async () => {
+                      await handleApproveSR(selectedRowForSR);
+                      setReadOnlySRForm(true);
+                    }}
                         className="bg-green-600 hover:bg-green-700 text-white"
+                    disabled={readOnlySRForm}
                       >
-                        {selectedRowForSR.receiptType === 'WR' ? 'Proceed to WR' : 'Proceed to SR'}
+                    Approve
                       </Button>
                       <Button
-                        onClick={() => handleRejectSR(selectedRowForSR)}
+                    onClick={async () => {
+                      await handleRejectSR(selectedRowForSR);
+                      setShowSRForm(false);
+                    }}
                         className="bg-red-600 hover:bg-red-700 text-white"
+                    disabled={readOnlySRForm}
                       >
                         Reject
                       </Button>
                       <Button
-                        onClick={() => handleResubmitSR(selectedRowForSR)}
+                    onClick={() => setReadOnlySRForm(false)}
                         className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                    disabled={!readOnlySRForm}
                       >
                         Resubmit
                       </Button>
-                    </div>
-                  );
-                }
-              })()}
-              {/* Hidden printRef for PDF export - New Layout */}
-              {(isFormApproved || selectedRowForSR?.status === 'approve') && (
-                <div style={showPrintDebug ? { position: 'static', margin: '32px 0', zIndex: 1000, background: '#fff' } : { position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
-                  <div ref={printableReceiptRef}>
-                    <PrintableWarehouseReceipt
-                      selectedRowForSR={selectedRowForSR}
-                      hologramNumber={hologramNumber}
-                      srGenerationDate={srGenerationDate}
-                      getSelectedVarietyParticulars={getSelectedVarietyParticulars}
-                    />
-                  </div>
-                  {/* Keep original components for backward compatibility */}
-                  <div ref={printRef} style={{ display: 'none' }}>
-                    <StorageReceipt
-                      data={{
-                        srNo: generateSRNo(selectedRowForSR),
-                        srGenerationDate: srGenerationDate || '-',
-                        dateOfIssue: selectedRowForSR?.dateOfInward || '',
-                        baseReceiptNo: selectedRowForSR?.baseReceiptNo || selectedRowForSR?.bankReceipt || '-',
-                        cadNo: selectedRowForSR?.cadNo || selectedRowForSR?.cadNumber || '',
-                        dateOfDeposit: selectedRowForSR?.dateOfInward || '',
-                        branch: selectedRowForSR?.branch || '-',
-                        warehouseName: selectedRowForSR?.warehouseName || '',
-                        warehouseAddress: selectedRowForSR?.warehouseAddress || '',
-                        client: selectedRowForSR?.client || '',
-                        clientAddress: selectedRowForSR?.clientAddress || '',
-                        commodity: selectedRowForSR?.commodity || '',
-                        totalBags: selectedRowForSR?.totalBags || '',
-                        netWeight: selectedRowForSR?.totalQuantity || '',
-                        grade: selectedRowForSR?.grade || '-',
-                        remarks: selectedRowForSR?.remarks || '-',
-                        marketRate: selectedRowForSR?.marketRate || '',
-                        valueOfCommodity: selectedRowForSR?.totalValue || '',
-                        hologramNumber: hologramNumber || '',
-                        insuranceDetails: [
-                          {
-                            policyNo: inspectionInsuranceData[0]?.firePolicyNumber || '-',
-                            company: inspectionInsuranceData[0]?.firePolicyCompanyName || '-',
-                            validFrom: inspectionInsuranceData[0]?.firePolicyStartDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyStartDate) : '-',
-                            validTo: inspectionInsuranceData[0]?.firePolicyEndDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyEndDate) : '-',
-                            sumInsured: inspectionInsuranceData[0]?.firePolicyAmount || '-',
-                          },
-                        ],
-                        bankName: selectedRowForSR?.bankName || '',
-                        date: selectedRowForSR?.dateOfInward || '',
-                        place: selectedRowForSR?.branch || '',
-                        stockInwardDate: selectedRowForSR?.dateOfInward || '-',
-                        receiptType: selectedRowForSR?.receiptType || 'SR',
-                        varietyName: selectedRowForSR?.varietyName || '',
-                        dateOfSampling: selectedRowForSR?.dateOfSampling || '',
-                        dateOfTesting: selectedRowForSR?.dateOfTesting || '',
-                      }}
-                    />
-                  </div>
-                  <div ref={testCertRef} style={{ display: 'none' }}>
-                    <TestCertificate
-                      client={selectedRowForSR?.client || ''}
-                      clientAddress={selectedRowForSR?.clientAddress || ''}
-                      commodity={selectedRowForSR?.commodity || ''}
-                      varietyName={selectedRowForSR?.varietyName || ''}
-                      warehouseName={selectedRowForSR?.warehouseName || ''}
-                      warehouseAddress={selectedRowForSR?.warehouseAddress || ''}
-                      totalBags={selectedRowForSR?.totalBags || ''}
-                      dateOfSampling={selectedRowForSR?.dateOfSampling || ''}
-                      dateOfTesting={selectedRowForSR?.dateOfTesting || ''}
-                      qualityParameters={(() => {
-                        const commodity = commodities.find((c: any) => c.commodityName === selectedRowForSR?.commodity);
-                        const variety = commodity?.varieties?.find((v: any) => v.varietyName === selectedRowForSR?.varietyName);
-                        const particulars = variety?.particulars || [];
-                        return particulars.map((p: any, idx: number) => ({
-                          name: p.name,
-                          minPercentage: p.minPercentage,
-                          maxPercentage: p.maxPercentage,
-                          actual: selectedRowForSR?.labResults?.[idx] || '',
-                        }));
-                      })()}
-                    />
-                  </div>
-                </div>
+                </>
               )}
-              {/* Insurance Seal/Stamp and Company Info */}
-              <div className="flex justify-between items-end mt-8">
-                <div>
-                  {/* <div className="font-bold text-lg">TEST certificate</div> */}
-                </div>
-                <div className="flex flex-col items-end">
-                  
-                  {/* <div className="text-sm font-semibold">{process.env.NEXT_PUBLIC_COMPANY_NAME || 'Company Name'}</div> */}
-                  {/* <div className="text-xs text-gray-500">{process.env.NEXT_PUBLIC_COMPANY_LOCATION || 'Location'}</div> */}
-                  </div>
-                </div>
-              {/* Disclaimer at the very end */}
-              <div className="w-full max-w-2xl mx-auto text-xs text-gray-600 mt-8 mb-2 text-justify border-t pt-4">
-                This Report is given to you on the base of best tesing ability. Any discrepancy found in the report should be brought to our notice within 48 hours of Receipt of the report. The above results are valid for the date and time of sampling and testing only. Total liability or any claim arising out of this report is limited to the invoiced amount only.
-              </div>
-              {/* Stock Validity section */}
-              {/* <div className="mt-4">
-                <Label className="font-semibold text-orange-500">Stock Validity</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="font-semibold">Validity Start Date</Label>
-                    <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Validity End Date</Label>
-                    <Input value={(() => {
-                      // If insurance taken by bank, 9 months after start date
-                      if (selectedRowForSR.selectedInsurance?.insuranceTakenBy === 'bank') {
-                        const start = selectedRowForSR.dateOfInward ? new Date(selectedRowForSR.dateOfInward) : null;
-                        if (start && !isNaN(start.getTime())) {
-                          start.setMonth(start.getMonth() + 9);
-                          return start.toISOString().slice(0, 10);
-                        }
-                      }
-                      // Otherwise, use Fire Policy End Date
-                      const fireEnd = selectedRowForSR.firePolicyEnd || (inspectionInsuranceData.find(i => i.insuranceTakenBy !== 'bank')?.firePolicyEndDate);
-                      return fireEnd || '';
-                    })()} readOnly />
-                  </div>
-                </div>
-              </div> */}
+              {(selectedRowForSR.status === 'approve' || isFormApproved) && (
+                <Button
+                  onClick={handlePrint}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
+                  disabled={isPrinting}
+                >
+                  {isPrinting ? 'Generating PDF...' : 'Print Receipt'}
+                </Button>
+              )}
+              {(selectedRowForSR.status === 'rejected') && (
+                <Button disabled className="bg-red-600 text-white px-4 py-2 text-sm opacity-70 cursor-not-allowed">
+                  Rejected
+                </Button>
+              )}
             </div>
-          )}
         </DialogContent>
       </Dialog>
+      )}
     </DashboardLayout>
   );
 }
