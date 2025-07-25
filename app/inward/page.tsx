@@ -1772,22 +1772,60 @@ export default function InwardPage() {
     { accessorKey: "firePolicyName", header: "Fire Policy Name" },
     { accessorKey: "burglaryPolicyName", header: "Burglary Policy Name" },
     { accessorKey: "bankFundedBy", header: "Bank Funded By" },
-    // Add status column
+    // Add CIR Status column
     {
-      accessorKey: "status",
-      header: "Status",
+      accessorKey: 'cirStatus',
+      header: 'CIR Status',
       cell: ({ row }: any) => {
+        const cirStatus = row.original.cirStatus || 'Pending';
+        let color = 'text-blue-600 font-semibold';
+        if (cirStatus === 'Approved') color = 'text-green-600 font-semibold';
+        else if (cirStatus === 'Rejected') color = 'text-red-600 font-semibold';
+        else if (cirStatus === 'Resubmitted') color = 'text-yellow-600 font-semibold';
+        return (
+          <div className="flex items-center space-x-2 justify-center">
+            <span className={color}>{cirStatus}</span>
+            <Button
+              onClick={() => handleCIRView(row.original)}
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-green-600 hover:text-green-800 hover:bg-green-50"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      }
+    },
+    {
+      accessorKey: 'srwrStatus',
+      header: 'SR/WR Status',
+      cell: ({ row }: any) => {
+        const cirStatus = row.original.cirStatus || 'Pending';
+        if (cirStatus !== 'Approved') {
+          return <span>-</span>;
+        }
         const status = row.original.status || 'pending';
-        // Optionally, you can style the status text
         let color = 'text-gray-600';
         if (status === 'approve') color = 'text-green-600 font-semibold';
         else if (status === 'rejected') color = 'text-red-600 font-semibold';
         else if (status === 'resubmited') color = 'text-yellow-600 font-semibold';
         else if (status === 'pending') color = 'text-blue-600 font-semibold';
-        return <span className={color}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
+        return (
+          <div className="flex items-center space-x-2 justify-center">
+            <span className={color}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
+            <Button
+              onClick={() => handleViewSR(row.original)}
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-green-600 hover:text-green-800 hover:bg-green-50"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          </div>
+        );
       }
     },
-    // Action column
     {
       accessorKey: "actions",
       header: "Actions",
@@ -1819,11 +1857,6 @@ export default function InwardPage() {
           </Button>
         </div>
       ),
-    },
-    {
-      accessorKey: 'alert',
-      header: 'Alert',
-      cell: AlertCell
     },
   ];
 
@@ -2265,7 +2298,7 @@ export default function InwardPage() {
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'approve', srGenerationDate: todayISO, hologramNumber });
+        await updateDoc(docRef, { status: 'approve', srGenerationDate: todayISO, hologramNumber, remarks });
       }
     } catch (error) {
       console.error('Error updating status to approve:', error);
@@ -2292,7 +2325,7 @@ export default function InwardPage() {
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'rejected' });
+        await updateDoc(docRef, { status: 'rejected', remarks });
       }
     } catch (error) {
       console.error('Error updating status to rejected:', error);
@@ -2308,7 +2341,7 @@ export default function InwardPage() {
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'resubmited' });
+        await updateDoc(docRef, { status: 'resubmited', remarks });
       }
     } catch (error) {
       console.error('Error updating status to resubmited:', error);
@@ -2778,6 +2811,692 @@ export default function InwardPage() {
   const visibleColumns = useMemo(() => {
     return columns.filter(col => visibleColumnKeys.includes(col.accessorKey));
   }, [columns, visibleColumnKeys]);
+
+  // Add state for CIR modal and logic for Approve, Reject, Resubmit
+  const [showCIRModal, setShowCIRModal] = useState(false);
+  const [cirModalData, setCIRModalData] = useState<any>(null);
+  const [cirReadOnly, setCIRReadOnly] = useState(true);
+  const [cirRemarks, setCIRRemarks] = useState(''); // <-- CIR remarks state
+
+  const handleCIRView = async (row: any) => {
+    setCIRReadOnly(true);
+    setShowCIRModal(true);
+
+    // Fetch insurance entries from inspection collection for the selected warehouse
+    let inspectionInsuranceEntries = [];
+    if (row.warehouseName) {
+      const inspectionsCollection = collection(db, 'inspections');
+      const q = query(inspectionsCollection, where('warehouseName', '==', row.warehouseName));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const inspectionData = querySnapshot.docs[0].data();
+        if (inspectionData.insuranceEntries && Array.isArray(inspectionData.insuranceEntries)) {
+          inspectionInsuranceEntries = inspectionData.insuranceEntries;
+        } else if (inspectionData.warehouseInspectionData?.insuranceEntries && Array.isArray(inspectionData.warehouseInspectionData.insuranceEntries)) {
+          inspectionInsuranceEntries = inspectionData.warehouseInspectionData.insuranceEntries;
+        }
+      }
+    }
+
+    // Find the correct insurance entry
+    let yourInsurance = null;
+    if (row.selectedInsurance && inspectionInsuranceEntries.length > 0) {
+      yourInsurance = inspectionInsuranceEntries.find(
+        (ins: any) =>
+          ins.insuranceId === row.selectedInsurance.insuranceId &&
+          ins.insuranceTakenBy === row.selectedInsurance.insuranceTakenBy
+      ) || null;
+    }
+
+    // Prepare lab parameter names from commodity/variety
+    let labParameterNames = [];
+    if (row.commodity && row.varietyName && typeof getCommodityVarieties === 'function') {
+      const varieties = getCommodityVarieties(row.commodity);
+      const variety = varieties.find((v: any) => v.varietyName === row.varietyName);
+      if (variety && Array.isArray(variety.qualityParameters)) {
+        labParameterNames = variety.qualityParameters.map((p: any) => p.parameterName);
+      }
+    }
+
+    // If inwardEntries missing, fetch all entries for this inwardId from the inward collection
+    let inwardEntries = row.inwardEntries || [];
+    if ((!inwardEntries || inwardEntries.length === 0) && row.inwardId) {
+      const inwardCollection = collection(db, 'inward');
+      const q = query(inwardCollection, where('inwardId', '==', row.inwardId));
+      const querySnapshot = await getDocs(q);
+      inwardEntries = querySnapshot.docs.map(doc => doc.data());
+    }
+
+    // Patch: Always prefer main row's fields, then inwardEntries[0] if missing
+    let patchFields: Record<string, any> = {};
+    const keys = [
+      'vehicleNumber', 'getpassNumber', 'weightBridge', 'weightBridgeSlipNumber',
+      'grossWeight', 'tareWeight', 'netWeight', 'averageWeight', 'totalBags', 'totalQuantity',
+      'dateOfSampling', 'dateOfTesting', 'labResults', 'labResultsValidation', 'stacks'
+    ];
+    for (const key of keys) {
+      if (row[key] !== undefined) {
+        patchFields[key] = row[key];
+      } else if (inwardEntries && inwardEntries.length > 0) {
+        const entry = inwardEntries[0];
+        if (entry[key] !== undefined) {
+          patchFields[key] = entry[key];
+        }
+      }
+    }
+
+    // Set CIR modal data with all required fields
+    setCIRModalData({
+      ...row,
+      ...patchFields,
+      yourInsurance,
+      inwardEntries,
+      labParameterNames,
+    });
+    setCIRRemarks(row.remarks || ''); // <-- Set remarks from row if present
+  };
+
+  const handleCIRApprove = async () => {
+    if (cirModalData) {
+      // Update cirStatus in Firestore
+      const inwardCollection = collection(db, 'inward');
+      const q = query(inwardCollection, where('inwardId', '==', cirModalData.inwardId));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { cirStatus: 'Approved', remarks: cirRemarks });
+      }
+      setShowCIRModal(false);
+      // Optionally trigger a re-fetch or state update
+    }
+  };
+
+  const handleCIRReject = async () => {
+    if (cirModalData) {
+      const inwardCollection = collection(db, 'inward');
+      const q = query(inwardCollection, where('inwardId', '==', cirModalData.inwardId));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { cirStatus: 'Rejected', remarks: cirRemarks });
+      }
+      setShowCIRModal(false);
+    }
+  };
+
+  const handleCIRResubmit = async () => {
+    if (cirModalData) {
+      const inwardCollection = collection(db, 'inward');
+      const q = query(inwardCollection, where('inwardId', '==', cirModalData.inwardId));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { cirStatus: 'Resubmitted', remarks: cirRemarks });
+      }
+      setShowCIRModal(false);
+      // Open edit inward modal for this entry
+      handleEdit(cirModalData);
+    }
+  };
+
+  const handleCIRSave = () => {
+    // Save changes and set status to Resubmitted
+    if (cirModalData) {
+      cirModalData.cirStatus = 'Resubmitted';
+      setCIRReadOnly(true);
+      setShowCIRModal(false);
+      // Optionally trigger a re-fetch or state update
+    }
+  };
+
+  // Render CIR Modal (add this near your modals or at the bottom of the component)
+  {showCIRModal && (
+    <Dialog open={showCIRModal} onOpenChange={setShowCIRModal}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        {/* Logo and company info header (copied from SR/WR receipt) */}
+        <div className="flex flex-col items-center justify-center mb-8 mt-2">
+          <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 120, height: 100, marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
+          <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
+            AGROGREEN WAREHOUSING PRIVATE LTD.
+          </div>
+          <div className="text-base font-semibold text-green-600 mb-2 text-center">
+            603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
+          </div>
+        </div>
+        <DialogHeader>
+          <DialogTitle className="text-orange-700 text-xl">
+            CIR Inward Details
+          </DialogTitle>
+        </DialogHeader>
+        <form className="space-y-4">
+          {/* State, Branch, Location, Warehouse Name, Warehouse Code, Business Type, Warehouse Address, Client Name, Client Code, Client Address */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="block font-semibold mb-1">State</Label>
+              <Input value={cirModalData?.state || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Branch</Label>
+              <Input value={cirModalData?.branch || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Location</Label>
+              <Input value={cirModalData?.location || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Warehouse Name</Label>
+              <Input value={cirModalData?.warehouseName || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Warehouse Code</Label>
+              <Input value={cirModalData?.warehouseCode || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Business Type</Label>
+              <Input value={cirModalData?.businessType || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Warehouse Address</Label>
+              <Input value={cirModalData?.warehouseAddress || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Client Name</Label>
+              <Input value={cirModalData?.client || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Client Code</Label>
+              <Input value={cirModalData?.clientCode || ''} readOnly disabled />
+            </div>
+            <div>
+              <Label className="block font-semibold mb-1">Client Address</Label>
+              <Input value={cirModalData?.clientAddress || ''} readOnly disabled />
+            </div>
+          </div>
+          {/* Inward Details */}
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-semibold mb-4 text-orange-700">Inward Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <Label className="block font-semibold mb-1">Date of Inward</Label>
+                <Input value={cirModalData?.dateOfInward || ''} readOnly disabled />
+              </div>
+              <div>
+                <Label className="block font-semibold mb-1">CAD Number</Label>
+                <Input value={cirModalData?.cadNumber || ''} readOnly disabled />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="block font-semibold mb-1">Base Receipt</Label>
+                <Input value={cirModalData?.bankReceipt || ''} readOnly disabled />
+              </div>
+            </div>
+          </div>
+          {/* Commodity Information */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-6 text-orange-700">Commodity Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <Label className="block font-semibold mb-2">Commodity</Label>
+                <Input value={cirModalData?.commodity || ''} readOnly disabled />
+              </div>
+              <div>
+                <Label className="block font-semibold mb-2">Variety Name</Label>
+                <Input value={cirModalData?.varietyName || ''} readOnly disabled />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <Label className="block font-semibold mb-2">Market Rate (Rs/MT)</Label>
+                <Input value={cirModalData?.marketRate || ''} readOnly disabled />
+              </div>
+              <div>
+                <Label className="block font-semibold mb-2">Total Bags</Label>
+                <Input value={cirModalData?.totalBags || ''} readOnly disabled />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label className="block font-semibold mb-2">Total Quantity (MT)</Label>
+                <Input value={cirModalData?.totalQuantity || ''} readOnly disabled />
+              </div>
+              <div>
+                <Label className="block font-semibold mb-2">Total Value (Rs/MT)</Label>
+                <Input value={cirModalData?.totalValue || ''} readOnly disabled />
+              </div>
+            </div>
+          </div>
+          {/* Bank Information */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-6 text-orange-700">Bank Information (Auto-filled from Inspection)</h3>
+            <div className="mb-6">
+              <Label className="block font-semibold mb-2">Bank Name</Label>
+              <Input value={cirModalData?.bankName || ''} readOnly disabled />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <Label className="block font-semibold mb-2">Bank Branch</Label>
+                <Input value={cirModalData?.bankBranch || ''} readOnly disabled />
+              </div>
+              <div>
+                <Label className="block font-semibold mb-2">Bank State</Label>
+                <Input value={cirModalData?.bankState || ''} readOnly disabled />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label className="block font-semibold mb-2">IFSC Code</Label>
+                <Input value={cirModalData?.ifscCode || ''} readOnly disabled />
+              </div>
+            </div>
+          </div>
+          {/* Reservation/Billing Information */}
+          {cirModalData?.businessType !== 'cm' && cirModalData?.billingStatus && (
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-semibold mb-4 text-orange-700">Reservation & Billing Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <Label className="block font-semibold mb-1">Billing Status</Label>
+                  <Input value={cirModalData?.billingStatus || ''} readOnly disabled />
+                </div>
+              </div>
+              {cirModalData?.billingStatus === 'reservation' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="block font-semibold mb-1">Reservation Rate</Label>
+                    <Input value={cirModalData?.reservationRate || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Reservation Quantity</Label>
+                    <Input value={cirModalData?.reservationQty || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Reservation Start Date</Label>
+                    <Input value={cirModalData?.reservationStart || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Reservation End Date</Label>
+                    <Input value={cirModalData?.reservationEnd || ''} readOnly disabled />
+                  </div>
+                </div>
+              )}
+              {cirModalData?.billingStatus === 'post-reservation' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="block font-semibold mb-1">Billing Cycle</Label>
+                    <Input value={cirModalData?.billingCycle || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Billing Type</Label>
+                    <Input value={cirModalData?.billingType || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Rate</Label>
+                    <Input value={cirModalData?.billingRate || ''} readOnly disabled />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Add more fields as needed, following the Add/Edit Inward modal structure */}
+          {/* Your Insurance Section */}
+          {cirModalData?.yourInsurance && (
+            <div className="border-t pt-6 mb-6">
+              <h3 className="text-xl font-semibold mb-4 text-blue-700">Your Insurance</h3>
+              <div className="border border-blue-200 rounded-lg p-6 bg-blue-50">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-medium text-blue-700">Insurance ID: {cirModalData.yourInsurance.insuranceId}</h4>
+                  <div className="text-sm text-blue-600 font-medium">
+                    {cirModalData.yourInsurance.insuranceTakenBy} - {cirModalData.yourInsurance.insuranceCommodity}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <Label className="block font-semibold mb-1">Insurance Taken By</Label>
+                    <Input value={cirModalData.yourInsurance.insuranceTakenBy || ''} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Commodity</Label>
+                    <Input value={cirModalData.yourInsurance.insuranceCommodity || ''} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Fire Policy Number</Label>
+                    <Input value={cirModalData.yourInsurance.firePolicyNumber || ''} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
+                    <Input value={formatAmount(cirModalData.yourInsurance.firePolicyAmount)} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
+                    <Input value={normalizeDate(cirModalData.yourInsurance.firePolicyStartDate)} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
+                    <Input value={normalizeDate(cirModalData.yourInsurance.firePolicyEndDate)} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
+                    <Input value={cirModalData.yourInsurance.burglaryPolicyNumber || ''} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
+                    <Input value={formatAmount(cirModalData.yourInsurance.burglaryPolicyAmount)} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
+                    <Input value={normalizeDate(cirModalData.yourInsurance.burglaryPolicyStartDate)} readOnly />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
+                    <Input value={normalizeDate(cirModalData.yourInsurance.burglaryPolicyEndDate)} readOnly />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Saved Inward Entries Section */}
+          {Array.isArray(cirModalData?.inwardEntries) && cirModalData.inwardEntries.length > 0 && (
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-semibold mb-4 text-green-700">Saved Inward Entries</h3>
+              <div className="space-y-6">
+                {cirModalData.inwardEntries.map((entry: any, index: number) => (
+                  <div key={entry.id || index} className="border border-green-300 rounded-lg p-6 bg-green-50">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-semibold text-green-800">Entry #{entry.entryNumber}</h4>
+                      <div className="text-sm text-green-600 font-medium">
+                        Vehicle: {entry.vehicleNumber} | Gatepass: {entry.getpassNumber}
+                      </div>
+                    </div>
+                    {/* Inward ID */}
+                    <div className="mb-4">
+                      <h5 className="text-md font-semibold mb-2 text-green-700">Inward Information</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="block font-medium mb-1 text-green-600">Inward ID</Label>
+                          <Input value={entry.inwardId || 'Pending'} readOnly className="bg-white border-green-300 font-mono" />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Vehicle Information */}
+                    <div className="mb-4">
+                      <h5 className="text-md font-semibold mb-2 text-green-700">Vehicle Information</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="block font-medium mb-1 text-green-600">Vehicle Number</Label>
+                          <Input value={entry.vehicleNumber} readOnly className="bg-white border-green-300" />
+                        </div>
+                        <div>
+                          <Label className="block font-medium mb-1 text-green-600">Gatepass Number</Label>
+                          <Input value={entry.getpassNumber} readOnly className="bg-white border-green-300" />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Weight Bridge Information */}
+                    <div className="mb-4">
+                      <h5 className="text-md font-semibold mb-2 text-green-700">Weight Bridge Information</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="block font-medium mb-1 text-green-600">Weight Bridge</Label>
+                          <Input value={entry.weightBridge} readOnly className="bg-white border-green-300" />
+                        </div>
+                        <div>
+                          <Label className="block font-medium mb-1 text-green-600">Weight Bridge Slip Number</Label>
+                          <Input value={entry.weightBridgeSlipNumber} readOnly className="bg-white border-green-300" />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Weight Information */}
+                    <div className="mb-4">
+                      <h5 className="text-md font-semibold mb-2 text-green-700">Weight Information</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label className="block font-medium mb-1 text-green-600">Gross Weight (MT)</Label>
+                          <Input value={entry.grossWeight} readOnly className="bg-white border-green-300" />
+                        </div>
+                        <div>
+                          <Label className="block font-medium mb-1 text-green-600">Tare Weight (MT)</Label>
+                          <Input value={entry.tareWeight} readOnly className="bg-white border-green-300" />
+                        </div>
+                        <div>
+                          <Label className="block font-medium mb-1 text-green-600">Net Weight (MT)</Label>
+                          <Input value={entry.netWeight} readOnly className="bg-white border-green-300" />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Stack Information */}
+                    <div>
+                      <h5 className="text-md font-semibold mb-2 text-green-700">Stack Information</h5>
+                      <div className="space-y-3">
+                        {entry.stacks && entry.stacks.map((stack: any, stackIndex: number) => (
+                          <div key={stackIndex} className="border border-green-200 rounded-lg p-3 bg-white">
+                            <div className="flex items-center justify-between mb-2">
+                              <h6 className="font-medium text-green-700">Stack {stackIndex + 1}</h6>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <Label className="block font-medium mb-1 text-green-600">Stack Number</Label>
+                                <Input value={stack.stackNumber} readOnly className="bg-gray-50 border-green-300" />
+                              </div>
+                              <div>
+                                <Label className="block font-medium mb-1 text-green-600">Number of Bags</Label>
+                                <Input value={stack.numberOfBags} readOnly className="bg-gray-50 border-green-300" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Lab Parameter Section */}
+          {cirModalData?.labResults && (
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4 text-orange-700">Lab Parameter</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <Label className="block font-semibold mb-1">Sampling Date</Label>
+                  <Input value={cirModalData.dateOfSampling || ''} readOnly />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Testing Date</Label>
+                  <Input value={cirModalData.dateOfTesting || ''} readOnly />
+                </div>
+              </div>
+              <div>
+                <Label className="block font-semibold mb-1">Quality Parameters</Label>
+                <div className="space-y-2">
+                  {Array.isArray(cirModalData.labParameterNames) && cirModalData.labParameterNames.length > 0 ? (
+                    cirModalData.labParameterNames.map((name: string, idx: number) => (
+                      <div key={name} className="flex items-center space-x-2">
+                        <span className="font-medium w-48">{name}</span>
+                        <Input value={cirModalData.labResults?.[idx] || ''} readOnly className="w-32" />
+                      </div>
+                    ))
+                  ) : (
+                    <Input value={Array.isArray(cirModalData.labResults) ? cirModalData.labResults.join(', ') : ''} readOnly />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {/* File Attachment Section */}
+          {cirModalData?.attachmentUrl && (
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold text-orange-700 mb-4">File Attachment</h3>
+              <a href={cirModalData.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                View Attached File
+              </a>
+            </div>
+          )}
+          {/* In the CIR modal Lab Parameter section, use the Input component for the Actual (%) column, matching the Edit Inward modal: */}
+          {cirModalData?.labParameterNames && cirModalData.labParameterNames.length > 0 && cirModalData?.commodity && cirModalData?.varietyName ? (
+            <div className="w-full max-w-2xl mb-8" style={{ maxWidth: '900px' }}>
+              <Label className="block font-semibold mb-2 text-green-700 text-left">Quality Parameters (from Commodity & Variety)</Label>
+              <div className="overflow-x-auto max-w-lg">
+                <table className="min-w-full border border-green-300 rounded-lg">
+                  <thead className="bg-orange-100 text-orange-600 font-bold">
+                    <tr>
+                      <th className="px-4 py-2 border-green-300 border">Parameter</th>
+                      <th className="px-4 py-2 border-green-300 border">Min %</th>
+                      <th className="px-4 py-2 border-green-300 border">Max %</th>
+                      <th className="px-4 py-2 border-green-300 border">Actual (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const commodity = commodities.find((c: any) => c.commodityName === cirModalData.commodity);
+                      const variety = commodity?.varieties?.find((v: any) => v.varietyName === cirModalData.varietyName);
+                      const particulars = variety?.particulars || [];
+                      return particulars.length > 0 ? (
+                        particulars.map((p: any, idx: number) => (
+                          <tr key={idx} className="text-green-800">
+                            <td className="px-4 py-2 border-green-300 border">{p.name}</td>
+                            <td className="px-4 py-2 border-green-300 border">{p.minPercentage}</td>
+                            <td className="px-4 py-2 border-green-300 border">{p.maxPercentage}</td>
+                            <td className="px-4 py-2 border-green-300 border">
+                              <Input
+                                type="number"
+                                value={cirModalData.labResults?.[idx] || ''}
+                                readOnly
+                                className="w-24 bg-white border border-green-300 text-center"
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr><td colSpan={4} className="text-center text-gray-400 py-2">No quality parameters found for this variety.</td></tr>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+          {/* Inward Entry Details (match edit inward form) */}
+          {(() => {
+            // Prefer cirModalData fields, fallback to inwardEntries[0] if missing
+            const entry = cirModalData || (Array.isArray(cirModalData?.inwardEntries) && cirModalData.inwardEntries.length > 0 ? cirModalData.inwardEntries[0] : {});
+            if (!entry) return null;
+            return (
+              <div className="border-t pt-6 mb-6">
+                <h3 className="text-lg font-semibold mb-6 text-orange-700">Inward Entry Details</h3>
+                {/* Inward ID */}
+                <div className="mb-4">
+                  <h5 className="text-md font-semibold mb-2 text-green-700">Inward Information</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="block font-medium mb-1 text-green-600">Inward ID</Label>
+                      <Input value={entry.inwardId || 'Pending'} readOnly className="bg-white border-green-300 font-mono" />
+                    </div>
+                  </div>
+                </div>
+                {/* Vehicle Information */}
+                <div className="mb-4">
+                  <h5 className="text-md font-semibold mb-2 text-green-700">Vehicle Information</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="block font-medium mb-1 text-green-600">Vehicle Number</Label>
+                      <Input value={entry.vehicleNumber || ''} readOnly className="bg-white border-green-300" />
+                    </div>
+                    <div>
+                      <Label className="block font-medium mb-1 text-green-600">Gatepass Number</Label>
+                      <Input value={entry.getpassNumber || ''} readOnly className="bg-white border-green-300" />
+                    </div>
+                  </div>
+                </div>
+                {/* Weight Bridge Information */}
+                <div className="mb-4">
+                  <h5 className="text-md font-semibold mb-2 text-green-700">Weight Bridge Information</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="block font-medium mb-1 text-green-600">Weight Bridge</Label>
+                      <Input value={entry.weightBridge || ''} readOnly className="bg-white border-green-300" />
+                    </div>
+                    <div>
+                      <Label className="block font-medium mb-1 text-green-600">Weight Bridge Slip Number</Label>
+                      <Input value={entry.weightBridgeSlipNumber || ''} readOnly className="bg-white border-green-300" />
+                    </div>
+                  </div>
+                </div>
+                {/* Weight Information */}
+                <div className="mb-4">
+                  <h5 className="text-md font-semibold mb-2 text-green-700">Weight Information</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label className="block font-medium mb-1 text-green-600">Gross Weight (MT)</Label>
+                      <Input value={entry.grossWeight || ''} readOnly className="bg-white border-green-300" />
+                    </div>
+                    <div>
+                      <Label className="block font-medium mb-1 text-green-600">Tare Weight (MT)</Label>
+                      <Input value={entry.tareWeight || ''} readOnly className="bg-white border-green-300" />
+                    </div>
+                    <div>
+                      <Label className="block font-medium mb-1 text-green-600">Net Weight (MT)</Label>
+                      <Input value={entry.netWeight || ''} readOnly className="bg-white border-green-300" />
+                    </div>
+                  </div>
+                </div>
+                {/* Stack Information */}
+                <div>
+                  <h5 className="text-md font-semibold mb-2 text-green-700">Stack Information</h5>
+                  <div className="space-y-3">
+                    {Array.isArray(entry.stacks) && entry.stacks.length > 0 ? entry.stacks.map((stack: any, stackIndex: number) => (
+                      <div key={stackIndex} className="border border-green-200 rounded-lg p-3 bg-white">
+                        <div className="flex items-center justify-between mb-2">
+                          <h6 className="font-medium text-green-700">Stack {stackIndex + 1}</h6>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Stack Number</Label>
+                            <Input value={stack.stackNumber} readOnly className="bg-gray-50 border-green-300" />
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Number of Bags</Label>
+                            <Input value={stack.numberOfBags} readOnly className="bg-gray-50 border-green-300" />
+                          </div>
+                        </div>
+                      </div>
+                    )) : <div className="text-gray-500">No stack information available.</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </form>
+        {/* Mandatory Remarks input at the bottom */}
+        <div className="mt-6">
+          <Label className="block font-semibold mb-2 text-orange-700">Remarks / Approval Note <span className="text-red-500">*</span></Label>
+          <Input
+            value={cirRemarks}
+            onChange={e => setCIRRemarks(e.target.value)}
+            placeholder="Enter remarks or approval note"
+            required
+          />
+        </div>
+        <div className="flex justify-end space-x-2 mt-4">
+          {cirModalData?.cirStatus === 'Approved' ? (
+            <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm">
+              Print
+            </Button>
+          ) : cirModalData?.cirStatus === 'Resubmitted' ? null : cirModalData?.cirStatus === 'Rejected' ? null : (
+            cirReadOnly ? (
+              <>
+                <Button onClick={handleCIRApprove} className="bg-green-600 hover:bg-green-700 text-white" disabled={!cirRemarks.trim()}>Approve</Button>
+                <Button onClick={handleCIRReject} className="bg-red-600 hover:bg-red-700 text-white" disabled={!cirRemarks.trim()}>Reject</Button>
+                <Button onClick={handleCIRResubmit} className="bg-yellow-400 hover:bg-yellow-500 text-white" disabled={!cirRemarks.trim()}>Resubmit</Button>
+              </>
+            ) : (
+              <Button onClick={handleCIRSave} color="primary">Save</Button>
+            )
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )}
 
   return (
     <DashboardLayout>
@@ -4405,7 +5124,7 @@ export default function InwardPage() {
                     </div>
                     <div>
                       <Label className="font-semibold mb-1">Date of Testing</Label>
-                      <Input readOnly value={selectedRowForSR?.dateOfTesting || ''} className="w-full bg-white border-green-300 text-green-800" />
+                      <Input readOnly value={selectedRowForSR?.dateOfTesting || ''} className="w-full bg-white bg-white border-green-300 text-green-800" />
                     </div>
                   </div>
                 </div>
@@ -4517,18 +5236,6 @@ export default function InwardPage() {
                         className="bg-green-600 hover:bg-green-700 text-white"
                       >
                         {selectedRowForSR.receiptType === 'WR' ? 'Proceed to WR' : 'Proceed to SR'}
-                      </Button>
-                      <Button
-                        onClick={() => handleRejectSR(selectedRowForSR)}
-                        className="bg-red-600 hover:bg-red-700 text-white"
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        onClick={() => handleResubmitSR(selectedRowForSR)}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-white"
-                      >
-                        Resubmit
                       </Button>
                     </div>
                   );
@@ -4659,6 +5366,501 @@ export default function InwardPage() {
           )}
         </DialogContent>
       </Dialog>
+      {showCIRModal && (
+        <Dialog open={showCIRModal} onOpenChange={setShowCIRModal}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            {/* Logo and company info header (copied from SR/WR receipt) */}
+            <div className="flex flex-col items-center justify-center mb-8 mt-2">
+              <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 120, height: 100, marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
+              <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
+                AGROGREEN WAREHOUSING PRIVATE LTD.
+              </div>
+              <div className="text-base font-semibold text-green-600 mb-2 text-center">
+                603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
+              </div>
+               <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
+              Commodity Inward Report
+            </div>
+            </div>
+            <DialogHeader>
+              
+            </DialogHeader>
+            <form className="space-y-4">
+              {/* State, Branch, Location, Warehouse Name, Warehouse Code, Business Type, Warehouse Address, Client Name, Client Code, Client Address */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="block font-semibold mb-1">State</Label>
+                  <Input value={cirModalData?.state || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Branch</Label>
+                  <Input value={cirModalData?.branch || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Location</Label>
+                  <Input value={cirModalData?.location || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Warehouse Name</Label>
+                  <Input value={cirModalData?.warehouseName || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Warehouse Code</Label>
+                  <Input value={cirModalData?.warehouseCode || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Business Type</Label>
+                  <Input value={cirModalData?.businessType || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Warehouse Address</Label>
+                  <Input value={cirModalData?.warehouseAddress || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Client Name</Label>
+                  <Input value={cirModalData?.client || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Client Code</Label>
+                  <Input value={cirModalData?.clientCode || ''} readOnly disabled />
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-1">Client Address</Label>
+                  <Input value={cirModalData?.clientAddress || ''} readOnly disabled />
+                </div>
+              </div>
+              {/* Inward Details */}
+              <div className="border-t pt-4">
+                <h3 className="text-lg font-semibold mb-4 text-orange-700">Inward Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <Label className="block font-semibold mb-1">Date of Inward</Label>
+                    <Input value={cirModalData?.dateOfInward || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-1">CAD Number</Label>
+                    <Input value={cirModalData?.cadNumber || ''} readOnly disabled />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="block font-semibold mb-1">Base Receipt</Label>
+                    <Input value={cirModalData?.bankReceipt || ''} readOnly disabled />
+                  </div>
+                </div>
+              </div>
+              {/* Commodity Information */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-6 text-orange-700">Commodity Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <Label className="block font-semibold mb-2">Commodity</Label>
+                    <Input value={cirModalData?.commodity || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-2">Variety Name</Label>
+                    <Input value={cirModalData?.varietyName || ''} readOnly disabled />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <Label className="block font-semibold mb-2">Market Rate (Rs/MT)</Label>
+                    <Input value={cirModalData?.marketRate || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-2">Total Bags</Label>
+                    <Input value={cirModalData?.totalBags || ''} readOnly disabled />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="block font-semibold mb-2">Total Quantity (MT)</Label>
+                    <Input value={cirModalData?.totalQuantity || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-2">Total Value (Rs/MT)</Label>
+                    <Input value={cirModalData?.totalValue || ''} readOnly disabled />
+                  </div>
+                </div>
+              </div>
+              {/* Bank Information */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-6 text-orange-700">Bank Information (Auto-filled from Inspection)</h3>
+                <div className="mb-6">
+                  <Label className="block font-semibold mb-2">Bank Name</Label>
+                  <Input value={cirModalData?.bankName || ''} readOnly disabled />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <Label className="block font-semibold mb-2">Bank Branch</Label>
+                    <Input value={cirModalData?.bankBranch || ''} readOnly disabled />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-2">Bank State</Label>
+                    <Input value={cirModalData?.bankState || ''} readOnly disabled />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="block font-semibold mb-2">IFSC Code</Label>
+                    <Input value={cirModalData?.ifscCode || ''} readOnly disabled />
+                  </div>
+                </div>
+              </div>
+              {/* Reservation/Billing Information */}
+              {cirModalData?.businessType !== 'cm' && cirModalData?.billingStatus && (
+                <div className="border-t pt-4">
+                  <h3 className="text-lg font-semibold mb-4 text-orange-700">Reservation & Billing Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <Label className="block font-semibold mb-1">Billing Status</Label>
+                      <Input value={cirModalData?.billingStatus || ''} readOnly disabled />
+                    </div>
+                  </div>
+                  {cirModalData?.billingStatus === 'reservation' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="block font-semibold mb-1">Reservation Rate</Label>
+                        <Input value={cirModalData?.reservationRate || ''} readOnly disabled />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Reservation Quantity</Label>
+                        <Input value={cirModalData?.reservationQty || ''} readOnly disabled />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Reservation Start Date</Label>
+                        <Input value={cirModalData?.reservationStart || ''} readOnly disabled />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Reservation End Date</Label>
+                        <Input value={cirModalData?.reservationEnd || ''} readOnly disabled />
+                      </div>
+                    </div>
+                  )}
+                  {cirModalData?.billingStatus === 'post-reservation' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="block font-semibold mb-1">Billing Cycle</Label>
+                        <Input value={cirModalData?.billingCycle || ''} readOnly disabled />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Billing Type</Label>
+                        <Input value={cirModalData?.billingType || ''} readOnly disabled />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Rate</Label>
+                        <Input value={cirModalData?.billingRate || ''} readOnly disabled />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Add more fields as needed, following the Add/Edit Inward modal structure */}
+              {/* Your Insurance Section */}
+              {cirModalData?.yourInsurance && (
+                <div className="border-t pt-6 mb-6">
+                  <h3 className="text-xl font-semibold mb-4 text-blue-700">Your Insurance</h3>
+                  <div className="border border-blue-200 rounded-lg p-6 bg-blue-50">
+                    <div className="flex items-center justify-between mb-4">
+                      {/* <h4 className="text-lg font-medium text-blue-700">Insurance ID: {cirModalData.yourInsurance.insuranceId}</h4> */}
+                      {/* <div className="text-sm text-blue-600 font-medium">
+                        {cirModalData.yourInsurance.insuranceTakenBy} - {cirModalData.yourInsurance.insuranceCommodity}
+                      </div> */}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <Label className="block font-semibold mb-1">Insurance Taken By</Label>
+                        <Input value={cirModalData.yourInsurance.insuranceTakenBy || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Commodity</Label>
+                        <Input value={cirModalData.yourInsurance.insuranceCommodity || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Number</Label>
+                        <Input value={cirModalData.yourInsurance.firePolicyNumber || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
+                        <Input value={formatAmount(cirModalData.yourInsurance.firePolicyAmount)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
+                        <Input value={normalizeDate(cirModalData.yourInsurance.firePolicyStartDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
+                        <Input value={normalizeDate(cirModalData.yourInsurance.firePolicyEndDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
+                        <Input value={cirModalData.yourInsurance.burglaryPolicyNumber || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
+                        <Input value={formatAmount(cirModalData.yourInsurance.burglaryPolicyAmount)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
+                        <Input value={normalizeDate(cirModalData.yourInsurance.burglaryPolicyStartDate)} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
+                        <Input value={normalizeDate(cirModalData.yourInsurance.burglaryPolicyEndDate)} readOnly />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Saved Inward Entries Section */}
+              {Array.isArray(cirModalData?.inwardEntries) && cirModalData.inwardEntries.length > 0 && (
+                <div className="border-t pt-4">
+                  <h3 className="text-lg font-semibold mb-4 text-green-700">Saved Inward Entries</h3>
+                  <div className="space-y-6">
+                    {cirModalData.inwardEntries.map((entry: any, index: number) => (
+                      <div key={entry.id || index} className="border border-green-300 rounded-lg p-6 bg-green-50">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-lg font-semibold text-green-800">Entry  {entry.entryNumber}</h4>
+                          <div className="text-sm text-green-600 font-medium">
+                            Vehicle: {entry.vehicleNumber} | Gatepass: {entry.getpassNumber}
+                          </div>
+                        </div>
+                        {/* Inward ID */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Inward Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Inward ID</Label>
+                              <Input value={entry.inwardId || 'Pending'} readOnly className="bg-white border-green-300 font-mono" />
+                            </div>
+                          </div>
+                        </div>
+                        {/* Vehicle Information */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Vehicle Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Vehicle Number</Label>
+                              <Input value={entry.vehicleNumber} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Gatepass Number</Label>
+                              <Input value={entry.getpassNumber} readOnly className="bg-white border-green-300" />
+                            </div>
+                          </div>
+                        </div>
+                        {/* Weight Bridge Information */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Weight Bridge Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Weight Bridge</Label>
+                              <Input value={entry.weightBridge} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Weight Bridge Slip Number</Label>
+                              <Input value={entry.weightBridgeSlipNumber} readOnly className="bg-white border-green-300" />
+                            </div>
+                          </div>
+                        </div>
+                        {/* Weight Information */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Weight Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Gross Weight (MT)</Label>
+                              <Input value={entry.grossWeight} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Tare Weight (MT)</Label>
+                              <Input value={entry.tareWeight} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Net Weight (MT)</Label>
+                              <Input value={entry.netWeight} readOnly className="bg-white border-green-300" />
+                            </div>
+                          </div>
+                        </div>
+                        {/* Stack Information */}
+                        <div>
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Stack Information</h5>
+                          <div className="space-y-3">
+                            {entry.stacks && entry.stacks.map((stack: any, stackIndex: number) => (
+                              <div key={stackIndex} className="border border-green-200 rounded-lg p-3 bg-white">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h6 className="font-medium text-green-700">Stack {stackIndex + 1}</h6>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <Label className="block font-medium mb-1 text-green-600">Stack Number</Label>
+                                    <Input value={stack.stackNumber} readOnly className="bg-gray-50 border-green-300" />
+                                  </div>
+                                  <div>
+                                    <Label className="block font-medium mb-1 text-green-600">Number of Bags</Label>
+                                    <Input value={stack.numberOfBags} readOnly className="bg-gray-50 border-green-300" />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Lab Parameter Section */}
+              {cirModalData?.labResults && (
+                <div className="border-t pt-6 mb-6">
+                  <h3 className="text-lg font-semibold mb-6 text-orange-700">Lab Parameter</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                      <Label className="block  mb-2">Date of Sampling <span className="text-red-500">*</span></Label>
+                      <Input
+                        type="date"
+                        value={cirModalData.dateOfSampling || ''}
+                        readOnly
+                        className="w-full rounded-lg border-green-300 text-green-800 text-sm px-4 py-2"
+                      />
+                    </div>
+                    <div>
+                      <Label className="block  mb-2">Date of Testing <span className="text-red-500">*</span></Label>
+                      <Input
+                        type="date"
+                        value={cirModalData.dateOfTesting || ''}
+                        readOnly
+                        className="w-full rounded-lg border-green-300 text-green-800 text-sm px-4 py-2"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-2">Quality Parameters (from Commodity & Variety)</Label>
+                    <div className="overflow-x-auto max-w-lg">
+                      <table className="min-w-full border border-green-300 rounded-lg">
+                        <thead className="bg-orange-100 text-orange-600 font-bold">
+                          <tr>
+                            <th className="px-4 py-2 border-green-300 border">Parameter</th>
+                            <th className="px-4 py-2 border-green-300 border">Min %</th>
+                            <th className="px-4 py-2 border-green-300 border">Max %</th>
+                            <th className="px-4 py-2 border-green-300 border">Actual (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const commodity = commodities.find((c: any) => c.commodityName === cirModalData.commodity);
+                            const variety = commodity?.varieties?.find((v: any) => v.varietyName === cirModalData.varietyName);
+                            const particulars = variety?.particulars || [];
+                            return particulars.length > 0 ? (
+                              particulars.map((p: any, idx: number) => (
+                                <tr key={idx} className="text-green-800">
+                                  <td className="px-4 py-2 border-green-300 border">{p.name}</td>
+                                  <td className="px-4 py-2 border-green-300 border">{p.minPercentage}</td>
+                                  <td className="px-4 py-2 border-green-300 border">{p.maxPercentage}</td>
+                                  <td className="px-4 py-2 border-green-300 border">
+                                    <Input
+                                      type="number"
+                                      value={cirModalData.labResults?.[idx] || ''}
+                                      readOnly
+                                      className="w-24 bg-white border border-green-300 text-center"
+                                      placeholder="Enter value"
+                                    />
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr><td colSpan={4} className="text-center text-gray-400 py-2">No quality parameters found for this variety.</td></tr>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* File Attachment Section */}
+              {cirModalData?.attachmentUrl && (
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold text-orange-700 mb-4">File Attachment</h3>
+                  <a href={cirModalData.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                    View Attached File
+                  </a>
+                </div>
+              )}
+              {/* In the CIR modal Lab Parameter section, use the Input component for the Actual (%) column, matching the Edit Inward modal: */}
+              {cirModalData?.labParameterNames && cirModalData.labParameterNames.length > 0 && cirModalData?.commodity && cirModalData?.varietyName ? (
+                <div className="w-full max-w-2xl mb-8" style={{ maxWidth: '900px' }}>
+                  <Label className="block font-semibold mb-2 text-green-700 text-left">Quality Parameters (from Commodity & Variety)</Label>
+                  <div className="overflow-x-auto max-w-lg">
+                    <table className="min-w-full border border-green-300 rounded-lg">
+                      <thead className="bg-orange-100 text-orange-600 font-bold">
+                        <tr>
+                          <th className="px-4 py-2 border-green-300 border">Parameter</th>
+                          <th className="px-4 py-2 border-green-300 border">Min %</th>
+                          <th className="px-4 py-2 border-green-300 border">Max %</th>
+                          <th className="px-4 py-2 border-green-300 border">Actual (%)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const commodity = commodities.find((c: any) => c.commodityName === cirModalData.commodity);
+                          const variety = commodity?.varieties?.find((v: any) => v.varietyName === cirModalData.varietyName);
+                          const particulars = variety?.particulars || [];
+                          return particulars.length > 0 ? (
+                            particulars.map((p: any, idx: number) => (
+                              <tr key={idx} className="text-green-800">
+                                <td className="px-4 py-2 border-green-300 border">{p.name}</td>
+                                <td className="px-4 py-2 border-green-300 border">{p.minPercentage}</td>
+                                <td className="px-4 py-2 border-green-300 border">{p.maxPercentage}</td>
+                                <td className="px-4 py-2 border-green-300 border">
+                                  <Input
+                                    type="number"
+                                    value={cirModalData.labResults?.[idx] || ''}
+                                    readOnly
+                                    className="w-24 bg-white border border-green-300 text-center"
+                                  />
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr><td colSpan={4} className="text-center text-gray-400 py-2">No quality parameters found for this variety.</td></tr>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+            </form>
+            {/* Mandatory Remarks input at the bottom */}
+            <div className="mt-6">
+              <Label className="block font-semibold mb-2 text-orange-700">Remarks / Approval Note <span className="text-red-500">*</span></Label>
+              <Input
+                value={cirRemarks}
+                onChange={e => setCIRRemarks(e.target.value)}
+                placeholder="Enter remarks or approval note"
+                required
+              />
+            </div>
+            <div className="flex justify-end space-x-2 mt-4">
+              {cirModalData?.cirStatus === 'Approved' ? (
+                <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm">
+                  Print
+                </Button>
+              ) : cirModalData?.cirStatus === 'Resubmitted' ? null : cirModalData?.cirStatus === 'Rejected' ? null : (
+                cirReadOnly ? (
+                  <>
+                    <Button onClick={handleCIRApprove} className="bg-green-600 hover:bg-green-700 text-white" disabled={!cirRemarks.trim()}>Approve</Button>
+                    <Button onClick={handleCIRReject} className="bg-red-600 hover:bg-red-700 text-white" disabled={!cirRemarks.trim()}>Reject</Button>
+                    <Button onClick={handleCIRResubmit} className="bg-yellow-400 hover:bg-yellow-500 text-white" disabled={!cirRemarks.trim()}>Resubmit</Button>
+                  </>
+                ) : (
+                  <Button onClick={handleCIRSave} color="primary">Save</Button>
+                )
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </DashboardLayout>
   );
 }
