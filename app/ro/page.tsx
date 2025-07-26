@@ -37,22 +37,81 @@ export default function ReleaseOrderPage() {
   const [releaseOrders, setReleaseOrders] = React.useState<any[]>([]);
   // For showing previous ROs for the selected SR/WR
   const [previousROs, setPreviousROs] = React.useState<any[]>([]);
+  const [showRODetails, setShowRODetails] = React.useState(false);
+  const [selectedRO, setSelectedRO] = React.useState<any>(null);
+  const [remark, setRemark] = React.useState('');
+  const [roStatusUpdating, setROStatusUpdating] = React.useState(false);
 
   // Fetch all releaseOrders for the table
   React.useEffect(() => {
     const fetchROs = async () => {
       const roCol = collection(db, 'releaseOrders');
       const snap = await getDocs(roCol);
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let data = snap.docs.map((doc, idx) => {
+        const d = doc.data();
+        // Ensure roCode and roStatus
+        return {
+          id: doc.id,
+          ...d,
+          roCode: d.roCode || `RO-${String(idx + 1).padStart(4, '0')}`,
+          roStatus: d.roStatus || 'pending',
+        };
+      });
       // Sort by roCode descending (latest first)
       data.sort((a, b) => (b.roCode || '').localeCompare(a.roCode || ''));
       setReleaseOrders(data);
     };
     fetchROs();
-  }, [submitSuccess]);
+  }, [submitSuccess, roStatusUpdating]);
 
-  // Define columns for the DataTable
+  // Helper to get balance from DB if not present in row
+  const getBalanceBags = (row: any) => {
+    if (typeof row.balanceBags === 'number') return row.balanceBags;
+    if (row.balanceBags && !isNaN(Number(row.balanceBags))) return Number(row.balanceBags);
+    if (typeof row.totalBags === 'number' && typeof row.releaseBags === 'number') {
+      return row.totalBags - row.releaseBags;
+    }
+    return '';
+  };
+  const getBalanceQty = (row: any) => {
+    if (typeof row.balanceQuantity === 'number') return row.balanceQuantity;
+    if (row.balanceQuantity && !isNaN(Number(row.balanceQuantity))) return Number(row.balanceQuantity);
+    if (typeof row.totalQuantity === 'number' && typeof row.releaseQuantity === 'number') {
+      return row.totalQuantity - row.releaseQuantity;
+    }
+    return '';
+  };
+
+  // Group releaseOrders by srwrNo, show only latest per group
+  const [expandedRows, setExpandedRows] = React.useState<{ [key: string]: boolean }>({});
+  const groupedROs: { [key: string]: any[] } = {};
+  releaseOrders.forEach(ro => {
+    if (!groupedROs[ro.srwrNo]) groupedROs[ro.srwrNo] = [];
+    groupedROs[ro.srwrNo].push(ro);
+  });
+  // Sort each group by createdAt descending
+  Object.values(groupedROs).forEach(group => group.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
+  // Only show latest per group in main table
+  const latestROs = Object.values(groupedROs).map(group => group[0]);
+
+  // Columns for main table
   const roColumns = [
+    {
+      accessorKey: 'expand',
+      header: '',
+      cell: ({ row }: any) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setExpandedRows(prev => ({ ...prev, [row.original.srwrNo]: !prev[row.original.srwrNo] }));
+          }}
+        >
+          {expandedRows[row.original.srwrNo] ? '▼' : '▶'}
+        </Button>
+      ),
+    },
+    { accessorKey: 'roCode', header: 'RO Code', cell: ({ row }: any) => <div>{row.original.roCode || ''}</div> },
     { accessorKey: 'srwrNo', header: 'SR/WR No.', cell: ({ row }: any) => <div style={{ minWidth: 180 }}>{row.original.srwrNo}</div> },
     { accessorKey: 'state', header: 'State' },
     { accessorKey: 'branch', header: 'Branch' },
@@ -63,8 +122,11 @@ export default function ReleaseOrderPage() {
     { accessorKey: 'clientAddress', header: 'Client Address' },
     { accessorKey: 'totalBags', header: 'Total Bags' },
     { accessorKey: 'totalQuantity', header: 'Total Quantity' },
-    { accessorKey: 'balanceBags', header: 'Balance Bags' },
-    { accessorKey: 'balanceQuantity', header: 'Balance Quantity' },
+    { accessorKey: 'balanceBags', header: 'Balance Bags', cell: ({ row }: any) => <div>{getBalanceBags(row.original)}</div> },
+    { accessorKey: 'balanceQuantity', header: 'Balance Quantity', cell: ({ row }: any) => <div>{getBalanceQty(row.original)}</div> },
+    { accessorKey: 'roStatus', header: 'RO Status', cell: ({ row }: any) => (
+      <Button variant="link" className="text-blue-600 underline p-0" onClick={() => { setSelectedRO(row.original); setShowRODetails(true); }}>{row.original.roStatus || 'pending'}</Button>
+    ) },
   ];
 
   // Placeholder handler for export
@@ -269,6 +331,27 @@ export default function ReleaseOrderPage() {
     }
   };
 
+  const handleROStatusChange = async (status: string) => {
+    if (!selectedRO) return;
+    setROStatusUpdating(true);
+    try {
+      const roCol = collection(db, 'releaseOrders');
+      // Update status and remark
+      await addDoc(roCol, {
+        ...selectedRO,
+        roStatus: status,
+        remark,
+        updatedAt: new Date().toISOString(),
+      });
+      setShowRODetails(false);
+      setRemark('');
+      setSelectedRO(null);
+    } catch (err) {
+      alert('Failed to update RO status');
+    }
+    setROStatusUpdating(false);
+  };
+
   // Redirect supervisors who don't have access
   useEffect(() => {
     if (userRole === 'supervisor') {
@@ -471,24 +554,155 @@ export default function ReleaseOrderPage() {
           </form>
         </DialogContent>
       </Dialog>
-      {/* Placeholder for future RO table and content */}
+      {/* RO table with grouping and expand/collapse */}
       <div className="px-8">
         <Card>
           <CardHeader>
             <CardTitle className="text-green-700 text-xl">Release Orders</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <DataTable
-              columns={roColumns}
-              data={releaseOrders}
-              isLoading={false}
-              error={undefined}
-              wrapperClassName="border-green-300"
-              headClassName="text-center bg-orange-100 text-orange-600 font-bold"
-              cellClassName="text-center"
-            />
+            <table className="min-w-full border text-sm">
+              <thead className="bg-orange-100">
+                <tr>
+                  <th className="px-2 py-1 border"></th>
+                  <th className="px-2 py-1 border">RO Code</th>
+                  <th className="px-2 py-1 border">SR/WR No.</th>
+                  <th className="px-2 py-1 border">State</th>
+                  <th className="px-2 py-1 border">Branch</th>
+                  <th className="px-2 py-1 border">Warehouse Name</th>
+                  <th className="px-2 py-1 border">Warehouse Code</th>
+                  <th className="px-2 py-1 border">Warehouse Address</th>
+                  <th className="px-2 py-1 border">Client Code</th>
+                  <th className="px-2 py-1 border">Client Address</th>
+                  <th className="px-2 py-1 border">Total Bags</th>
+                  <th className="px-2 py-1 border">Total Quantity</th>
+                  <th className="px-2 py-1 border">Balance Bags</th>
+                  <th className="px-2 py-1 border">Balance Quantity</th>
+                  <th className="px-2 py-1 border">RO Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {latestROs.map(ro => (
+                  <React.Fragment key={ro.roCode}>
+                    <tr className="even:bg-gray-50">
+                      <td className="px-2 py-1 border text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setExpandedRows(prev => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
+                        >
+                          {expandedRows[ro.srwrNo] ? '▼' : '▶'}
+                        </Button>
+                      </td>
+                      <td className="px-2 py-1 border text-center">{ro.roCode}</td>
+                      <td className="px-2 py-1 border text-center">{ro.srwrNo}</td>
+                      <td className="px-2 py-1 border text-center">{ro.state}</td>
+                      <td className="px-2 py-1 border text-center">{ro.branch}</td>
+                      <td className="px-2 py-1 border text-center">{ro.warehouseName}</td>
+                      <td className="px-2 py-1 border text-center">{ro.warehouseCode}</td>
+                      <td className="px-2 py-1 border text-center">{ro.warehouseAddress}</td>
+                      <td className="px-2 py-1 border text-center">{ro.clientCode}</td>
+                      <td className="px-2 py-1 border text-center">{ro.clientAddress}</td>
+                      <td className="px-2 py-1 border text-center">{ro.totalBags}</td>
+                      <td className="px-2 py-1 border text-center">{ro.totalQuantity}</td>
+                      <td className="px-2 py-1 border text-center">{getBalanceBags(ro)}</td>
+                      <td className="px-2 py-1 border text-center">{getBalanceQty(ro)}</td>
+                      <td className="px-2 py-1 border text-center">
+                        <Button variant="link" className="text-blue-600 underline p-0" onClick={() => { setSelectedRO(ro); setShowRODetails(true); }}>{ro.roStatus || 'pending'}</Button>
+                      </td>
+                    </tr>
+                    {expandedRows[ro.srwrNo] && (
+                      <tr>
+                        <td colSpan={15} className="p-0">
+                          <div className="bg-gray-50 border-t">
+                            <div className="font-semibold mb-2 text-green-700 px-4 pt-2">All Release Orders for SR/WR No. {ro.srwrNo}</div>
+                            <div className="overflow-x-auto px-4 pb-2">
+                              <table className="min-w-full border text-xs">
+                                <thead className="bg-orange-50">
+                                  <tr>
+                                    <th className="px-2 py-1 border">Date</th>
+                                    <th className="px-2 py-1 border">RO Code</th>
+                                    <th className="px-2 py-1 border">Release Bags</th>
+                                    <th className="px-2 py-1 border">Release Qty</th>
+                                    <th className="px-2 py-1 border">Balance Bags</th>
+                                    <th className="px-2 py-1 border">Balance Qty</th>
+                                    <th className="px-2 py-1 border">RO Status</th>
+                                    <th className="px-2 py-1 border">Attachment</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {groupedROs[ro.srwrNo].map((entry, idx) => (
+                                    <tr key={entry.roCode || idx} className="even:bg-gray-100">
+                                      <td className="px-2 py-1 border text-center">{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : ''}</td>
+                                      <td className="px-2 py-1 border text-center">{entry.roCode}</td>
+                                      <td className="px-2 py-1 border text-center">{entry.releaseBags}</td>
+                                      <td className="px-2 py-1 border text-center">{entry.releaseQuantity}</td>
+                                      <td className="px-2 py-1 border text-center">{entry.balanceBags}</td>
+                                      <td className="px-2 py-1 border text-center">{entry.balanceQuantity}</td>
+                                      <td className="px-2 py-1 border text-center">
+                                        <Button variant="link" className="text-blue-600 underline p-0" onClick={() => { setSelectedRO(entry); setShowRODetails(true); }}>{entry.roStatus || 'pending'}</Button>
+                                      </td>
+                                      <td className="px-2 py-1 border text-center">
+                                        {entry.attachmentUrl ? <a href={entry.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View</a> : <span className="text-gray-400">No file</span>}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
+        {/* RO Details Dialog */}
+        <Dialog open={showRODetails} onOpenChange={setShowRODetails}>
+          <DialogContent className="max-w-5xl w-full p-2">
+            <DialogHeader>
+              <DialogTitle>RO Details</DialogTitle>
+            </DialogHeader>
+            {selectedRO && (
+              <form className="space-y-4 max-h-[80vh] overflow-y-auto p-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div><Label>RO Code</Label><Input value={selectedRO.roCode || ''} readOnly /></div>
+                  <div><Label>Status</Label><Input value={selectedRO.roStatus || 'pending'} readOnly /></div>
+                  <div><Label>SR/WR No.</Label><Input value={selectedRO.srwrNo || ''} readOnly /></div>
+                  <div><Label>CAD Number</Label><Input value={selectedRO.cadNumber || ''} readOnly /></div>
+                  <div><Label>State</Label><Input value={selectedRO.state || ''} readOnly /></div>
+                  <div><Label>Branch</Label><Input value={selectedRO.branch || ''} readOnly /></div>
+                  <div><Label>Location</Label><Input value={selectedRO.location || ''} readOnly /></div>
+                  <div><Label>Warehouse Name</Label><Input value={selectedRO.warehouseName || ''} readOnly /></div>
+                  <div><Label>Warehouse Code</Label><Input value={selectedRO.warehouseCode || ''} readOnly /></div>
+                  <div><Label>Warehouse Address</Label><Input value={selectedRO.warehouseAddress || ''} readOnly /></div>
+                  <div><Label>Client Name</Label><Input value={selectedRO.client || ''} readOnly /></div>
+                  <div><Label>Client Code</Label><Input value={selectedRO.clientCode || ''} readOnly /></div>
+                  <div><Label>Client Address</Label><Input value={selectedRO.clientAddress || ''} readOnly /></div>
+                  <div><Label>Total Bags</Label><Input value={selectedRO.totalBags || ''} readOnly /></div>
+                  <div><Label>Total Quantity</Label><Input value={selectedRO.totalQuantity || ''} readOnly /></div>
+                  <div><Label>Balance Bags</Label><Input value={getBalanceBags(selectedRO)} readOnly /></div>
+                  <div><Label>Balance Quantity</Label><Input value={getBalanceQty(selectedRO)} readOnly /></div>
+                  <div><Label>Release Bags</Label><Input value={selectedRO.releaseBags || ''} readOnly /></div>
+                  <div><Label>Release Quantity</Label><Input value={selectedRO.releaseQuantity || ''} readOnly /></div>
+                  <div><Label>Attachment</Label>{selectedRO.attachmentUrl ? <a href={selectedRO.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View File</a> : <span className="text-gray-400">No file</span>}</div>
+                </div>
+                <div className="mt-4">
+                  <Label>Remark</Label>
+                  <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="Enter remark..." />
+                </div>
+                <div className="flex gap-4 mt-4 justify-end">
+                  <Button type="button" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleROStatusChange('approved')} disabled={roStatusUpdating}>Approve</Button>
+                  <Button type="button" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleROStatusChange('rejected')} disabled={roStatusUpdating}>Reject</Button>
+                  <Button type="button" className="bg-yellow-500 hover:bg-yellow-600 text-white" onClick={() => handleROStatusChange('resubmitted')} disabled={roStatusUpdating}>Resubmit</Button>
+                </div>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
