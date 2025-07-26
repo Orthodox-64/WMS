@@ -34,6 +34,7 @@ const roleBasedRoutes: Record<string, Set<string>> = {
     '/inward',
     '/outward',
     '/ro',
+    '/delivery-order', // Added delivery order access for admin
     '/commodity-summary',
     '/aum-summary',
     '/warehouse-status', // Allow warehouse status for admin

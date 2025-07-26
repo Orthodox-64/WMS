@@ -770,34 +770,99 @@ export default function ReleaseOrderPage() {
                 {/* Generate Receipt Button (only if approved) */}
                 {selectedRO.roStatus === 'approved' && (
                   <div className="flex justify-end mt-2">
-                    <Button type="button" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={async () => {
-                      // PDF generation logic using the visible form for exact copy, multi-page support
-                      const html2canvas = (await import('html2canvas')).default;
-                      const jsPDF = (await import('jspdf')).default;
-                      const detailsForm = document.getElementById('ro-details-form');
-                      if (!detailsForm) return;
-                      detailsForm.scrollIntoView({ behavior: 'auto', block: 'center' });
-                      await new Promise((resolve) => setTimeout(resolve, 300));
-                      const canvas = await html2canvas(detailsForm, { scale: 2, useCORS: true, backgroundColor: '#fff' });
-                      const imgData = canvas.toDataURL('image/png');
-                      const pdf = new jsPDF('p', 'mm', 'a4');
-                      const imgWidth = 210; // A4 width in mm
-                      const pageHeight = 295; // A4 height in mm
-                      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                      let heightLeft = imgHeight;
-                      let position = 0;
-                      // Add first page
-                      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight > pageHeight ? pageHeight : imgHeight);
-                      heightLeft -= pageHeight;
-                      position = pageHeight;
-                      // Add extra pages if needed
-                      while (heightLeft > 0) {
-                        pdf.addPage();
-                        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-                        position += pageHeight;
-                        heightLeft -= pageHeight;
+                    <Button type="button" className="bg-green-600 hover:bg-green-700 text-white" onClick={async () => {
+                      try {
+                        // Import required libraries
+                        const html2canvas = (await import('html2canvas')).default;
+                        const jsPDF = (await import('jspdf')).default;
+                        const ReactDOMClient = (await import('react-dom/client')).default;
+                        
+                        // Import PrintableROReceipt component dynamically to avoid SSR issues
+                        const PrintableROReceipt = (await import('../../components/PrintableROReceipt')).default;
+                        
+                        // Create a proper React element with the receipt component
+                        const receiptElement = document.createElement('div');
+                        receiptElement.id = "temp-pdf-container";
+                        receiptElement.style.width = '100%';
+                        receiptElement.style.position = 'absolute';
+                        receiptElement.style.top = '-9999px';
+                        receiptElement.style.left = '-9999px';
+                        receiptElement.style.zIndex = '-1000';
+                        receiptElement.style.overflow = 'hidden';
+                        document.body.appendChild(receiptElement);
+                        
+                        // Create root and render component
+                        const root = ReactDOMClient.createRoot(receiptElement);
+                        root.render(<PrintableROReceipt data={selectedRO} />);
+                        
+                        // Add a small delay for rendering
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        // Get the rendered receipt
+                        const printableReceipt = document.getElementById('printable-ro-receipt');
+                        if (!printableReceipt) {
+                          throw new Error("Could not find printable receipt element");
+                        }
+                        
+                        // Create canvas with higher scale for better quality
+                        const canvas = await html2canvas(printableReceipt, { 
+                          scale: 2, 
+                          useCORS: true, 
+                          backgroundColor: '#fff',
+                          logging: false,
+                          allowTaint: true
+                        });
+                        
+                        // Create PDF with proper dimensions
+                        const pdf = new jsPDF('p', 'mm', 'a4');
+                        const pageWidth = pdf.internal.pageSize.getWidth();
+                        const pageHeight = pdf.internal.pageSize.getHeight();
+                        
+                        // Calculate image dimensions to fit page width
+                        const imgWidth = pageWidth;
+                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                        
+                        // Split across multiple pages if needed
+                        let heightLeft = imgHeight;
+                        let position = 0;
+                        let pageCount = 0;
+                        
+                        while (heightLeft > 0) {
+                          // Add image to page
+                          pdf.addImage(
+                            canvas.toDataURL('image/jpeg', 1.0),
+                            'JPEG',
+                            0,
+                            position,
+                            imgWidth,
+                            imgHeight,
+                            `page-${pageCount}`,
+                            'FAST'
+                          );
+                          
+                          heightLeft -= pageHeight;
+                          position -= pageHeight;
+                          
+                          // Add new page if there's more content
+                          if (heightLeft > 0) {
+                            pdf.addPage();
+                            pageCount++;
+                          }
+                        }
+                        
+                        // Save PDF
+                        pdf.save(`release-order-receipt-${selectedRO.roCode || ''}.pdf`);
+                        
+                        // Clean up - remove the temporary element
+                        const tempContainer = document.getElementById("temp-pdf-container");
+                        if (tempContainer) {
+                          document.body.removeChild(tempContainer);
+                        }
+                        
+                      } catch (error) {
+                        console.error("PDF Generation Error:", error);
+                        alert("Failed to generate PDF. Please try again.");
                       }
-                      pdf.save(`release-order-receipt-${selectedRO.roCode || ''}.pdf`);
                     }}>
                       Generate Receipt
                     </Button>
