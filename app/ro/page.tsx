@@ -15,7 +15,9 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
 import { uploadToCloudinary } from '@/lib/cloudinary';
+
 import { DataTable } from '@/components/data-table';
+import ROReceipt from '@/components/ROReceipt';
 
 export default function ReleaseOrderPage() {
   const { userRole } = useAuth();
@@ -28,7 +30,7 @@ export default function ReleaseOrderPage() {
   const [selectedInward, setSelectedInward] = React.useState<any>(null);
   const [releaseBags, setReleaseBags] = React.useState('');
   const [releaseQty, setReleaseQty] = React.useState('');
-  const [fileAttachment, setFileAttachment] = React.useState<File | null>(null);
+  const [fileAttachments, setFileAttachments] = React.useState<File[]>([]);
   const [isUploading, setIsUploading] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
@@ -120,8 +122,10 @@ export default function ReleaseOrderPage() {
     { accessorKey: 'warehouseAddress', header: 'Warehouse Address' },
     { accessorKey: 'clientCode', header: 'Client Code' },
     { accessorKey: 'clientAddress', header: 'Client Address' },
-    { accessorKey: 'totalBags', header: 'Total Bags' },
-    { accessorKey: 'totalQuantity', header: 'Total Quantity' },
+    { accessorKey: 'totalBags', header: 'Inward Bags' },
+    { accessorKey: 'totalQuantity', header: 'Inward Quantity' },
+    { accessorKey: 'releaseBags', header: 'Release Bags', cell: ({ row }: any) => <div>{row.original.releaseBags || ''}</div> },
+    { accessorKey: 'releaseQuantity', header: 'Release Quantity', cell: ({ row }: any) => <div>{row.original.releaseQuantity || ''}</div> },
     { accessorKey: 'balanceBags', header: 'Balance Bags', cell: ({ row }: any) => <div>{getBalanceBags(row.original)}</div> },
     { accessorKey: 'balanceQuantity', header: 'Balance Quantity', cell: ({ row }: any) => <div>{getBalanceQty(row.original)}</div> },
     { accessorKey: 'roStatus', header: 'RO Status', cell: ({ row }: any) => (
@@ -226,16 +230,20 @@ export default function ReleaseOrderPage() {
 
   // Handle file input
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf', 'image/jpg'];
-      if (!allowedTypes.includes(file.type)) {
-        setFormError('Please select a JPG, JPEG, PNG, or PDF file.');
-        setFileAttachment(null);
+    if (e.target.files && e.target.files.length > 0) {
+      const allowedTypes = [
+        'image/jpeg', 'image/png', 'application/pdf', 'image/jpg',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      const files = Array.from(e.target.files);
+      const validFiles = files.filter(file => allowedTypes.includes(file.type));
+      if (validFiles.length !== files.length) {
+        setFormError('Please select only JPG, JPEG, PNG, PDF, or DOCX files.');
+        setFileAttachments([]);
         e.target.value = '';
       } else {
         setFormError(null);
-        setFileAttachment(file);
+        setFileAttachments(validFiles);
       }
     }
   };
@@ -253,15 +261,17 @@ export default function ReleaseOrderPage() {
       setFormError('Please enter Release Bags and Release Qty.');
       return;
     }
-    if (!fileAttachment) {
-      setFormError('Please attach a file.');
+    if (!fileAttachments || fileAttachments.length === 0) {
+      setFormError('Please attach at least one file.');
       return;
     }
     setIsUploading(true);
-    let uploadedFileUrl = '';
+    let uploadedFileUrls: string[] = [];
     try {
-      const uploadResult = await uploadToCloudinary(fileAttachment);
-      uploadedFileUrl = uploadResult.secure_url;
+      for (const file of fileAttachments) {
+        const uploadResult = await uploadToCloudinary(file);
+        uploadedFileUrls.push(uploadResult.secure_url);
+      }
     } catch (error) {
       setFormError('File upload failed.');
       setIsUploading(false);
@@ -314,7 +324,7 @@ export default function ReleaseOrderPage() {
       balanceQuantity: newBalanceQty,
       releaseBags: releaseBagsNum,
       releaseQuantity: releaseQtyNum,
-      attachmentUrl: uploadedFileUrl,
+      attachmentUrls: uploadedFileUrls,
       createdAt: new Date().toISOString(),
       roCode,
     };
@@ -325,7 +335,7 @@ export default function ReleaseOrderPage() {
       setSelectedInward(null);
       setReleaseBags('');
       setReleaseQty('');
-      setFileAttachment(null);
+      setFileAttachments([]);
     } catch (error) {
       setFormError('Failed to save Release Order.');
     }
@@ -482,11 +492,11 @@ export default function ReleaseOrderPage() {
                   <Input value={selectedInward.clientAddress || ''} readOnly />
                 </div>
                 <div>
-                  <Label>TOTAL BAGS</Label>
+                  <Label>INWARD BAGS</Label>
                   <Input value={selectedInward.totalBags || ''} readOnly />
                 </div>
                 <div>
-                  <Label>TOTAL QUANTITY (MT)</Label>
+                  <Label>INWARD QTY(MT) </Label>
                   <Input value={selectedInward.totalQuantity || ''} readOnly />
                 </div>
                 <div>
@@ -506,8 +516,8 @@ export default function ReleaseOrderPage() {
                   <Input value={releaseQty} onChange={e => setReleaseQty(e.target.value)} type="number" min="0" required />
                 </div>
                 <div className="md:col-span-2">
-                  <Label>Attachment (JPG, JPEG, PNG, PDF)</Label>
-                  <Input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={handleFileChange} required />
+                  <Label>Attachments (JPG, JPEG, PNG, PDF, DOCX)</Label>
+                  <Input type="file" accept=".jpg,.jpeg,.png,.pdf,.docx" multiple onChange={handleFileChange} required />
                 </div>
               </div>
             )}
@@ -561,103 +571,125 @@ export default function ReleaseOrderPage() {
             <CardTitle className="text-green-700 text-xl">Release Orders</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="min-w-full border text-sm">
-              <thead className="bg-orange-100">
-                <tr>
-                  <th className="px-2 py-1 border"></th>
-                  <th className="px-2 py-1 border">RO Code</th>
-                  <th className="px-2 py-1 border">SR/WR No.</th>
-                  <th className="px-2 py-1 border">State</th>
-                  <th className="px-2 py-1 border">Branch</th>
-                  <th className="px-2 py-1 border">Warehouse Name</th>
-                  <th className="px-2 py-1 border">Warehouse Code</th>
-                  <th className="px-2 py-1 border">Warehouse Address</th>
-                  <th className="px-2 py-1 border">Client Code</th>
-                  <th className="px-2 py-1 border">Client Address</th>
-                  <th className="px-2 py-1 border">Total Bags</th>
-                  <th className="px-2 py-1 border">Total Quantity</th>
-                  <th className="px-2 py-1 border">Balance Bags</th>
-                  <th className="px-2 py-1 border">Balance Quantity</th>
-                  <th className="px-2 py-1 border">RO Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {latestROs.map(ro => (
-                  <React.Fragment key={ro.roCode}>
-                    <tr className="even:bg-gray-50">
-                      <td className="px-2 py-1 border text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setExpandedRows(prev => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
-                        >
-                          {expandedRows[ro.srwrNo] ? '▼' : '▶'}
-                        </Button>
-                      </td>
-                      <td className="px-2 py-1 border text-center">{ro.roCode}</td>
-                      <td className="px-2 py-1 border text-center">{ro.srwrNo}</td>
-                      <td className="px-2 py-1 border text-center">{ro.state}</td>
-                      <td className="px-2 py-1 border text-center">{ro.branch}</td>
-                      <td className="px-2 py-1 border text-center">{ro.warehouseName}</td>
-                      <td className="px-2 py-1 border text-center">{ro.warehouseCode}</td>
-                      <td className="px-2 py-1 border text-center">{ro.warehouseAddress}</td>
-                      <td className="px-2 py-1 border text-center">{ro.clientCode}</td>
-                      <td className="px-2 py-1 border text-center">{ro.clientAddress}</td>
-                      <td className="px-2 py-1 border text-center">{ro.totalBags}</td>
-                      <td className="px-2 py-1 border text-center">{ro.totalQuantity}</td>
-                      <td className="px-2 py-1 border text-center">{getBalanceBags(ro)}</td>
-                      <td className="px-2 py-1 border text-center">{getBalanceQty(ro)}</td>
-                      <td className="px-2 py-1 border text-center">
-                        <Button variant="link" className="text-blue-600 underline p-0" onClick={() => { setSelectedRO(ro); setShowRODetails(true); }}>{ro.roStatus || 'pending'}</Button>
-                      </td>
-                    </tr>
-                    {expandedRows[ro.srwrNo] && (
-                      <tr>
-                        <td colSpan={15} className="p-0">
-                          <div className="bg-gray-50 border-t">
-                            <div className="font-semibold mb-2 text-green-700 px-4 pt-2">All Release Orders for SR/WR No. {ro.srwrNo}</div>
-                            <div className="overflow-x-auto px-4 pb-2">
-                              <table className="min-w-full border text-xs">
-                                <thead className="bg-orange-50">
-                                  <tr>
-                                    <th className="px-2 py-1 border">Date</th>
-                                    <th className="px-2 py-1 border">RO Code</th>
-                                    <th className="px-2 py-1 border">Release Bags</th>
-                                    <th className="px-2 py-1 border">Release Qty</th>
-                                    <th className="px-2 py-1 border">Balance Bags</th>
-                                    <th className="px-2 py-1 border">Balance Qty</th>
-                                    <th className="px-2 py-1 border">RO Status</th>
-                                    <th className="px-2 py-1 border">Attachment</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {groupedROs[ro.srwrNo].map((entry, idx) => (
-                                    <tr key={entry.roCode || idx} className="even:bg-gray-100">
-                                      <td className="px-2 py-1 border text-center">{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : ''}</td>
-                                      <td className="px-2 py-1 border text-center">{entry.roCode}</td>
-                                      <td className="px-2 py-1 border text-center">{entry.releaseBags}</td>
-                                      <td className="px-2 py-1 border text-center">{entry.releaseQuantity}</td>
-                                      <td className="px-2 py-1 border text-center">{entry.balanceBags}</td>
-                                      <td className="px-2 py-1 border text-center">{entry.balanceQuantity}</td>
-                                      <td className="px-2 py-1 border text-center">
-                                        <Button variant="link" className="text-blue-600 underline p-0" onClick={() => { setSelectedRO(entry); setShowRODetails(true); }}>{entry.roStatus || 'pending'}</Button>
-                                      </td>
-                                      <td className="px-2 py-1 border text-center">
-                                        {entry.attachmentUrl ? <a href={entry.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View</a> : <span className="text-gray-400">No file</span>}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+            <div style={{ width: '100%', overflowX: 'auto' }}>
+              <table className="min-w-[1400px] border text-sm">
+                <thead className="bg-orange-100">
+                  <tr>
+                    <th className="px-2 py-1 border"></th>
+                    <th className="px-2 py-1 border">RO Code</th>
+                    <th className="px-2 py-1 border">SR/WR No.</th>
+                    <th className="px-2 py-1 border">State</th>
+                    <th className="px-2 py-1 border">Branch</th>
+                    <th className="px-2 py-1 border">Warehouse Name</th>
+                    <th className="px-2 py-1 border">Warehouse Code</th>
+                    <th className="px-2 py-1 border">Warehouse Address</th>
+                    <th className="px-2 py-1 border">Client Code</th>
+                    <th className="px-2 py-1 border">Client Address</th>
+                    <th className="px-2 py-1 border">Inward Bags</th>
+                    <th className="px-2 py-1 border">Inward Quantity</th>
+                    <th className="px-2 py-1 border">Release Bags</th>
+                    <th className="px-2 py-1 border">Release Quantity</th>
+                    <th className="px-2 py-1 border">Balance Bags</th>
+                    <th className="px-2 py-1 border">Balance Quantity</th>
+                    <th className="px-2 py-1 border">RO Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {latestROs.map(ro => (
+                    <React.Fragment key={ro.roCode}>
+                      <tr className="even:bg-gray-50">
+                        <td className="px-2 py-1 border text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setExpandedRows(prev => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
+                          >
+                            {expandedRows[ro.srwrNo] ? '▼' : '▶'}
+                          </Button>
+                        </td>
+                        <td className="px-2 py-1 border text-center">{ro.roCode}</td>
+                        <td className="px-2 py-1 border text-center">{ro.srwrNo}</td>
+                        <td className="px-2 py-1 border text-center">{ro.state}</td>
+                        <td className="px-2 py-1 border text-center">{ro.branch}</td>
+                        <td className="px-2 py-1 border text-center">{ro.warehouseName}</td>
+                        <td className="px-2 py-1 border text-center">{ro.warehouseCode}</td>
+                        <td className="px-2 py-1 border text-center">{ro.warehouseAddress}</td>
+                        <td className="px-2 py-1 border text-center">{ro.clientCode}</td>
+                        <td className="px-2 py-1 border text-center">{ro.clientAddress}</td>
+                        <td className="px-2 py-1 border text-center">{ro.totalBags}</td>
+                        <td className="px-2 py-1 border text-center">{ro.totalQuantity}</td>
+                        <td className="px-2 py-1 border text-center">{ro.releaseBags !== undefined ? ro.releaseBags : (groupedROs[ro.srwrNo]?.[0]?.releaseBags ?? '')}</td>
+                        <td className="px-2 py-1 border text-center">{ro.releaseQuantity !== undefined ? ro.releaseQuantity : (groupedROs[ro.srwrNo]?.[0]?.releaseQuantity ?? '')}</td>
+                        <td className="px-2 py-1 border text-center">{getBalanceBags(ro)}</td>
+                        <td className="px-2 py-1 border text-center">{getBalanceQty(ro)}</td>
+                        <td className="px-2 py-1 border text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <span>{ro.roStatus || 'pending'}</span>
+                            <Button variant="ghost" size="sm" className="p-1" title="View Details" onClick={() => { setSelectedRO(ro); setShowRODetails(true); }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-5 h-5 text-blue-600">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                              </svg>
+                            </Button>
                           </div>
                         </td>
                       </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+                      {expandedRows[ro.srwrNo] && (
+                        <tr>
+                          <td colSpan={15} className="p-0">
+                            <div className="bg-green-50 border-t">
+                              <div className="font-semibold mb-2 text-orange-700 px-4 pt-2">All Release Orders for SR/WR No. - {ro.srwrNo}</div>
+                              <div className="overflow-x-auto px-4 pb-2">
+                                <table className="min-w-full border border-green-200 rounded-lg text-xs">
+                                  <thead className="bg-orange-50">
+                                    <tr>
+                                      <th className="px-2 py-1 border">Date</th>
+                                      <th className="px-2 py-1 border">RO Code</th>
+                                      <th className="px-2 py-1 border">Release Bags</th>
+                                      <th className="px-2 py-1 border">Release Qty</th>
+                                      <th className="px-2 py-1 border">Balance Bags</th>
+                                      <th className="px-2 py-1 border">Balance Qty</th>
+                                      <th className="px-2 py-1 border">RO Status</th>
+                                      <th className="px-2 py-1 border">Attachment</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {groupedROs[ro.srwrNo].map((entry, idx) => (
+                                      <tr key={entry.roCode || idx} className="even:bg-gray-100">
+                                        <td className="px-2 py-1 border text-center">{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : ''}</td>
+                                        <td className="px-2 py-1 border text-center">{entry.roCode}</td>
+                                        <td className="px-2 py-1 border text-center">{entry.releaseBags}</td>
+                                        <td className="px-2 py-1 border text-center">{entry.releaseQuantity}</td>
+                                        <td className="px-2 py-1 border text-center">{entry.balanceBags}</td>
+                                        <td className="px-2 py-1 border text-center">{entry.balanceQuantity}</td>
+                                        <td className="px-2 py-1 border text-center">
+                                          <div className="flex items-center justify-center gap-2">
+                                            <span>{entry.roStatus || 'pending'}</span>
+                                            <Button variant="ghost" size="sm" className="p-1" title="View Details" onClick={() => { setSelectedRO(entry); setShowRODetails(true); }}>
+                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4 text-blue-600">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                                              </svg>
+                                            </Button>
+                                          </div>
+                                        </td>
+                                        <td className="px-2 py-1 border text-center">
+                                          {entry.attachmentUrl ? <a href={entry.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View</a> : <span className="text-gray-400">No file</span>}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
         {/* RO Details Dialog */}
@@ -667,29 +699,142 @@ export default function ReleaseOrderPage() {
               <DialogTitle>RO Details</DialogTitle>
             </DialogHeader>
             {selectedRO && (
-              <form className="space-y-4 max-h-[80vh] overflow-y-auto p-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div><Label>RO Code</Label><Input value={selectedRO.roCode || ''} readOnly /></div>
-                  <div><Label>Status</Label><Input value={selectedRO.roStatus || 'pending'} readOnly /></div>
-                  <div><Label>SR/WR No.</Label><Input value={selectedRO.srwrNo || ''} readOnly /></div>
-                  <div><Label>CAD Number</Label><Input value={selectedRO.cadNumber || ''} readOnly /></div>
-                  <div><Label>State</Label><Input value={selectedRO.state || ''} readOnly /></div>
-                  <div><Label>Branch</Label><Input value={selectedRO.branch || ''} readOnly /></div>
-                  <div><Label>Location</Label><Input value={selectedRO.location || ''} readOnly /></div>
-                  <div><Label>Warehouse Name</Label><Input value={selectedRO.warehouseName || ''} readOnly /></div>
-                  <div><Label>Warehouse Code</Label><Input value={selectedRO.warehouseCode || ''} readOnly /></div>
-                  <div><Label>Warehouse Address</Label><Input value={selectedRO.warehouseAddress || ''} readOnly /></div>
-                  <div><Label>Client Name</Label><Input value={selectedRO.client || ''} readOnly /></div>
-                  <div><Label>Client Code</Label><Input value={selectedRO.clientCode || ''} readOnly /></div>
-                  <div><Label>Client Address</Label><Input value={selectedRO.clientAddress || ''} readOnly /></div>
-                  <div><Label>Total Bags</Label><Input value={selectedRO.totalBags || ''} readOnly /></div>
-                  <div><Label>Total Quantity</Label><Input value={selectedRO.totalQuantity || ''} readOnly /></div>
-                  <div><Label>Balance Bags</Label><Input value={getBalanceBags(selectedRO)} readOnly /></div>
-                  <div><Label>Balance Quantity</Label><Input value={getBalanceQty(selectedRO)} readOnly /></div>
-                  <div><Label>Release Bags</Label><Input value={selectedRO.releaseBags || ''} readOnly /></div>
-                  <div><Label>Release Quantity</Label><Input value={selectedRO.releaseQuantity || ''} readOnly /></div>
-                  <div><Label>Attachment</Label>{selectedRO.attachmentUrl ? <a href={selectedRO.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View File</a> : <span className="text-gray-400">No file</span>}</div>
+              <form id="ro-details-form" className="max-h-[80vh] overflow-y-auto p-2">
+                {/* CIR-style header */}
+                <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                  <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#e67c1f', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>RO Details</div>
                 </div>
+                {/* Two-column grid for fields */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '0 32px',
+                    marginTop: 32,
+                  }}
+                >
+                  {/* All fields except attachments */}
+                  {[
+                    { label: 'RO Code', value: selectedRO.roCode },
+                    { label: 'Status', value: selectedRO.roStatus },
+                    { label: 'SR/WR No.', value: selectedRO.srwrNo },
+                    { label: 'CAD Number', value: selectedRO.cadNumber },
+                    { label: 'State', value: selectedRO.state },
+                    { label: 'Branch', value: selectedRO.branch },
+                    { label: 'Location', value: selectedRO.location },
+                    { label: 'Warehouse Name', value: selectedRO.warehouseName },
+                    { label: 'Warehouse Code', value: selectedRO.warehouseCode },
+                    { label: 'Warehouse Address', value: selectedRO.warehouseAddress },
+                    { label: 'Client Name', value: selectedRO.client },
+                    { label: 'Client Code', value: selectedRO.clientCode },
+                    { label: 'Client Address', value: selectedRO.clientAddress },
+                    { label: 'Inward Bags', value: selectedRO.totalBags },
+                    { label: 'Inward Quantity', value: selectedRO.totalQuantity },
+                    { label: 'Release Bags', value: selectedRO.releaseBags },
+                    { label: 'Release Quantity', value: selectedRO.releaseQuantity },
+                    { label: 'Balance Bags', value: getBalanceBags(selectedRO) },
+                    { label: 'Balance Quantity', value: getBalanceQty(selectedRO) },
+                    { label: 'Remark', value: selectedRO.remark },
+                  ].map((f, idx) => (
+                    <div key={idx} style={{ marginBottom: 12 }}>
+                      <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>{f.label}</div>
+                      <div style={{ fontWeight: 500, color: '#222', fontSize: 16, marginBottom: 8, background: '#f6fef9', borderRadius: 8, padding: '6px 12px', border: '1px solid #e0f2e9' }}>{f.value ?? '-'}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Attachments row below grid */}
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Attachment</div>
+                  {Array.isArray(selectedRO.attachmentUrls) && selectedRO.attachmentUrls.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {selectedRO.attachmentUrls.map((url: string, idx: number) => {
+                        const ext = url.split('.').pop()?.toLowerCase();
+                        let label = 'View File';
+                        if (ext === 'pdf') label = 'View PDF';
+                        else if (ext === 'docx') label = 'View DOCX';
+                        else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
+                        return (
+                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db', textDecoration: 'underline', fontSize: 15 }}>
+                            {label} {idx + 1}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <span style={{ color: '#888', fontSize: 15 }}>No file</span>
+                  )}
+                </div>
+                {/* Generate Receipt Button (only if approved) */}
+                {selectedRO.roStatus === 'approved' && (
+                  <div className="flex justify-end mt-2">
+                    <Button type="button" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={async () => {
+                      // PDF generation logic using the visible form for exact copy, multi-page support
+                      const html2canvas = (await import('html2canvas')).default;
+                      const jsPDF = (await import('jspdf')).default;
+                      const detailsForm = document.getElementById('ro-details-form');
+                      if (!detailsForm) return;
+                      detailsForm.scrollIntoView({ behavior: 'auto', block: 'center' });
+                      await new Promise((resolve) => setTimeout(resolve, 300));
+                      const canvas = await html2canvas(detailsForm, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+                      const imgData = canvas.toDataURL('image/png');
+                      const pdf = new jsPDF('p', 'mm', 'a4');
+                      const imgWidth = 210; // A4 width in mm
+                      const pageHeight = 295; // A4 height in mm
+                      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                      let heightLeft = imgHeight;
+                      let position = 0;
+                      // Add first page
+                      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight > pageHeight ? pageHeight : imgHeight);
+                      heightLeft -= pageHeight;
+                      position = pageHeight;
+                      // Add extra pages if needed
+                      while (heightLeft > 0) {
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+                        position += pageHeight;
+                        heightLeft -= pageHeight;
+                      }
+                      pdf.save(`release-order-receipt-${selectedRO.roCode || ''}.pdf`);
+                    }}>
+                      Generate Receipt
+                    </Button>
+                  </div>
+                )}
+                {/* Previous ROs Table for this SR/WR in RO Details Dialog */}
+                {selectedRO.srwrNo && groupedROs[selectedRO.srwrNo] && groupedROs[selectedRO.srwrNo].length > 0 && (
+                  <div className="mb-4 mt-6">
+                    <div className="font-semibold mb-2 text-green-700">Previous Release Orders for this SR/WR</div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full border text-sm">
+                        <thead className="bg-orange-100">
+                          <tr>
+                            <th className="px-2 py-1 border text-orange-500">Date</th>
+                            <th className="px-2 py-1 border text-orange-500">RO Code</th>
+                            <th className="px-2 py-1 border text-orange-500">Release Bags</th>
+                            <th className="px-2 py-1 border text-orange-500">Release Qty</th>
+                            <th className="px-2 py-1 border text-orange-500">Balance Bags</th>
+                            <th className="px-2 py-1 border text-orange-500">Balance Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {groupedROs[selectedRO.srwrNo].map((ro, idx) => (
+                            <tr key={ro.roCode || idx} className="even:bg-gray-50">
+                              <td className="px-2 py-1 border text-center">{ro.createdAt ? new Date(ro.createdAt).toLocaleDateString('en-GB') : ''}</td>
+                              <td className="px-2 py-1 border text-center">{ro.roCode}</td>
+                              <td className="px-2 py-1 border text-center">{ro.releaseBags}</td>
+                              <td className="px-2 py-1 border text-center">{ro.releaseQuantity}</td>
+                              <td className="px-2 py-1 border text-center">{ro.balanceBags}</td>
+                              <td className="px-2 py-1 border text-center">{ro.balanceQuantity}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-4">
                   <Label>Remark</Label>
                   <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="Enter remark..." />
