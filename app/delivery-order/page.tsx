@@ -122,7 +122,19 @@ export default function DeliveryOrderPage() {
       ),
     },
     { accessorKey: 'doCode', header: 'DO Code', cell: ({ row }: any) => <div>{row.original.doCode || ''}</div> },
-    { accessorKey: 'srwrNo', header: 'SR/WR No.', cell: ({ row }: any) => <div style={{ minWidth: 180 }}>{row.original.srwrNo}</div> },
+    { accessorKey: 'srwrNo', header: 'SR/WR No.', cell: ({ row }: any) => (
+      <div style={{ minWidth: 180 }} className="flex items-center">
+        {row.original.isDirectDO ? (
+          <span className="inline-block w-3 h-3 rounded-full bg-orange-500 mr-2" title="Direct DO (No Bank Details)"></span>
+        ) : (
+          <span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2" title="Regular DO (From Release Order)"></span>
+        )}
+        {row.original.srwrNo}
+        {row.original.isDirectDO && (
+          <span className="ml-2 text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">Direct</span>
+        )}
+      </div>
+    ) },
     { accessorKey: 'state', header: 'State' },
     { accessorKey: 'branch', header: 'Branch' },
     { accessorKey: 'warehouseName', header: 'Warehouse Name' },
@@ -149,24 +161,94 @@ export default function DeliveryOrderPage() {
     alert('Export CSV functionality coming soon!');
   };
 
-  // Fetch approved RO entries for dropdown
+  // Fetch both approved ROs and inward entries without bank details for dropdown
   React.useEffect(() => {
-    const fetchROs = async () => {
+    const fetchOptions = async () => {
+      // Fetch approved ROs
       const roCol = collection(db, 'releaseOrders');
-      const q = query(roCol, where('roStatus', '==', 'approved'));
-      const snap = await getDocs(q);
-      const roData: any[] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRoOptions(roData);
+      const roQ = query(roCol, where('roStatus', '==', 'approved'));
+      const roSnap = await getDocs(roQ);
+      const roData: any[] = roSnap.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        source: 'ro' // Mark as coming from RO collection
+      }));
+      
+      // Fetch all inward entries first
+      const inwardCol = collection(db, 'inward');
+      const inwardSnap = await getDocs(inwardCol);
+      const allInwardEntries: any[] = inwardSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Fetch all inspection entries to check for bank details
+      const inspectionCol = collection(db, 'inspections');
+      const inspectionSnap = await getDocs(inspectionCol);
+      const inspectionEntries: any[] = inspectionSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Filter inward entries without bank details in either inward or inspection collections
+      const inwardData: any[] = allInwardEntries
+        .filter(entry => {
+          // Get warehouse name for this entry
+          const warehouseName = entry.warehouseName?.toLowerCase().trim() || '';
+          
+          // Check if there's an inspection entry with this warehouse name that has bank details
+          const matchingInspection = inspectionEntries.find(
+            insp => insp.warehouseName?.toLowerCase().trim() === warehouseName
+          );
+          
+          // Check both inward and inspection entries for bank details
+          const inwardHasBankDetails = entry.bankDetails?.name && entry.bankDetails.name.trim() !== '';
+          const inspectionHasBankDetails = matchingInspection?.bankDetails?.name && 
+                                           matchingInspection.bankDetails.name.trim() !== '';
+          
+          // Filter to include only entries WITHOUT bank details in BOTH collections
+          return !inwardHasBankDetails && !inspectionHasBankDetails;
+        })
+        .map(entry => {
+          // Format similar to RO entries
+          return {
+            id: entry.id,
+            srwrNo: `${entry.receiptType || 'SR'}-${entry.inwardId || ''}-${entry.dateOfInward || ''}`,
+            cadNumber: entry.cadNumber,
+            state: entry.state,
+            branch: entry.branch,
+            location: entry.location,
+            warehouseName: entry.warehouseName,
+            warehouseCode: entry.warehouseCode,
+            warehouseAddress: entry.warehouseAddress,
+            client: entry.client,
+            clientCode: entry.clientCode,
+            clientAddress: entry.clientAddress,
+            totalBags: entry.totalBags,
+            totalQuantity: entry.totalQuantity,
+            // These direct inwards don't have release values, so we use total as release
+            releaseBags: entry.totalBags,
+            releaseQuantity: entry.totalQuantity,
+            balanceBags: entry.totalBags,
+            balanceQuantity: entry.totalQuantity,
+            source: 'inward', // Mark as coming from inward collection
+            directDO: true // Flag that this is for direct DO creation
+          };
+        });
+      
+      // Combine both sets of options
+      setRoOptions([...roData, ...inwardData]);
     };
-    fetchROs();
+    fetchOptions();
   }, []);
 
   // Filtered options for dropdown
   const filteredROOptions = React.useMemo(() => {
     if (!roSearch) return roOptions;
+    const searchLower = roSearch.toLowerCase();
+    
     return roOptions.filter(opt => {
       const srwr = `${opt.srwrNo || ''}`.toLowerCase();
-      return srwr.includes(roSearch.toLowerCase());
+      // Include "no bank" as a search term to find entries without bank details
+      const source = opt.source === 'inward' 
+        ? 'no bank details direct do without bank' 
+        : opt.roCode?.toLowerCase() || '';
+        
+      return srwr.includes(searchLower) || source.includes(searchLower);
     });
   }, [roOptions, roSearch]);
 
@@ -281,7 +363,10 @@ export default function DeliveryOrderPage() {
         remark: remark,
         doStatus: 'pending',
         createdAt: new Date().toISOString(),
-        createdBy: userRole // Already has a default value
+        createdBy: userRole, // Already has a default value
+        // Add source information
+        isDirectDO: selectedRO.source === 'inward',
+        source: selectedRO.source || 'ro'
       };
 
       await addDoc(collection(db, 'deliveryOrders'), doData);
@@ -352,7 +437,7 @@ export default function DeliveryOrderPage() {
           </Button>
           <h1 className="text-2xl font-bold text-orange-600 text-center flex-1">Delivery Order</h1>
           <Button onClick={() => setShowAddModal(true)} className="bg-green-600 hover:bg-green-700">
-            <Plus className="h-4 w-4 mr-2" /> Add DO
+            <Plus className="h-4 w-4 mr-2" /> Add DO / Create Direct DO
           </Button>
         </div>
 
@@ -366,11 +451,14 @@ export default function DeliveryOrderPage() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   type="search"
-                  placeholder="Search by DO fields..."
+                  placeholder="Search by DO fields or type 'direct' or 'regular'..."
                   className="pl-8"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
+                <div className="text-xs text-muted-foreground mt-1">
+                  Tip: Type "direct" to show only Direct DOs or "regular" to show only Regular DOs
+                </div>
               </div>
             </div>
             <Button onClick={handleExportCSV} className="bg-blue-500 hover:bg-blue-600 text-white">
@@ -382,7 +470,19 @@ export default function DeliveryOrderPage() {
         {/* Main Table */}
         <div className="bg-white rounded-lg shadow-md">
           <div className="py-3 px-4 bg-green-50 border-b border-green-100">
-            <h2 className="text-green-700 text-xl font-semibold">Delivery Orders</h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-green-700 text-xl font-semibold">Delivery Orders</h2>
+              <div className="flex items-center space-x-6">
+                <div className="flex items-center">
+                  <span className="inline-block w-3 h-3 rounded-full bg-orange-500 mr-2"></span>
+                  <span className="text-sm text-gray-700">Direct DO (No Bank Details)</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
+                  <span className="text-sm text-gray-700">Regular DO (From Release Order)</span>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-[1400px] border text-sm w-full">
@@ -426,7 +526,19 @@ export default function DeliveryOrderPage() {
                         </Button>
                       </td>
                       <td className="px-2 py-1 border">{do_item.doCode || ''}</td>
-                      <td className="px-2 py-1 border" style={{ minWidth: '180px' }}>{do_item.srwrNo}</td>
+                      <td className="px-2 py-1 border" style={{ minWidth: '180px' }}>
+                        <div className="flex items-center justify-start">
+                          {do_item.isDirectDO ? (
+                            <span className="inline-block w-3 h-3 rounded-full bg-orange-500 mr-2" title="Direct DO (No Bank Details)"></span>
+                          ) : (
+                            <span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2" title="Regular DO (From Release Order)"></span>
+                          )}
+                          {do_item.srwrNo}
+                          {do_item.isDirectDO && (
+                            <span className="ml-2 text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">Direct</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-2 py-1 border">{do_item.state}</td>
                       <td className="px-2 py-1 border">{do_item.branch}</td>
                       <td className="px-2 py-1 border">{do_item.warehouseName}</td>
@@ -517,7 +629,12 @@ export default function DeliveryOrderPage() {
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-xl text-center text-orange-600 font-bold">DELIVERY ORDER (DO)</DialogTitle>
+              <DialogTitle className="text-xl text-center text-orange-600 font-bold">
+                DELIVERY ORDER (DO) / DIRECT DO
+                <div className="mt-1 text-sm font-normal text-gray-600">
+                  Create a Delivery Order based on a Release Order or directly for entries without bank details
+                </div>
+              </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="overflow-y-auto pr-1">
               {formError && <div className="bg-red-100 p-3 mb-4 text-red-600 rounded-md text-center font-medium">{formError}</div>}
@@ -525,14 +642,29 @@ export default function DeliveryOrderPage() {
               <div className="space-y-5 pt-4">
                 {/* RO Selection */}
                 <div className="bg-green-50 p-4 rounded-md border border-green-200">
-                  <Label htmlFor="ro-select" className="text-green-800 font-semibold text-lg mb-2 block">Select Release Order (RO)</Label>
+                  <Label htmlFor="ro-select" className="text-green-800 font-semibold text-lg mb-2 block">
+                    Select Release Order (RO) or Entry Without Bank Details
+                  </Label>
+                  {filteredROOptions.some(opt => opt.source === 'inward') && (
+                    <div className="mb-2 px-3 py-2 bg-orange-100 text-orange-800 rounded-md text-sm flex items-start">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <strong>Direct DO Entries:</strong> Items with <span className="inline-block w-2 h-2 rounded-full bg-orange-500 mx-1"></span> orange indicator are SR/WR entries without bank details in both inward and inspection collections. These can be used for direct DO creation without requiring a Release Order.
+                      </div>
+                    </div>
+                  )}
                   <div className="relative">
                     <Input
-                      placeholder="Search by SR/WR No"
+                      placeholder="Search by SR/WR No or type 'no bank' for entries without bank details"
                       value={roSearch}
                       onChange={(e) => setRoSearch(e.target.value)}
                       className="mb-2"
                     />
+                    <div className="text-xs text-muted-foreground mb-2">
+                      Tip: Type "no bank" to quickly find all entries without bank details for direct DO creation
+                    </div>
                     <Select
                       value={selectedRO?.id || ''}
                       onValueChange={(value) => {
@@ -543,10 +675,21 @@ export default function DeliveryOrderPage() {
                       <SelectTrigger id="ro-select" className="bg-white">
                         <SelectValue placeholder="Select RO" />
                       </SelectTrigger>
-                      <SelectContent>
-                        {filteredROOptions.map(ro => (
-                          <SelectItem key={ro.id} value={ro.id}>
-                            {ro.srwrNo} - {ro.roCode}
+                      <SelectContent className="max-h-[300px]">
+                        {filteredROOptions.map(option => (
+                          <SelectItem 
+                            key={option.id} 
+                            value={option.id} 
+                            className={option.source === 'inward' ? "bg-orange-50 text-orange-800 font-medium" : ""}
+                          >
+                            {option.source === 'inward' ? (
+                              <span className="flex items-center">
+                                <span className="inline-block w-2 h-2 rounded-full bg-orange-500 mr-2"></span>
+                                {option.srwrNo} <span className="ml-1 font-semibold">(No Bank Details - Direct DO)</span>
+                              </span>
+                            ) : (
+                              <span>{option.srwrNo} - {option.roCode}</span>
+                            )}
                           </SelectItem>
                         ))}
                       </SelectContent>
