@@ -657,14 +657,12 @@ export default function DeliveryOrderPage() {
                   )}
                   <div className="relative">
                     <Input
-                      placeholder="Search by SR/WR No or type 'no bank' for entries without bank details"
+                      placeholder="Search by SR/WR No "
                       value={roSearch}
                       onChange={(e) => setRoSearch(e.target.value)}
                       className="mb-2"
                     />
-                    <div className="text-xs text-muted-foreground mb-2">
-                      Tip: Type "no bank" to quickly find all entries without bank details for direct DO creation
-                    </div>
+                    
                     <Select
                       value={selectedRO?.id || ''}
                       onValueChange={(value) => {
@@ -880,79 +878,132 @@ export default function DeliveryOrderPage() {
         <Dialog open={showDODetails} onOpenChange={setShowDODetails}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader className="border-b border-green-100 pb-4">
-              <DialogTitle className="text-xl font-bold text-center text-orange-600">Delivery Order Details</DialogTitle>
+           
             </DialogHeader>
             {selectedDO && (
-              <form id="do-details-form" className="max-h-[80vh] overflow-y-auto p-2">
-                {/* CIR-style header */}
-                <div style={{ textAlign: 'center', marginBottom: 8 }}>
-                  <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
-                  <div style={{ fontSize: 28, fontWeight: 700, color: '#e67c1f', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
-                  <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>DO Details</div>
+              <div className="max-h-[80vh] overflow-y-auto p-2">
+                {/* Agrogreen Logo and DO Details Header */}
+                <div className="flex flex-col items-center justify-center mb-8 mt-2">
+                  <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 120, height: 100, marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
+                  <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
+                    AGROGREEN WAREHOUSING PRIVATE LTD.
+                  </div>
+                  <div className="text-base font-semibold text-green-600 mb-2 text-center">
+                    603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
+                  </div>
+                  <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
+                    DELIVERY ORDER (DO) DETAILS
+                  </div>
                 </div>
-                {/* Two-column grid for fields */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '0 32px',
-                    marginTop: 32,
-                  }}
-                >
-                  {/* All fields except attachments */}
-                  {[
-                    { label: 'DO Code', value: selectedDO.doCode },
-                    { label: 'Status', value: selectedDO.doStatus },
-                    { label: 'SR/WR No.', value: selectedDO.srwrNo },
-                    { label: 'CAD Number', value: selectedDO.cadNumber },
-                    { label: 'State', value: selectedDO.state },
-                    { label: 'Branch', value: selectedDO.branch },
-                    { label: 'Location', value: selectedDO.location },
-                    { label: 'Warehouse Name', value: selectedDO.warehouseName },
-                    { label: 'Warehouse Code', value: selectedDO.warehouseCode },
-                    { label: 'Warehouse Address', value: selectedDO.warehouseAddress },
-                    { label: 'Client Name', value: selectedDO.client },
-                    { label: 'Client Code', value: selectedDO.clientCode },
-                    { label: 'Client Address', value: selectedDO.clientAddress },
-                    { label: 'Inward Bags', value: selectedDO.totalBags },
-                    { label: 'Inward Quantity', value: selectedDO.totalQuantity },
-                    { label: 'Release RO Bags', value: selectedDO.releaseBags },
-                    { label: 'Release RO Quantity', value: selectedDO.releaseQuantity },
-                    { label: 'DO Bags', value: selectedDO.doBags },
-                    { label: 'DO Quantity', value: selectedDO.doQuantity },
-                    { label: 'Balance Bags', value: getBalanceBags(selectedDO) },
-                    { label: 'Balance Quantity', value: getBalanceQty(selectedDO) },
-                    { label: 'Remark', value: selectedDO.remark },
-                  ].map((f, idx) => (
-                    <div key={idx} style={{ marginBottom: 12 }}>
-                      <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>{f.label}</div>
-                      <div style={{ fontWeight: 500, color: '#222', fontSize: 16, marginBottom: 8, background: '#f6fef9', borderRadius: 8, padding: '6px 12px', border: '1px solid #e0f2e9' }}>{f.value ?? '-'}</div>
+                
+                {/* DO Details in bordered container */}
+                <div className="w-full max-w-2xl mx-auto mt-8 mb-4 border border-gray-200 rounded-lg p-4 bg-gray-50" style={{ maxWidth: '900px' }}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <Label className="font-semibold mb-1">SR/WR No.</Label>
+                      <Input readOnly value={selectedDO.srwrNo || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
-                  ))}
-                </div>
-                {/* Attachments row below grid */}
-                <div style={{ marginTop: 24 }}>
-                  <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Attachment</div>
-                  {Array.isArray(selectedDO.attachmentUrls) && selectedDO.attachmentUrls.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {selectedDO.attachmentUrls.map((url: string, idx: number) => {
-                        const ext = url.split('.').pop()?.toLowerCase();
-                        let label = 'View File';
-                        if (ext === 'pdf') label = 'View PDF';
-                        else if (ext === 'docx') label = 'View DOCX';
-                        else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
-                        return (
-                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db', textDecoration: 'underline', fontSize: 15 }}>
-                            {label} {idx + 1}
-                          </a>
-                        );
-                      })}
+                    <div>
+                      <Label className="font-semibold mb-1">CAD Number</Label>
+                      <Input readOnly value={selectedDO.cadNumber || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
-                  ) : (
-                    <span style={{ color: '#888', fontSize: 15 }}>No file</span>
-                  )}
+                    <div>
+                      <Label className="font-semibold mb-1">State</Label>
+                      <Input readOnly value={selectedDO.state || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Branch</Label>
+                      <Input readOnly value={selectedDO.branch || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Location</Label>
+                      <Input readOnly value={selectedDO.location || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Warehouse Name</Label>
+                      <Input readOnly value={selectedDO.warehouseName || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Warehouse Code</Label>
+                      <Input readOnly value={selectedDO.warehouseCode || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Warehouse Address</Label>
+                      <Input readOnly value={selectedDO.warehouseAddress || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Client Name</Label>
+                      <Input readOnly value={selectedDO.client || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Client Code</Label>
+                      <Input readOnly value={selectedDO.clientCode || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Client Address</Label>
+                      <Input readOnly value={selectedDO.clientAddress || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Inward Bags</Label>
+                      <Input readOnly value={selectedDO.totalBags || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Inward Quantity</Label>
+                      <Input readOnly value={selectedDO.totalQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Release RO Bags</Label>
+                      <Input readOnly value={selectedDO.releaseBags || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Release RO Quantity</Label>
+                      <Input readOnly value={selectedDO.releaseQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">DO Bags</Label>
+                      <Input readOnly value={selectedDO.doBags || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">DO Quantity</Label>
+                      <Input readOnly value={selectedDO.doQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Balance Bags</Label>
+                      <Input readOnly value={getBalanceBags(selectedDO) || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                    <div>
+                      <Label className="font-semibold mb-1">Balance Quantity</Label>
+                      <Input readOnly value={getBalanceQty(selectedDO) || ''} className="w-full bg-white border-green-300 text-green-800" />
+                    </div>
+                  </div>
                 </div>
+
+                {/* Attachments section */}
+                <div className="w-full max-w-2xl mx-auto mt-4 mb-4">
+                  <Label className="font-semibold mb-1 block">Attachments</Label>
+                  <div className="w-full bg-white border-green-300 text-green-800 rounded border p-3">
+                    {Array.isArray(selectedDO.attachmentUrls) && selectedDO.attachmentUrls.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        {selectedDO.attachmentUrls.map((url: string, idx: number) => {
+                          const ext = url.split('.').pop()?.toLowerCase();
+                          let label = 'View File';
+                          if (ext === 'pdf') label = 'View PDF';
+                          else if (ext === 'docx') label = 'View DOCX';
+                          else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
+                          return (
+                            <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">
+                              {label} {idx + 1}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">No files attached</span>
+                    )}
+                  </div>
+                </div>
+                
+
                 {/* Generate Receipt Button (only if approved) */}
                 {selectedDO.doStatus === 'approved' && (
                   <div className="flex justify-end mt-2">
@@ -1056,16 +1107,28 @@ export default function DeliveryOrderPage() {
                   </div>
                 )}
                 {/* Previous DO entries table removed for PDF generation */}
-                <div className="mt-6 pt-4 border-t border-green-200">
-                  <Label className="text-green-800 font-medium">Update Status with Remark</Label>
-                  <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="Enter remark..." className="mt-2 border-green-100" />
-                  <div className="flex gap-4 mt-4 justify-end">
-                    <Button type="button" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleDOStatusChange('approved')} disabled={doStatusUpdating}>Approve</Button>
-                    <Button type="button" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleDOStatusChange('rejected')} disabled={doStatusUpdating}>Reject</Button>
-                    <Button type="button" className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => handleDOStatusChange('resubmitted')} disabled={doStatusUpdating}>Resubmit</Button>
+                {selectedDO.doStatus !== 'approved' && (
+                  <div className="mt-6 pt-4 border-t border-green-200">
+                    <Label className="text-green-800 font-medium">Update Status with Remark</Label>
+                    <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="Enter remark..." className="mt-2 border-green-100" />
+                    <div className="flex gap-4 mt-4 justify-end">
+                      <Button type="button" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleDOStatusChange('approved')} disabled={doStatusUpdating}>Approve</Button>
+                      <Button type="button" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleDOStatusChange('rejected')} disabled={doStatusUpdating}>Reject</Button>
+                      <Button type="button" className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => handleDOStatusChange('resubmitted')} disabled={doStatusUpdating}>Resubmit</Button>
+                    </div>
                   </div>
-                </div>
-              </form>
+                )}
+                {selectedDO.doStatus === 'approved' && (
+                  <div className="mt-6 pt-4 border-t border-green-200">
+                    <div className="flex items-center justify-center gap-2 text-green-700">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-medium">This delivery order has been approved</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </DialogContent>
         </Dialog>

@@ -1,5 +1,17 @@
 import React from 'react';
 
+// Define interface for field structure
+interface Field {
+  label: string;
+  value: string | number | null | undefined;
+  highlightStyle?: {
+    background?: string;
+    borderColor?: string;
+    color?: string;
+    fontWeight?: number;
+  };
+}
+
 export default function PrintableDOReceipt({ data }: { data: any }) {
   // CIR-style layout
   const labelStyle = {
@@ -22,9 +34,8 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
   };
 
   // All fields in two-column grid
-  const fields = [
-    { label: 'DO Code', value: data.doCode },
-    { label: 'Status', value: data.doStatus },
+  const fields: Field[] = [
+
     { label: 'SR/WR No.', value: data.srwrNo },
     { label: 'CAD Number', value: data.cadNumber },
     { label: 'State', value: data.state },
@@ -40,11 +51,29 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
     { label: 'Inward Quantity', value: data.totalQuantity },
     { label: 'Release RO Bags', value: data.releaseBags },
     { label: 'Release RO Quantity', value: data.releaseQuantity },
-    { label: 'DO Bags', value: data.doBags },
-    { label: 'DO Quantity', value: data.doQuantity },
+    { 
+      label: 'DO Bags', 
+      value: data.doBags, 
+      highlightStyle: { 
+        background: '#fff3e6', 
+        borderColor: '#ffe0c0',
+        color: '#e67c1f', 
+        fontWeight: 700 
+      } 
+    },
+    { 
+      label: 'DO Quantity', 
+      value: data.doQuantity,
+      highlightStyle: { 
+        background: '#fff3e6', 
+        borderColor: '#ffe0c0',
+        color: '#e67c1f', 
+        fontWeight: 700 
+      }
+    },
     { label: 'Balance Bags', value: data.balanceBags },
     { label: 'Balance Quantity', value: data.balanceQuantity },
-    { label: 'Remark', value: data.remark },
+ 
   ];
 
   return (
@@ -80,8 +109,14 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
       >
         {fields.map((f, idx) => (
           <div key={idx} style={{ marginBottom: 12 }}>
-            <div style={labelStyle}>{f.label}</div>
-            <div style={valueStyle}>{f.value ?? '-'}</div>
+            <div style={{
+              ...labelStyle,
+              ...(f.highlightStyle ? { color: f.highlightStyle.color } : {})
+            }}>{f.label}</div>
+            <div style={{
+              ...valueStyle,
+              ...(f.highlightStyle || {})
+            }}>{f.value ?? '-'}</div>
           </div>
         ))}
       </div>
