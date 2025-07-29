@@ -37,6 +37,7 @@ export default function DeliveryOrderPage() {
   const [roOptions, setRoOptions] = React.useState<any[]>([]);
   const [roSearch, setRoSearch] = React.useState('');
   const [selectedRO, setSelectedRO] = React.useState<any>(null);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [doBags, setDoBags] = React.useState('');
   const [doQty, setDoQty] = React.useState('');
   const [fileAttachments, setFileAttachments] = React.useState<File[]>([]);
@@ -77,8 +78,9 @@ export default function DeliveryOrderPage() {
   const getBalanceBags = (row: any) => {
     if (typeof row.balanceBags === 'number') return row.balanceBags;
     if (row.balanceBags && !isNaN(Number(row.balanceBags))) return Number(row.balanceBags);
-    if (typeof row.totalBags === 'number' && typeof row.doBags === 'number') {
-      return row.totalBags - row.doBags;
+    // Use releaseBags instead of totalBags for balance calculation
+    if (typeof row.releaseBags === 'number' && typeof row.doBags === 'number') {
+      return row.releaseBags - row.doBags;
     }
     return '';
   };
@@ -86,8 +88,9 @@ export default function DeliveryOrderPage() {
   const getBalanceQty = (row: any) => {
     if (typeof row.balanceQuantity === 'number') return row.balanceQuantity;
     if (row.balanceQuantity && !isNaN(Number(row.balanceQuantity))) return Number(row.balanceQuantity);
-    if (typeof row.totalQuantity === 'number' && typeof row.doQuantity === 'number') {
-      return row.totalQuantity - row.doQuantity;
+    // Use releaseQuantity instead of totalQuantity for balance calculation
+    if (typeof row.releaseQuantity === 'number' && typeof row.doQuantity === 'number') {
+      return row.releaseQuantity - row.doQuantity;
     }
     return '';
   };
@@ -168,11 +171,79 @@ export default function DeliveryOrderPage() {
       const roCol = collection(db, 'releaseOrders');
       const roQ = query(roCol, where('roStatus', '==', 'approved'));
       const roSnap = await getDocs(roQ);
-      const roData: any[] = roSnap.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data(),
-        source: 'ro' // Mark as coming from RO collection
-      }));
+      
+      // Fetch all existing DOs to check balances
+      const doCol = collection(db, 'deliveryOrders');
+      const doSnap = await getDocs(doCol);
+      const allDOs = doSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Group DOs by SR/WR number for balance calculation
+      const dosBySRWR: Record<string, any[]> = {};
+      
+      // Loop through each DO and group by SR/WR number
+      allDOs.forEach((doItem: any) => {
+        const srwrNo = doItem.srwrNo;
+        if (srwrNo) {
+          if (!dosBySRWR[srwrNo]) {
+            dosBySRWR[srwrNo] = [];
+          }
+          dosBySRWR[srwrNo].push(doItem);
+        }
+      });
+      
+      // Calculate balances for ROs taking into account existing DOs
+      const roData: any[] = roSnap.docs.map(doc => {
+        // Get the document data properly typed as 'any' to avoid TypeScript errors
+        const docData = doc.data() as any;
+        const roData = { 
+          id: doc.id, 
+          ...docData,
+          source: 'ro' // Mark as coming from RO collection
+        };
+        
+        // Calculate remaining balance by checking existing DOs
+        const srwrNo = roData.srwrNo as string | undefined;
+        const existingDOs = srwrNo ? (dosBySRWR[srwrNo] || []) : [];
+        
+        // Start with releaseBags and releaseQuantity
+        let balanceBags = Number(roData.releaseBags || 0);
+        let balanceQuantity = Number(roData.releaseQuantity || 0);
+        
+        // Log for debugging
+        console.log(`RO ${srwrNo}: Starting with ${balanceBags} bags, ${balanceQuantity} quantity`);
+        
+        // Subtract DO quantities from each existing DO
+        if (existingDOs.length > 0) {
+          console.log(`Found ${existingDOs.length} existing DOs for ${srwrNo}`);
+          
+          existingDOs.forEach((doItem: any) => {
+            const doBags = Number(doItem.doBags || 0);
+            const doQty = Number(doItem.doQuantity || 0);
+            
+            console.log(`Subtracting DO ${doItem.doCode}: ${doBags} bags, ${doQty} quantity`);
+            
+            balanceBags -= doBags;
+            balanceQuantity -= doQty;
+          });
+        }
+        
+        // Ensure balance doesn't go below zero
+        balanceBags = Math.max(0, balanceBags);
+        balanceQuantity = Math.max(0, balanceQuantity);
+        
+        console.log(`RO ${srwrNo}: Final balance ${balanceBags} bags, ${balanceQuantity.toFixed(2)} quantity`);
+        
+        // Add calculated balances to RO data
+        return {
+          ...roData,
+          balanceBags,
+          balanceQuantity
+        };
+      })
+      // Filter out ROs with zero balance
+      .filter(ro => ro.balanceBags > 0);
+      
+      console.log(`Found ${roData.length} ROs with positive balance`);
       
       // Fetch all inward entries first
       const inwardCol = collection(db, 'inward');
@@ -415,33 +486,113 @@ export default function DeliveryOrderPage() {
             // These direct inwards don't have release values, so we use total as release
             releaseBags: entry.totalBags,
             releaseQuantity: entry.totalQuantity,
-            balanceBags: entry.totalBags,
-            balanceQuantity: entry.totalQuantity,
             source: 'inward', // Mark as coming from inward collection
             directDO: true // Flag that this is for direct DO creation
           };
-        });
+        })
+        .map(inwardEntry => {
+          // Calculate remaining balance by checking existing DOs - same logic as for ROs
+          const srwrNo = inwardEntry.srwrNo as string;
+          const existingDOs = srwrNo ? (dosBySRWR[srwrNo] || []) : [];
+          
+          // Start with releaseBags and releaseQuantity
+          let balanceBags = Number(inwardEntry.releaseBags || 0);
+          let balanceQuantity = Number(inwardEntry.releaseQuantity || 0);
+          
+          // Log for debugging
+          console.log(`Inward ${srwrNo}: Starting with ${balanceBags} bags, ${balanceQuantity} quantity`);
+          
+          // Subtract DO quantities from each existing DO
+          if (existingDOs.length > 0) {
+            console.log(`Found ${existingDOs.length} existing DOs for inward ${srwrNo}`);
+            
+            existingDOs.forEach((doItem: any) => {
+              const doBags = Number(doItem.doBags || 0);
+              const doQty = Number(doItem.doQuantity || 0);
+              
+              console.log(`Subtracting DO ${doItem.doCode}: ${doBags} bags, ${doQty} quantity`);
+              
+              balanceBags -= doBags;
+              balanceQuantity -= doQty;
+            });
+          }
+          
+          // Ensure balance doesn't go below zero
+          balanceBags = Math.max(0, balanceBags);
+          balanceQuantity = Math.max(0, balanceQuantity);
+          
+          // Add calculated balances to inward data
+          return {
+            ...inwardEntry,
+            balanceBags,
+            balanceQuantity
+          };
+        })
+        // Filter out inward entries with zero balance
+        .filter(entry => entry.balanceBags > 0);
+      
+      console.log(`Found ${inwardData.length} inward entries with positive balance`);
       
       // Combine both sets of options
-      setRoOptions([...roData, ...inwardData]);
+      const combinedOptions = [...roData, ...inwardData];
+      console.log(`Total of ${combinedOptions.length} options available for DO creation`);
+      setRoOptions(combinedOptions);
     };
     fetchOptions();
   }, []);
 
-  // Filtered options for dropdown
+  // Filtered options for dropdown - Enhanced search functionality focusing on SR/WR numbers
   const filteredROOptions = React.useMemo(() => {
-    if (!roSearch) return roOptions;
-    const searchLower = roSearch.toLowerCase();
+    // If search is empty, show all options
+    if (!roSearch || roSearch.trim() === '') return roOptions;
     
-    return roOptions.filter(opt => {
+    const searchLower = roSearch.toLowerCase().trim();
+    
+    // DEBUG - Log the search term to console to help with troubleshooting
+    console.log('Searching for:', searchLower);
+    console.log('Available options:', roOptions.map(opt => opt.srwrNo));
+    
+    // First try to find exact matches on SR/WR No
+    const exactMatches = roOptions.filter(opt => {
       const srwr = `${opt.srwrNo || ''}`.toLowerCase();
-      // Include "no bank" as a search term to find entries without bank details
+      return srwr === searchLower;
+    });
+    
+    // If we have exact matches, just return those
+    if (exactMatches.length > 0) {
+      console.log('Found exact matches:', exactMatches.map(opt => opt.srwrNo));
+      return exactMatches;
+    }
+    
+    // Otherwise, look for partial matches prioritizing SR/WR numbers
+    const partialMatches = roOptions.filter(opt => {
+      // Start with SR/WR No as primary search field
+      const srwr = `${opt.srwrNo || ''}`.toLowerCase();
+      
+      // Check if SR/WR contains the search term
+      if (srwr.includes(searchLower)) {
+        return true;
+      }
+      
+      // Secondary fields for broader search
+      const warehouseName = `${opt.warehouseName || ''}`.toLowerCase();
+      const warehouseCode = `${opt.warehouseCode || ''}`.toLowerCase();
+      const clientCode = `${opt.clientCode || ''}`.toLowerCase();
+      
+      // Include "no bank" as a search term for direct DO entries
       const source = opt.source === 'inward' 
         ? 'no bank details direct do without bank' 
         : opt.roCode?.toLowerCase() || '';
-        
-      return srwr.includes(searchLower) || source.includes(searchLower);
+      
+      // Return true if any of these fields contain the search term
+      return warehouseName.includes(searchLower) || 
+             warehouseCode.includes(searchLower) || 
+             clientCode.includes(searchLower) ||
+             source.includes(searchLower);
     });
+    
+    console.log('Found partial matches:', partialMatches.map(opt => opt.srwrNo));
+    return partialMatches;
   }, [roOptions, roSearch]);
 
   // When RO is selected, update form fields
@@ -452,11 +603,49 @@ export default function DeliveryOrderPage() {
         setCurrentBalanceQty(null);
         return;
       }
-      setCurrentBalanceBags(Number(selectedRO.balanceBags) || 0);
-      setCurrentBalanceQty(Number(selectedRO.balanceQuantity) || 0);
+      
+      // Calculate balance bags and quantity
+      let balanceBags = 0;
+      let balanceQty = 0;
+      
+      // If balanceBags is already in the data, use it
+      if (selectedRO.balanceBags !== undefined && selectedRO.balanceBags !== null) {
+        balanceBags = Number(selectedRO.balanceBags);
+      } 
+      // Otherwise calculate from releaseBags
+      else if (selectedRO.releaseBags !== undefined && selectedRO.releaseBags !== null) {
+        balanceBags = Number(selectedRO.releaseBags);
+      }
+      
+      // If balanceQuantity is already in the data, use it
+      if (selectedRO.balanceQuantity !== undefined && selectedRO.balanceQuantity !== null) {
+        balanceQty = Number(selectedRO.balanceQuantity);
+      }
+      // Otherwise calculate from releaseQuantity
+      else if (selectedRO.releaseQuantity !== undefined && selectedRO.releaseQuantity !== null) {
+        balanceQty = Number(selectedRO.releaseQuantity);
+      }
+      
+      setCurrentBalanceBags(balanceBags);
+      setCurrentBalanceQty(balanceQty);
     };
     updateFormFields();
   }, [selectedRO]);
+  
+  // Reset search and focus the search input when modal opens
+  React.useEffect(() => {
+    if (showAddModal) {
+      // Clear previous search when opening the modal
+      setRoSearch('');
+      // Focus the search input after a short delay to ensure the modal is fully rendered
+      setTimeout(() => {
+        const searchInput = document.querySelector('input[placeholder="Type to search by SR/WR No..."]') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }, 100);
+    }
+  }, [showAddModal]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -467,12 +656,24 @@ export default function DeliveryOrderPage() {
       setFormError('Please select an RO');
       return;
     }
+    
+    // Check for mandatory attachment
+    if (fileAttachments.length === 0) {
+      setFormError('Please upload at least one attachment');
+      return;
+    }
 
     // Validate DO bags and quantity
-    const dbBags = Number(doBags);
-    const dQuantity = Number(doQty);
+    let dbBags = Number(doBags);
+    let dQuantity = Number(doQty);
     const balanceBags = currentBalanceBags || 0;
     const balanceQty = currentBalanceQty || 0;
+
+    // Check if balance is zero - if so, prevent creation
+    if (balanceBags <= 0 || balanceQty <= 0) {
+      setFormError('No remaining balance available for this Release Order');
+      return;
+    }
 
     if (isNaN(dbBags) || dbBags <= 0) {
       setFormError('Please enter valid number of bags');
@@ -482,6 +683,13 @@ export default function DeliveryOrderPage() {
       setFormError('Please enter valid quantity');
       return;
     }
+    
+    // If this is the last bag, automatically adjust to use all remaining quantity
+    if (dbBags === balanceBags) {
+      dQuantity = balanceQty;
+      setDoQty(balanceQty.toString());
+    }
+    
     if (dbBags > balanceBags) {
       setFormError(`Cannot release more than available balance bags (${balanceBags})`);
       return;
@@ -624,33 +832,30 @@ export default function DeliveryOrderPage() {
     <DashboardLayout>
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
-          <Button onClick={() => router.push('/dashboard')} variant="ghost" className="flex items-center">
+          <Button onClick={() => router.push('/dashboard')} variant="ghost" className="flex items-center bg-orange-500 text-white hover:bg-orange-600">
             ← Dashboard
           </Button>
-          <h1 className="text-2xl font-bold text-orange-600 text-center flex-1">Delivery Order</h1>
-          <Button onClick={() => setShowAddModal(true)} className="bg-green-600 hover:bg-green-700">
-            <Plus className="h-4 w-4 mr-2" /> Add DO / Create Direct DO
+          <h1 className="text-3xl font-bold text-orange-600 text-center flex-1">Delivery Order</h1>
+          <Button onClick={() => setShowAddModal(true)} className="bg-green-500 hover:bg-green-600 text-white">
+            <Plus className="h-4 w-4 mr-2" /> Add DO
           </Button>
         </div>
 
         {/* Search and Export */}
-        <div className="bg-green-50 rounded-lg p-4 mb-6">
+        <div className="bg-green-50 rounded-lg p-4 mb-6 border border-green-200">
           <div className="text-lg font-semibold text-green-800 mb-3">Search & Export Options</div>
           <div className="flex justify-between items-center">
-            <div className="relative w-80 flex items-center">
+            <div className="flex items-center">
               <span className="mr-2 text-gray-600">Search:</span>
-              <div className="relative flex-1">
+              <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   type="search"
-                  placeholder="Search by DO fields or type 'direct' or 'regular'..."
-                  className="pl-8"
+                  placeholder="Search by DO fields..."
+                  className="pl-8 w-[400px]"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                <div className="text-xs text-muted-foreground mt-1">
-                  Tip: Type "direct" to show only Direct DOs or "regular" to show only Regular DOs
-                </div>
               </div>
             </div>
             <Button onClick={handleExportCSV} className="bg-blue-500 hover:bg-blue-600 text-white">
@@ -691,13 +896,13 @@ export default function DeliveryOrderPage() {
                   <th className="px-2 py-1 border">Client Code</th>
                   <th className="px-2 py-1 border">Client Address</th>
                   <th className="px-2 py-1 border">Inward Bags</th>
-                  <th className="px-2 py-1 border">Inward Quantity</th>
+                  <th className="px-2 py-1 border">Inward Quantity (MT)</th>
                   <th className="px-2 py-1 border">Release RO Bags</th>
-                  <th className="px-2 py-1 border">Release RO Quantity</th>
+                  <th className="px-2 py-1 border">Release RO Quantity (MT)</th>
                   <th className="px-2 py-1 border">DO Bags</th>
-                  <th className="px-2 py-1 border">DO Quantity</th>
+                  <th className="px-2 py-1 border">DO Quantity (MT)</th>
                   <th className="px-2 py-1 border">Balance Bags</th>
-                  <th className="px-2 py-1 border">Balance Quantity</th>
+                  <th className="px-2 py-1 border">Balance Quantity (MT)</th>
                   <th className="px-2 py-1 border">DO Status</th>
                 </tr>
               </thead>
@@ -848,12 +1053,45 @@ export default function DeliveryOrderPage() {
                     </div>
                   )}
                   <div className="relative">
-                    <Input
-                      placeholder="Search by SR/WR No "
-                      value={roSearch}
-                      onChange={(e) => setRoSearch(e.target.value)}
-                      className="mb-2"
-                    />
+                    <div className="relative mb-1">
+                      <Input
+                        ref={searchInputRef}
+                        placeholder="Type to search by SR/WR No..."
+                        value={roSearch}
+                        onChange={(e) => setRoSearch(e.target.value)}
+                        className="mb-1 pr-8 border-2 border-blue-300 focus:border-blue-500"
+                        autoFocus
+                      />
+                      {roSearch && (
+                        <button 
+                          type="button" 
+                          onClick={() => setRoSearch('')}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    {roSearch && (
+                      <div className="text-xs mb-2">
+                        <span className={`${filteredROOptions.length > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {filteredROOptions.length} {filteredROOptions.length === 1 ? 'result' : 'results'} found
+                          {filteredROOptions.length === 0 && roSearch.length > 0 && " - Try partial SR/WR number"}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Debug info */}
+                    <div className="text-xs mb-2 text-blue-600">
+                      Available options: {roOptions.length} | 
+                      Filtered: {filteredROOptions.length} | 
+                      With positive balance: {filteredROOptions.filter(opt => 
+                        (opt.balanceBags !== undefined ? Number(opt.balanceBags) : 
+                          (opt.releaseBags !== undefined ? Number(opt.releaseBags) : 0)) > 0
+                      ).length}
+                    </div>
                     
                     <Select
                       value={selectedRO?.id || ''}
@@ -866,22 +1104,42 @@ export default function DeliveryOrderPage() {
                         <SelectValue placeholder="Select RO" />
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px]">
-                        {filteredROOptions.map(option => (
-                          <SelectItem 
-                            key={option.id} 
-                            value={option.id} 
-                            className={option.source === 'inward' ? "bg-orange-50 text-orange-800 font-medium" : ""}
-                          >
-                            {option.source === 'inward' ? (
-                              <span className="flex items-center">
-                                <span className="inline-block w-2 h-2 rounded-full bg-orange-500 mr-2"></span>
-                                {option.srwrNo} <span className="ml-1 font-semibold">(No Bank Details - Direct DO)</span>
-                              </span>
-                            ) : (
-                              <span>{option.srwrNo} - {option.roCode}</span>
-                            )}
-                          </SelectItem>
-                        ))}
+                        {filteredROOptions
+                          .filter(option => {
+                            // Calculate and check if balance is positive
+                            const balanceBags = option.balanceBags !== undefined ? 
+                              Number(option.balanceBags) : 
+                              (option.releaseBags !== undefined ? Number(option.releaseBags) : 0);
+                            return balanceBags > 0;
+                          })
+                          .map(option => {
+                            // Get the balance for display
+                            const balanceBags = option.balanceBags !== undefined ? 
+                              Number(option.balanceBags) : 
+                              (option.releaseBags !== undefined ? Number(option.releaseBags) : 0);
+                          
+                          return (
+                            <SelectItem 
+                              key={option.id} 
+                              value={option.id} 
+                              className={option.source === 'inward' ? "bg-orange-50 text-orange-800 font-medium" : ""}
+                            >
+                              {option.source === 'inward' ? (
+                                <span className="flex items-center">
+                                  <span className="inline-block w-2 h-2 rounded-full bg-orange-500 mr-2"></span>
+                                  {option.srwrNo} <span className="ml-1 font-semibold">(No Bank Details - Direct DO)</span>
+                                </span>
+                              ) : (
+                                <span>
+                                  {option.srwrNo} - {option.roCode}
+                                  <span className="ml-2 text-green-700">
+                                    (Balance: {balanceBags} bags)
+                                  </span>
+                                </span>
+                              )}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -955,10 +1213,23 @@ export default function DeliveryOrderPage() {
                         id="doBags"
                         type="number"
                         value={doBags}
-                        onChange={(e) => setDoBags(e.target.value)}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setDoBags(newValue);
+                          
+                          // If user entered exactly the remaining balance bags, auto-set quantity too
+                          if (Number(newValue) === currentBalanceBags) {
+                            setDoQty(currentBalanceQty?.toString() || "0");
+                          }
+                        }}
                         required
                         className="bg-white border-orange-200"
                       />
+                      {currentBalanceBags === 1 && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          This is the last bag - full remaining quantity will be used
+                        </div>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="doQty" className="text-orange-600 font-medium">DO QUANTITY (MT)</Label>
@@ -970,7 +1241,14 @@ export default function DeliveryOrderPage() {
                         onChange={(e) => setDoQty(e.target.value)}
                         required
                         className="bg-white border-orange-200"
+                        // Auto-set to full remaining quantity if this is the last bag
+                        readOnly={Number(doBags) === currentBalanceBags}
                       />
+                      {Number(doBags) === currentBalanceBags && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          Using full remaining quantity for last bag
+                        </div>
+                      )}
                     </div>
 
                     {/* Auto calculated balance fields */}
@@ -995,13 +1273,16 @@ export default function DeliveryOrderPage() {
                       />
                     </div>
 
-                    {/* Attachment */}
+                    {/* Attachment - Now Mandatory */}
                     <div className="col-span-2">
-                      <Label htmlFor="attachment" className="text-green-800 font-medium">ATTACHMENT (ALL FILE TYPES ALLOWED)</Label>
+                      <Label htmlFor="attachment" className="text-orange-600 font-medium flex items-center">
+                        ATTACHMENT (ALL FILE TYPES ALLOWED) 
+                        <span className="text-red-500 ml-1">*</span>
+                      </Label>
                       <Input
                         id="attachment"
                         type="file"
-                        className="cursor-pointer bg-white border-green-100"
+                        className="cursor-pointer bg-white border-orange-200"
                         onChange={(e) => {
                           if (e.target.files) {
                             const filesArray = Array.from(e.target.files);
@@ -1010,6 +1291,7 @@ export default function DeliveryOrderPage() {
                             e.target.value = '';
                           }
                         }}
+                        required={fileAttachments.length === 0}
                         multiple
                       />
                       {fileAttachments.length > 0 && (
@@ -1140,7 +1422,7 @@ export default function DeliveryOrderPage() {
                       <Input readOnly value={selectedDO.totalBags || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                     <div>
-                      <Label className="font-semibold mb-1">Inward Quantity</Label>
+                      <Label className="font-semibold mb-1">Inward Quantity (MT)</Label>
                       <Input readOnly value={selectedDO.totalQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                     <div>
@@ -1148,7 +1430,7 @@ export default function DeliveryOrderPage() {
                       <Input readOnly value={selectedDO.releaseBags || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                     <div>
-                      <Label className="font-semibold mb-1">Release RO Quantity</Label>
+                      <Label className="font-semibold mb-1">Release RO Quantity (MT)</Label>
                       <Input readOnly value={selectedDO.releaseQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                     <div>
@@ -1156,7 +1438,7 @@ export default function DeliveryOrderPage() {
                       <Input readOnly value={selectedDO.doBags || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                     <div>
-                      <Label className="font-semibold mb-1">DO Quantity</Label>
+                      <Label className="font-semibold mb-1">DO Quantity (MT)</Label>
                       <Input readOnly value={selectedDO.doQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                     <div>
@@ -1164,7 +1446,7 @@ export default function DeliveryOrderPage() {
                       <Input readOnly value={getBalanceBags(selectedDO) || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                     <div>
-                      <Label className="font-semibold mb-1">Balance Quantity</Label>
+                      <Label className="font-semibold mb-1">Balance Quantity (MT)</Label>
                       <Input readOnly value={getBalanceQty(selectedDO) || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                   </div>

@@ -13,7 +13,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
 import { DataTable } from '@/components/data-table';
@@ -123,11 +123,11 @@ export default function ReleaseOrderPage() {
     { accessorKey: 'clientCode', header: 'Client Code' },
     { accessorKey: 'clientAddress', header: 'Client Address' },
     { accessorKey: 'totalBags', header: 'Inward Bags' },
-    { accessorKey: 'totalQuantity', header: 'Inward Quantity' },
+    { accessorKey: 'totalQuantity', header: 'Inward Quantity (MT)' },
     { accessorKey: 'releaseBags', header: 'Release Bags', cell: ({ row }: any) => <div>{row.original.releaseBags || ''}</div> },
-    { accessorKey: 'releaseQuantity', header: 'Release Quantity', cell: ({ row }: any) => <div>{row.original.releaseQuantity || ''}</div> },
+    { accessorKey: 'releaseQuantity', header: 'Release Quantity (MT)', cell: ({ row }: any) => <div>{row.original.releaseQuantity || ''}</div> },
     { accessorKey: 'balanceBags', header: 'Balance Bags', cell: ({ row }: any) => <div>{getBalanceBags(row.original)}</div> },
-    { accessorKey: 'balanceQuantity', header: 'Balance Quantity', cell: ({ row }: any) => <div>{getBalanceQty(row.original)}</div> },
+    { accessorKey: 'balanceQuantity', header: 'Balance Quantity (MT)', cell: ({ row }: any) => <div>{getBalanceQty(row.original)}</div> },
     { accessorKey: 'roStatus', header: 'RO Status', cell: ({ row }: any) => (
       <Button variant="link" className="text-blue-600 underline p-0" onClick={() => { setSelectedRO(row.original); setShowRODetails(true); }}>{row.original.roStatus || 'pending'}</Button>
     ) },
@@ -345,10 +345,10 @@ export default function ReleaseOrderPage() {
     if (!selectedRO) return;
     setROStatusUpdating(true);
     try {
-      const roCol = collection(db, 'releaseOrders');
-      // Update status and remark
-      await addDoc(roCol, {
-        ...selectedRO,
+      // Get a reference to the existing document
+      const roDocRef = doc(db, 'releaseOrders', selectedRO.id);
+      // Update status and remark on the existing document
+      await updateDoc(roDocRef, {
         roStatus: status,
         remark,
         updatedAt: new Date().toISOString(),
@@ -357,6 +357,7 @@ export default function ReleaseOrderPage() {
       setRemark('');
       setSelectedRO(null);
     } catch (err) {
+      console.error('Error updating RO status:', err);
       alert('Failed to update RO status');
     }
     setROStatusUpdating(false);
@@ -586,11 +587,11 @@ export default function ReleaseOrderPage() {
                     <th className="px-2 py-1 border">Client Code</th>
                     <th className="px-2 py-1 border">Client Address</th>
                     <th className="px-2 py-1 border">Inward Bags</th>
-                    <th className="px-2 py-1 border">Inward Quantity</th>
+                    <th className="px-2 py-1 border">Inward Quantity (MT)</th>
                     <th className="px-2 py-1 border">Release Bags</th>
-                    <th className="px-2 py-1 border">Release Quantity</th>
+                    <th className="px-2 py-1 border">Release Quantity (MT)</th>
                     <th className="px-2 py-1 border">Balance Bags</th>
-                    <th className="px-2 py-1 border">Balance Quantity</th>
+                    <th className="px-2 py-1 border">Balance Quantity (MT)</th>
                     <th className="px-2 py-1 border">RO Status</th>
                   </tr>
                 </thead>
@@ -732,11 +733,11 @@ export default function ReleaseOrderPage() {
                     { label: 'Client Code', value: selectedRO.clientCode },
                     { label: 'Client Address', value: selectedRO.clientAddress },
                     { label: 'Inward Bags', value: selectedRO.totalBags },
-                    { label: 'Inward Quantity', value: selectedRO.totalQuantity },
+                    { label: 'Inward Quantity (MT)', value: selectedRO.totalQuantity },
                     { label: 'Release Bags', value: selectedRO.releaseBags },
-                    { label: 'Release Quantity', value: selectedRO.releaseQuantity },
+                    { label: 'Release Quantity (MT)', value: selectedRO.releaseQuantity },
                     { label: 'Balance Bags', value: getBalanceBags(selectedRO) },
-                    { label: 'Balance Quantity', value: getBalanceQty(selectedRO) },
+                    { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedRO) },
                     { label: 'Remark', value: selectedRO.remark },
                   ].map((f, idx) => (
                     <div key={idx} style={{ marginBottom: 12 }}>

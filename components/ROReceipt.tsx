@@ -39,11 +39,11 @@ export default function ROReceipt({ data }: { data: any }) {
     { label: 'Client Code', value: data.clientCode },
     { label: 'Client Address', value: data.clientAddress },
     { label: 'Inward Bags', value: data.totalBags },
-    { label: 'Inward Quantity', value: data.totalQuantity },
+    { label: 'Inward Quantity (MT)', value: data.totalQuantity },
     { label: 'Release Bags', value: data.releaseBags },
-    { label: 'Release Quantity', value: data.releaseQuantity },
+    { label: 'Release Quantity (MT)', value: data.releaseQuantity },
     { label: 'Balance Bags', value: data.balanceBags },
-    { label: 'Balance Quantity', value: data.balanceQuantity },
+    { label: 'Balance Quantity (MT)', value: data.balanceQuantity },
     { label: 'Remark', value: data.remark },
   ];
 
