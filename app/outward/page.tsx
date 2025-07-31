@@ -53,6 +53,9 @@ export default function OutwardPage() {
   const [remark, setRemark] = React.useState('');
   const [outwardStatusUpdating, setOutwardStatusUpdating] = React.useState(false);
   
+  // Inward entry data for reference
+  const [selectedInwardEntry, setSelectedInwardEntry] = React.useState<any>(null);
+  
   // Fetch all outward entries for the table
   React.useEffect(() => {
     const fetchOutwards = async () => {
@@ -676,32 +679,177 @@ export default function OutwardPage() {
                         // Fetch stack information from the inward collection
                         const fetchStackInfo = async () => {
                           try {
-                            // We need to find the original inward entry based on SR/WR No
+                            console.log('=== STARTING INWARD DATA FETCH ===');
+                            
+                            // Get the SR/WR number from selected DO
+                            const srwrNo = selected.srwrNo;
+                            console.log('Selected SR/WR No:', srwrNo);
+                            
+                            if (!srwrNo) {
+                              console.log('No SR/WR number found in selected DO');
+                              setStackEntries([{
+                                stackNo: 'Stack-1',
+                                bags: '',
+                                quantity: '',
+                                inwardBags: 0
+                              }]);
+                              return;
+                            }
+                            
+                            // Method 1: Try to extract inward ID from SR/WR number
+                            let inwardId = '';
+                            const parts = srwrNo.split('-');
+                            console.log('SR/WR parts:', parts);
+                            
+                            // Look for INW pattern in the parts
+                            const inwardIdPart = parts.find((part: string) => part.startsWith('INW'));
+                            if (inwardIdPart) {
+                              inwardId = inwardIdPart;
+                              console.log('Extracted inward ID from SR/WR:', inwardId);
+                            }
+                            
+                            // Method 2: If no INW pattern, try to reconstruct from SR/WR
+                            if (!inwardId && parts.length >= 2) {
+                              // Format: "SR-INW-047-2025-07-25" -> parts[1] should be "INW-047"
+                              if (parts[1] && parts[1].includes('INW')) {
+                                inwardId = parts[1];
+                                console.log('Extracted inward ID from parts[1]:', inwardId);
+                              }
+                            }
+                            
+                            console.log('Final inward ID to search for:', inwardId);
+                            
+                            // Fetch inward data
                             const inwardCol = collection(db, 'inward');
-                            const inwardSnap = await getDocs(inwardCol);
-                            const inwardEntries = inwardSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            let inwardData = null;
                             
-                            // Find the matching inward by srwrNo
-                            const matchingInward = inwardEntries.find((entry: any) => {
-                              const inwardSrWr = `${entry.receiptType || 'SR'}-${entry.inwardId || ''}-${entry.dateOfInward || ''}`;
-                              return inwardSrWr === selected.srwrNo;
-                            }) as any; // Type assertion to any since we know the structure
+                            // Method 1: Direct query by inwardId
+                            if (inwardId) {
+                              console.log('Trying direct query with inwardId:', inwardId);
+                              const inwardQuery = query(inwardCol, where('inwardId', '==', inwardId));
+                              const inwardSnap = await getDocs(inwardQuery);
+                              
+                              if (!inwardSnap.empty) {
+                                inwardData = inwardSnap.docs[0].data();
+                                console.log('Found inward data via direct query');
+                              } else {
+                                console.log('Direct query failed, trying case-insensitive search');
+                                
+                                // Method 2: Case-insensitive search
+                                const allInwardSnap = await getDocs(inwardCol);
+                                const matchingInward = allInwardSnap.docs.find(doc => {
+                                  const data = doc.data();
+                                  return data.inwardId && data.inwardId.toLowerCase() === inwardId.toLowerCase();
+                                });
+                                
+                                if (matchingInward) {
+                                  inwardData = matchingInward.data();
+                                  console.log('Found inward data via case-insensitive search');
+                                }
+                              }
+                            }
                             
-                            if (matchingInward && matchingInward.stackDetails) {
-                              console.log('Found matching inward with stack details:', matchingInward.stackDetails);
+                            // Method 3: If still not found, try to find by SR/WR pattern
+                            if (!inwardData) {
+                              console.log('Trying SR/WR pattern search');
+                              const allInwardSnap = await getDocs(inwardCol);
                               
-                              // Convert stack details to our format
-                              const stackData = Object.entries(matchingInward.stackDetails || {}).map(([stackNo, details]: [string, any]) => ({
-                                stackNo,
-                                bags: '',  // User will input this
-                                quantity: '', // User will input this
-                                inwardBags: details.bags || 0  // Original bags from inward
-                              }));
+                              const matchingInward = allInwardSnap.docs.find(doc => {
+                                const data = doc.data();
+                                const dataSrwr = `${data.receiptType || 'SR'}-${data.inwardId || ''}-${data.dateOfInward || ''}`;
+                                console.log('Comparing:', dataSrwr, 'with', srwrNo);
+                                return dataSrwr === srwrNo;
+                              });
                               
-                              setStackEntries(stackData);
+                              if (matchingInward) {
+                                inwardData = matchingInward.data();
+                                console.log('Found inward data via SR/WR pattern search');
+                              }
+                            }
+                            
+                            // Method 4: Last resort - search by partial match
+                            if (!inwardData) {
+                              console.log('Trying partial match search');
+                              const allInwardSnap = await getDocs(inwardCol);
+                              
+                              // Try to find by inwardId pattern in SR/WR
+                              const matchingInward = allInwardSnap.docs.find(doc => {
+                                const data = doc.data();
+                                if (data.inwardId && srwrNo.includes(data.inwardId)) {
+                                  console.log('Found partial match:', data.inwardId, 'in', srwrNo);
+                                  return true;
+                                }
+                                return false;
+                              });
+                              
+                              if (matchingInward) {
+                                inwardData = matchingInward.data();
+                                console.log('Found inward data via partial match');
+                              }
+                            }
+                            
+                            if (inwardData) {
+                              console.log('=== INWARD DATA FOUND ===');
+                              console.log('Inward data:', inwardData);
+                              console.log('Available fields:', Object.keys(inwardData));
+                              
+                              // Store inward entry data for reference
+                              setSelectedInwardEntry(inwardData);
+                              
+                              // Auto-populate vehicle number
+                              const vehicleNumber = inwardData.vehicleNumber || '';
+                              if (vehicleNumber) {
+                                setVehicleNumber(vehicleNumber);
+                                console.log('Auto-populated vehicle number:', vehicleNumber);
+                              } else {
+                                console.log('No vehicle number found');
+                                console.log('Vehicle-related fields:', Object.keys(inwardData).filter(key => key.toLowerCase().includes('vehicle')));
+                              }
+                              
+                              // Auto-populate gate pass
+                              const gatePass = inwardData.getpassNumber || '';
+                              if (gatePass) {
+                                setGatepass(gatePass);
+                                console.log('Auto-populated gate pass:', gatePass);
+                              } else {
+                                console.log('No gate pass found');
+                                console.log('Gate pass-related fields:', Object.keys(inwardData).filter(key => key.toLowerCase().includes('gate') || key.toLowerCase().includes('pass')));
+                              }
+                              
+                              // Extract stack information
+                              const stacks = inwardData.stacks || [];
+                              console.log('Stacks found:', stacks);
+                              console.log('Stacks type:', typeof stacks);
+                              console.log('Stacks is array:', Array.isArray(stacks));
+                              
+                              if (stacks && Array.isArray(stacks) && stacks.length > 0) {
+                                console.log('Processing stacks:', stacks.length, 'stacks');
+                                
+                                const stackData = stacks.map((stack: any, index: number) => {
+                                  console.log(`Processing stack ${index}:`, stack);
+                                  return {
+                                    stackNo: stack.stackNumber || `Stack-${index + 1}`,
+                                    bags: '', // User will input this
+                                    quantity: '', // User will input this
+                                    inwardBags: parseInt(stack.numberOfBags) || 0
+                                  };
+                                });
+                                
+                                setStackEntries(stackData);
+                                console.log('Set stack entries:', stackData);
+                              } else {
+                                console.log('No valid stacks found, using default');
+                                setStackEntries([{
+                                  stackNo: 'Stack-1',
+                                  bags: '',
+                                  quantity: '',
+                                  inwardBags: 0
+                                }]);
+                              }
                             } else {
-                              console.log('No matching inward found or no stack details');
-                              // Add a default stack entry as fallback
+                              console.log('=== NO INWARD DATA FOUND ===');
+                              console.log('Could not find inward entry for SR/WR:', srwrNo);
+                              setSelectedInwardEntry(null);
                               setStackEntries([{
                                 stackNo: 'Stack-1',
                                 bags: '',
@@ -709,8 +857,10 @@ export default function OutwardPage() {
                                 inwardBags: 0
                               }]);
                             }
+                            
+                            console.log('=== INWARD DATA FETCH COMPLETE ===');
                           } catch (error) {
-                            console.error('Error fetching stack information:', error);
+                            console.error('Error in fetchStackInfo:', error);
                             setStackEntries([{
                               stackNo: 'Stack-1',
                               bags: '',
@@ -725,6 +875,9 @@ export default function OutwardPage() {
                         setCurrentBalanceBags(null);
                         setCurrentBalanceQty(null);
                         setStackEntries([]);
+                        setSelectedInwardEntry(null);
+                        setVehicleNumber('');
+                        setGatepass('');
                       }
                     }}
                   >
@@ -943,16 +1096,17 @@ export default function OutwardPage() {
                         ) : (
                           <div className="space-y-4">
                             {/* Header */}
-                            <div className="grid grid-cols-4 gap-3 text-sm font-medium text-gray-600 mb-1">
+                            <div className="grid grid-cols-5 gap-3 text-sm font-medium text-gray-600 mb-1">
                               <div>Stack No.</div>
-                              <div>Bags</div>
+                              <div>Inward Bags</div>
+                              <div>Outward Bags</div>
                               <div>Quantity (MT)</div>
                               <div>Actions</div>
                             </div>
                             
                             {/* Stack entries */}
                             {stackEntries.map((entry, index) => (
-                              <div key={index} className="grid grid-cols-4 gap-3">
+                              <div key={index} className="grid grid-cols-5 gap-3">
                                 <div>
                                   <Input 
                                     value={entry.stackNo} 
@@ -966,11 +1120,26 @@ export default function OutwardPage() {
                                 </div>
                                 <div>
                                   <Input 
+                                    value={entry.inwardBags || 0} 
+                                    readOnly
+                                    className="bg-gray-100 border-gray-300 text-gray-600"
+                                  />
+                                </div>
+                                <div>
+                                  <Input 
                                     type="number"
                                     value={entry.bags} 
                                     onChange={(e) => {
                                       const newEntries = [...stackEntries];
                                       const newBags = e.target.value;
+                                      const inwardBags = entry.inwardBags || 0;
+                                      
+                                      // Validate that outward bags don't exceed inward bags
+                                      if (parseInt(newBags) > inwardBags) {
+                                        alert(`Cannot release more bags than available in inward. Max available: ${inwardBags} bags`);
+                                        return;
+                                      }
+                                      
                                       newEntries[index].bags = newBags;
                                       setStackEntries(newEntries);
                                       
@@ -979,6 +1148,7 @@ export default function OutwardPage() {
                                     }}
                                     className="bg-white"
                                     placeholder={`Max: ${entry.inwardBags || 0}`}
+                                    max={entry.inwardBags || 0}
                                   />
                                 </div>
                                 <div>
@@ -1051,8 +1221,9 @@ export default function OutwardPage() {
                             ))}
                             
                             {/* Totals */}
-                            <div className="grid grid-cols-4 gap-3 pt-3 border-t border-gray-200 mt-4">
+                            <div className="grid grid-cols-5 gap-3 pt-3 border-t border-gray-200 mt-4">
                               <div className="font-medium">Totals</div>
+                              <div className="font-medium">{stackEntries.reduce((sum, entry) => sum + (entry.inwardBags || 0), 0)}</div>
                               <div className="font-medium">{outwardBags || '0'}</div>
                               <div className="font-medium">{outwardQty || '0'}</div>
                               <div></div>
