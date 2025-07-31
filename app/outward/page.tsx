@@ -230,7 +230,7 @@ export default function OutwardPage() {
           <Button onClick={() => router.push('/dashboard')} variant="ghost" className="flex items-center bg-orange-500 text-white hover:bg-orange-600">
             ← Dashboard
           </Button>
-          <h1 className="text-3xl font-bold text-orange-600 text-center flex-1">Outward Management</h1>
+          <h1 className="text-3xl font-bold text-orange-600 text-center flex-1">Outward</h1>
           <Button onClick={() => setShowAddModal(true)} className="bg-green-500 hover:bg-green-600 text-white">
             <Plus className="h-4 w-4 mr-2" /> Add Outward
           </Button>
