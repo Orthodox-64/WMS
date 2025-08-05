@@ -69,6 +69,27 @@ function parseDDMMYYYY(dateStr: string): Date | null {
   return new Date(year, month - 1, day);
 }
 
+// Helper function to safely parse and validate insurance amounts
+function validateInsuranceAmount(amount: any): string {
+  if (amount === null || amount === undefined || amount === '') return '-';
+  if (typeof amount === 'string' && (amount === '-' || amount === 'N/A' || amount === 'null' || amount === 'undefined')) return '-';
+  const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
+  return isNaN(parsed) ? '-' : parsed.toString();
+}
+
+// Helper function to validate insurance entry structure
+function validateInsuranceEntry(insurance: any): boolean {
+  if (!insurance) return false;
+  
+  // Check if it has the required properties for source collection updates
+  const hasSourceProperties = insurance.sourceDocumentId && insurance.sourceCollection && insurance.insuranceId;
+  
+  // Check if it has basic insurance properties
+  const hasBasicProperties = insurance.firePolicyNumber || insurance.burglaryPolicyNumber;
+  
+  return hasBasicProperties; // Return true if it has at least basic properties
+}
+
 // 1. Add helper functions at the top-level scope:
 function isDateExpired(dateStr: string): boolean {
   if (!dateStr) return false;
@@ -232,6 +253,7 @@ export default function InwardPage() {
 
   // In the InwardPage component, add state for 'your insurance' data
   const [yourInsurance, setYourInsurance] = useState<any>(null);
+  const [hasPendingEntries, setHasPendingEntries] = useState(false);
 
   // Filter insurance entries based on selected type
   const filteredInsuranceEntries = useMemo(() => {
@@ -314,9 +336,19 @@ export default function InwardPage() {
       console.log('Total inward entries found:', inwardSnap.docs.length);
       
       const inwardDataWithReceiptType = await Promise.all(
-        inwardSnap.docs.map(async (doc) => {
+        inwardSnap.docs
+          .filter(doc => {
           const data = doc.data();
-          console.log('Processing inward entry:', data.inwardId, 'for warehouse:', data.warehouseName);
+            // Only process documents that have an inwardId
+            if (!data.inwardId) {
+              console.log('Skipping document without inwardId:', doc.id);
+              return false;
+            }
+            return true;
+          })
+          .map(async (doc) => {
+            const data = doc.data();
+            console.log('Processing inward entry:', data.inwardId, 'for warehouse:', data.warehouseName || 'NO_WAREHOUSE');
           
           // Fetch receipt type from inspection collection
           const receiptType = await getReceiptTypeFromInspection(data.warehouseName);
@@ -333,6 +365,13 @@ export default function InwardPage() {
             firePolicyName: '-',
             burglaryPolicyName: '-',
             bankFundedBy: '-'
+          };
+
+          // Helper function to safely parse amounts and return actual values
+          const safeParseAmount = (amount: any): string => {
+            if (amount === null || amount === undefined || amount === '') return '';
+            const parsed = parseFloat(String(amount));
+            return isNaN(parsed) ? '' : parsed.toString();
           };
 
           // Check if this inward entry has selectedInsurance data
@@ -390,6 +429,14 @@ export default function InwardPage() {
                   if (matchingInsurance) {
                     console.log('Found matching insurance for inward:', data.inwardId, matchingInsurance);
                     console.log('Extracting insurance data from inspection collection for inward:', data.inwardId);
+                    console.log('Policy amounts from matching insurance:', {
+                      firePolicyAmount: matchingInsurance.firePolicyAmount,
+                      burglaryPolicyAmount: matchingInsurance.burglaryPolicyAmount
+                    });
+                    console.log('Policy amounts from inward data:', {
+                      firePolicyAmount: data.firePolicyAmount,
+                      burglaryPolicyAmount: data.burglaryPolicyAmount
+                    });
                     console.log('Raw date values from matchingInsurance:', {
                       firePolicyStartDate: matchingInsurance.firePolicyStartDate,
                       firePolicyEndDate: matchingInsurance.firePolicyEndDate,
@@ -401,10 +448,59 @@ export default function InwardPage() {
                       burglaryPolicyEndDateType: typeof matchingInsurance.burglaryPolicyEndDate
                     });
                     
+                    // Try to fetch actual amounts from source collections if inspection data is missing
+                    let actualFireAmount = safeParseAmount(matchingInsurance.firePolicyAmount);
+                    let actualBurglaryAmount = safeParseAmount(matchingInsurance.burglaryPolicyAmount);
+                    
+                    // If amounts are missing from inspection, try to fetch from source collections
+                    if (!actualFireAmount || !actualBurglaryAmount) {
+                      console.log('Insurance amounts missing from inspection, fetching from source collections...');
+                      
+                      if (matchingInsurance.sourceDocumentId && matchingInsurance.insuranceId && matchingInsurance.sourceCollection) {
+                        try {
+                          if (matchingInsurance.sourceCollection === 'clients') {
+                            // Fetch from clients collection
+                            const clientDocRef = doc(db, 'clients', matchingInsurance.sourceDocumentId);
+                            const clientDocSnap = await getDoc(clientDocRef);
+                            
+                            if (clientDocSnap.exists()) {
+                              const clientData = clientDocSnap.data() as any;
+                              const insurances = clientData.insurances || [];
+                              const sourceInsurance = insurances.find((ins: any) => ins.insuranceId === matchingInsurance.insuranceId);
+                              
+                              if (sourceInsurance) {
+                                console.log('Found source insurance in clients collection:', sourceInsurance);
+                                actualFireAmount = safeParseAmount(sourceInsurance.firePolicyAmount) || actualFireAmount;
+                                actualBurglaryAmount = safeParseAmount(sourceInsurance.burglaryPolicyAmount) || actualBurglaryAmount;
+                              }
+                            }
+                          } else if (matchingInsurance.sourceCollection === 'agrogreen') {
+                            // Fetch from agrogreen collection
+                            const agrogreenDocRef = doc(db, 'agrogreen', matchingInsurance.sourceDocumentId);
+                            const agrogreenDocSnap = await getDoc(agrogreenDocRef);
+                            
+                            if (agrogreenDocSnap.exists()) {
+                              const agrogreenData = agrogreenDocSnap.data() as any;
+                              console.log('Found source insurance in agrogreen collection:', agrogreenData);
+                              actualFireAmount = safeParseAmount(agrogreenData.firePolicyAmount) || actualFireAmount;
+                              actualBurglaryAmount = safeParseAmount(agrogreenData.burglaryPolicyAmount) || actualBurglaryAmount;
+                            }
+                          }
+                        } catch (error) {
+                          console.error('Error fetching from source collections:', error);
+                        }
+                      }
+                    }
+                    
+                    console.log('Final insurance amounts after source collection fetch:', {
+                      firePolicyAmount: actualFireAmount,
+                      burglaryPolicyAmount: actualBurglaryAmount
+                    });
+                    
                     // Extract all required insurance fields from inspection collection
                     insuranceData = {
-                      firePolicyAmount: matchingInsurance.firePolicyAmount || '-',           // From inspection collection
-                      burglaryPolicyAmount: matchingInsurance.burglaryPolicyAmount || '-',   // From inspection collection
+                      firePolicyAmount: actualFireAmount || safeParseAmount(data.firePolicyAmount) || '-',
+                      burglaryPolicyAmount: actualBurglaryAmount || safeParseAmount(data.burglaryPolicyAmount) || '-',
                       firePolicyStartDate: (() => {
                         const date = matchingInsurance.firePolicyStartDate;
                         console.log('Processing firePolicyStartDate:', date, 'type:', typeof date);
@@ -515,6 +611,19 @@ export default function InwardPage() {
                       insuranceId: ins.insuranceId,
                       insuranceTakenBy: ins.insuranceTakenBy
                     })));
+                    
+                                         // Fallback: use data from inward document if no matching insurance found
+                     insuranceData = {
+                       firePolicyAmount: safeParseAmount(data.firePolicyAmount) || '-',
+                       burglaryPolicyAmount: safeParseAmount(data.burglaryPolicyAmount) || '-',
+                      firePolicyStartDate: data.firePolicyStart || '-',
+                      firePolicyEndDate: data.firePolicyEnd || '-',
+                      burglaryPolicyStartDate: data.burglaryPolicyStart || '-',
+                      burglaryPolicyEndDate: data.burglaryPolicyEnd || '-',
+                      firePolicyName: data.firePolicyCompanyName || '-',
+                      burglaryPolicyName: data.burglaryPolicyCompanyName || '-',
+                      bankFundedBy: data.bankFundedBy || '-'
+                    };
                   }
                 }
               }
@@ -523,19 +632,165 @@ export default function InwardPage() {
             }
           } else {
             console.log('No selectedInsurance data for inward:', data.inwardId);
+            
+            // Fallback: use data from inward document if no selectedInsurance
+            insuranceData = {
+              firePolicyAmount: safeParseAmount(data.firePolicyAmount),
+              burglaryPolicyAmount: safeParseAmount(data.burglaryPolicyAmount),
+              firePolicyStartDate: data.firePolicyStart || '-',
+              firePolicyEndDate: data.firePolicyEnd || '-',
+              burglaryPolicyStartDate: data.burglaryPolicyStart || '-',
+              burglaryPolicyEndDate: data.burglaryPolicyEnd || '-',
+              firePolicyName: data.firePolicyCompanyName || '-',
+              burglaryPolicyName: data.burglaryPolicyCompanyName || '-',
+              bankFundedBy: data.bankFundedBy || '-'
+            };
           }
           
-          return { 
-            ...data, 
+          // Handle new structure with inwardEntries array
+          if (data.inwardEntries && Array.isArray(data.inwardEntries)) {
+            console.log('Found new structure with inwardEntries array, length:', data.inwardEntries.length);
+            
+            // Combine all entries into one row with combined data
+            const combinedEntry = {
             id: doc.id, 
+              docId: doc.id,
+              inwardId: data.inwardId,
+              // Base form data
+              state: data.state,
+              branch: data.branch,
+              location: data.location,
+              warehouseName: data.warehouseName,
+              warehouseCode: data.warehouseCode,
+              warehouseAddress: data.warehouseAddress,
+              businessType: data.businessType,
+              client: data.client,
+              clientCode: data.clientCode,
+              clientAddress: data.clientAddress,
+              dateOfInward: data.dateOfInward,
+              cadNumber: data.cadNumber,
+              commodity: data.commodity,
+              varietyName: data.varietyName,
+              marketRate: data.marketRate,
+              totalBags: data.totalBags,
+              totalQuantity: data.totalQuantity,
+              totalValue: data.totalValue,
+              bankName: data.bankName,
+              bankBranch: data.bankBranch,
+              bankState: data.bankState,
+              ifscCode: data.ifscCode,
+              bankReceipt: data.bankReceipt,
+              billingStatus: data.billingStatus,
+              reservationRate: data.reservationRate,
+              reservationQty: data.reservationQty,
+              reservationStart: data.reservationStart,
+              reservationEnd: data.reservationEnd,
+              billingCycle: data.billingCycle,
+              billingType: data.billingType,
+              billingRate: data.billingRate,
+              insuranceManagedBy: data.insuranceManagedBy,
+              firePolicyNumber: data.firePolicyNumber,
+              firePolicyAmount: insuranceData.firePolicyAmount,
+              firePolicyStart: data.firePolicyStart,
+              firePolicyEnd: data.firePolicyEnd,
+              burglaryPolicyNumber: data.burglaryPolicyNumber,
+              burglaryPolicyAmount: insuranceData.burglaryPolicyAmount,
+              burglaryPolicyStart: data.burglaryPolicyStart,
+              burglaryPolicyEnd: data.burglaryPolicyEnd,
+              firePolicyCompanyName: data.firePolicyCompanyName,
+              burglaryPolicyCompanyName: data.burglaryPolicyCompanyName,
+              firePolicyBalance: data.firePolicyBalance,
+              burglaryPolicyBalance: data.burglaryPolicyBalance,
+              bankFundedBy: data.bankFundedBy,
+              attachmentUrl: data.attachmentUrl,
+              createdAt: data.createdAt,
+              selectedInsurance: data.selectedInsurance,
+              status: data.status,
+              cirStatus: data.cirStatus || 'Pending',
+              
+              // Combined entry data - show first entry's data as primary
+              vehicleNumber: data.inwardEntries[0]?.vehicleNumber || '-',
+              getpassNumber: data.inwardEntries[0]?.getpassNumber || '-',
+              weightBridge: data.inwardEntries[0]?.weightBridge || '-',
+              weightBridgeSlipNumber: data.inwardEntries[0]?.weightBridgeSlipNumber || '-',
+              grossWeight: data.inwardEntries[0]?.grossWeight || '-',
+              tareWeight: data.inwardEntries[0]?.tareWeight || '-',
+              netWeight: data.inwardEntries[0]?.netWeight || '-',
+              averageWeight: data.inwardEntries[0]?.averageWeight || '-',
+              totalBags: data.totalBagsFromEntries || data.totalBags || '-',
+              totalQuantity: data.totalQuantityFromEntries || data.totalQuantity || '-',
+              // Lab parameters from document level
+              dateOfSampling: data.dateOfSampling || '-',
+              dateOfTesting: data.dateOfTesting || '-',
+              labResults: data.labResults || [],
+              stacks: data.inwardEntries[0]?.stacks || [],
+              
+              // Additional fields for multiple entries
+              totalEntries: data.inwardEntries.length,
+              inwardEntries: data.inwardEntries, // Keep the full array for reference
+              
+              // Insurance and receipt data
             receiptType,
-            ...insuranceData
+            // Only include insurance fields that are not already defined above
+            firePolicyStartDate: insuranceData.firePolicyStartDate,
+            firePolicyEndDate: insuranceData.firePolicyEndDate,
+            burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate,
+            burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate,
+            firePolicyName: insuranceData.firePolicyName,
+            burglaryPolicyName: insuranceData.burglaryPolicyName,
           };
+            
+            return [combinedEntry];
+          } else {
+            // Handle old structure (single entry per document)
+            console.log('Found old structure (single entry per document)');
+            return [{
+              ...data, 
+              id: doc.id, 
+              receiptType,
+              cirStatus: data.cirStatus || 'Pending',
+              // Use insurance data for policy amounts and other fields
+              firePolicyAmount: (insuranceData.firePolicyAmount || '-').toString(),
+              burglaryPolicyAmount: (insuranceData.burglaryPolicyAmount || '-').toString(),
+              firePolicyStartDate: insuranceData.firePolicyStartDate,
+              firePolicyEndDate: insuranceData.firePolicyEndDate,
+              burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate,
+              burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate,
+              firePolicyName: insuranceData.firePolicyName,
+              burglaryPolicyName: insuranceData.burglaryPolicyName,
+            }];
+          }
         })
       );
       
-      console.log('Final inward data with receipt types and insurance data:', inwardDataWithReceiptType);
-      setInwardData(inwardDataWithReceiptType);
+      // Flatten the array since some documents now return multiple entries
+              const flattenedData = inwardDataWithReceiptType.flat();
+        
+        // Calculate remaining amounts for each entry
+        const dataWithRemainingAmounts = flattenedData.map(entry => {
+          // Helper function to safely parse amounts
+          const parseAmount = (amount: any): number => {
+            if (!amount || amount === '' || amount === '-' || amount === 'N/A') return 0;
+            const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
+            return isNaN(parsed) ? 0 : parsed;
+          };
+
+          const firePolicyAmount = parseAmount(entry.firePolicyAmount);
+          const burglaryPolicyAmount = parseAmount(entry.burglaryPolicyAmount);
+          const totalValue = parseAmount(entry.totalValue);
+
+          const fireBalance = firePolicyAmount - totalValue;
+          const burglaryBalance = burglaryPolicyAmount - totalValue;
+
+          return {
+            ...entry,
+            firePolicyBalance: fireBalance >= 0 ? fireBalance.toString() : '0',
+            burglaryPolicyBalance: burglaryBalance >= 0 ? burglaryBalance.toString() : '0',
+          };
+        });
+        
+        console.log('Final inward data with remaining amounts:', dataWithRemainingAmounts);
+        setInwardData(dataWithRemainingAmounts);
 
       // States from branches
       const branchSnap = await getDocs(collection(db, 'branches'));
@@ -705,9 +960,28 @@ export default function InwardPage() {
 
   // Calculate insurance balance amounts
   useEffect(() => {
-    const fireAmount = parseFloat(baseForm.firePolicyAmount) || 0;
-    const burglaryAmount = parseFloat(baseForm.burglaryPolicyAmount) || 0;
-    const totalValue = parseFloat(baseForm.totalValue) || 0;
+    // Safely parse amounts, handling empty strings, null, undefined, and non-numeric values
+    const parseAmount = (amount: any): number => {
+      if (!amount || amount === '' || amount === '-' || amount === 'N/A') return 0;
+      const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const fireAmount = parseAmount(baseForm.firePolicyAmount);
+    const burglaryAmount = parseAmount(baseForm.burglaryPolicyAmount);
+    const totalValue = parseAmount(baseForm.totalValue);
+
+    // Debug logging to track NaN issues
+    if (isNaN(fireAmount) || isNaN(burglaryAmount) || isNaN(totalValue)) {
+      console.warn('NaN detected in insurance balance calculation:', {
+        firePolicyAmount: baseForm.firePolicyAmount,
+        burglaryPolicyAmount: baseForm.burglaryPolicyAmount,
+        totalValue: baseForm.totalValue,
+        parsedFireAmount: fireAmount,
+        parsedBurglaryAmount: burglaryAmount,
+        parsedTotalValue: totalValue
+      });
+    }
 
     const fireBalance = fireAmount - totalValue;
     const burglaryBalance = burglaryAmount - totalValue;
@@ -721,24 +995,36 @@ export default function InwardPage() {
 
   // Auto-calculate total bags and quantity from all entries (saved and current)
   useEffect(() => {
-    // Sum from already saved entries
-    const savedBagsSum = inwardEntries.reduce((sum, entry) => sum + (parseInt(entry.totalBags, 10) || 0), 0);
-    const savedQuantitySum = inwardEntries.reduce((sum, entry) => sum + (parseFloat(entry.totalQuantity) || 0), 0);
+    if (isEditMode) {
+      // In edit mode, calculate only from visible inward entries
+      const savedBagsSum = inwardEntries.reduce((sum, entry) => sum + (parseInt(entry.totalBags, 10) || 0), 0);
+      const savedQuantitySum = inwardEntries.reduce((sum, entry) => sum + (parseFloat(entry.totalQuantity) || 0), 0);
 
-    // Get values from the current, unsaved entry form
-    const currentBags = parseInt(currentEntryForm.totalBags, 10) || 0;
-    const currentQuantity = parseFloat(currentEntryForm.totalQuantity) || 0;
+      setBaseForm(f => ({
+        ...f,
+        totalBags: savedBagsSum > 0 ? savedBagsSum.toString() : '',
+        totalQuantity: savedQuantitySum > 0 ? savedQuantitySum.toFixed(3) : '',
+      }));
+    } else {
+      // For new entries, sum from already saved entries + current entry form
+      const savedBagsSum = inwardEntries.reduce((sum, entry) => sum + (parseInt(entry.totalBags, 10) || 0), 0);
+      const savedQuantitySum = inwardEntries.reduce((sum, entry) => sum + (parseFloat(entry.totalQuantity) || 0), 0);
 
-    // Calculate the grand total
-    const totalBagsSum = savedBagsSum + currentBags;
-    const totalQuantitySum = savedQuantitySum + currentQuantity;
+      // Get values from the current, unsaved entry form
+      const currentBags = parseInt(currentEntryForm.totalBags, 10) || 0;
+      const currentQuantity = parseFloat(currentEntryForm.totalQuantity) || 0;
 
-    setBaseForm(f => ({
-      ...f,
-      totalBags: totalBagsSum > 0 ? totalBagsSum.toString() : '',
-      totalQuantity: totalQuantitySum > 0 ? totalQuantitySum.toFixed(3) : '',
-    }));
-  }, [inwardEntries, currentEntryForm.totalBags, currentEntryForm.totalQuantity]);
+      // Calculate the grand total - Total Bags in Commodity Information should always be sum of all entries
+      const totalBagsSum = savedBagsSum + currentBags;
+      const totalQuantitySum = savedQuantitySum + currentQuantity;
+
+      setBaseForm(f => ({
+        ...f,
+        totalBags: totalBagsSum > 0 ? totalBagsSum.toString() : '',
+        totalQuantity: totalQuantitySum > 0 ? totalQuantitySum.toFixed(3) : '',
+      }));
+    }
+  }, [inwardEntries, currentEntryForm.totalBags, currentEntryForm.totalQuantity, isEditMode]);
 
   // Fetch all data on mount
   useEffect(() => {
@@ -1013,12 +1299,30 @@ export default function InwardPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    try {
     if (!fileAttachment && !isEditMode) {
       alert('Please attach a file.');
       return;
     }
 
     // Base form validations
+    console.log('Validating base form fields:', {
+      state: form.state,
+      branch: form.branch,
+      location: form.location,
+      warehouseName: form.warehouseName,
+      client: form.client,
+      dateOfInward: form.dateOfInward,
+      cadNumber: form.cadNumber,
+      commodity: form.commodity,
+      varietyName: form.varietyName,
+      marketRate: form.marketRate,
+      totalBags: form.totalBags,
+      totalQuantity: form.totalQuantity
+    });
+    console.log('Base form object:', baseForm);
+    console.log('Form object:', form);
+    
     const missingBaseFields = [];
     if (!form.state) missingBaseFields.push('State');
     if (!form.branch) missingBaseFields.push('Branch');
@@ -1030,13 +1334,15 @@ export default function InwardPage() {
     if (!form.commodity) missingBaseFields.push('Commodity');
     if (!form.varietyName) missingBaseFields.push('Variety Name');
     if (!form.marketRate) missingBaseFields.push('Market Rate');
-    if (!baseForm.totalBags) missingBaseFields.push('Total Bags (in Commodity Info)');
-    if (!baseForm.totalQuantity) missingBaseFields.push('Total Quantity (in Commodity Info)');
+    if (!form.totalBags) missingBaseFields.push('Total Bags (in Commodity Info)');
+    if (!form.totalQuantity) missingBaseFields.push('Total Quantity (in Commodity Info)');
 
     if (missingBaseFields.length > 0) {
+      console.log('Missing base fields:', missingBaseFields);
       alert(`Please fill in the following required base fields:\n\n${missingBaseFields.join('\n')}`);
       return;
     }
+    console.log('All base form fields are valid');
     
     setIsUploading(true);
     let uploadedFileUrl = '';
@@ -1057,19 +1363,141 @@ export default function InwardPage() {
     setIsUploading(false);
 
     let allEntries = [...inwardEntries];
-    if (currentEntryForm.vehicleNumber || currentEntryForm.getpassNumber) {
-      allEntries.push({ id: Date.now(), ...baseForm, ...currentEntryForm, entryNumber: inwardEntries.length + 1 });
+    console.log('Current inwardEntries:', inwardEntries.length);
+    console.log('Current entry form has data:', !!(currentEntryForm.vehicleNumber || currentEntryForm.getpassNumber));
+    console.log('Is edit mode:', isEditMode);
+    
+    // For edit mode, use ONLY the entries visible in the UI (inwardEntries array)
+    if (isEditMode) {
+      console.log('Edit mode: Using ONLY visible entries from UI');
+      console.log('Base form data:', baseForm);
+      console.log('Visible inward entries:', inwardEntries);
+      
+      // Only use the entries that are visible in the UI (inwardEntries array)
+      allEntries = inwardEntries.map((entry, index) => {
+        // Create base form data without totalBags and totalQuantity to avoid double counting
+        const { totalBags, totalQuantity, ...baseFormWithoutTotals } = baseForm;
+        
+        // Check if this entry is the currently selected entry being edited
+        const isCurrentlyEditing = currentEntryForm.vehicleNumber && 
+                                  currentEntryForm.getpassNumber && 
+                                  entry.getpassNumber === currentEntryForm.getpassNumber;
+        
+        let updatedEntry;
+        if (isCurrentlyEditing) {
+          // Merge current entry form data with existing entry data
+          updatedEntry = {
+          ...entry,
+            ...baseFormWithoutTotals, // Include base form data except totals
+            ...currentEntryForm, // Include current entry form data (overwrites existing entry data)
+            entryNumber: index + 1
+          };
+          console.log(`Entry ${index + 1} (currently editing) after merging current form data:`, updatedEntry);
+        } else {
+          // Just apply base form data to existing entry
+          updatedEntry = {
+            ...entry,
+            ...baseFormWithoutTotals, // Include base form data except totals
+          entryNumber: index + 1
+        };
+        console.log(`Entry ${index + 1} after applying base form:`, updatedEntry);
+        }
+        
+        return updatedEntry;
+      });
+      
+      // In edit mode, ONLY add current entry form if it's a completely NEW entry (not visible in UI)
+      // This should be rare in edit mode, but handle it just in case
+      const isNewEntry = currentEntryForm.vehicleNumber && 
+                        currentEntryForm.getpassNumber && 
+                        !inwardEntries.some(entry => entry.getpassNumber === currentEntryForm.getpassNumber) &&
+                        !inwardEntries.some(entry => entry.vehicleNumber === currentEntryForm.vehicleNumber);
+      
+      if (isNewEntry) {
+        // Create base form data without totalBags and totalQuantity to avoid double counting
+        const { totalBags, totalQuantity, ...baseFormWithoutTotals } = baseForm;
+        
+        const currentEntry = {
+          id: Date.now(),
+          ...baseFormWithoutTotals,
+          ...currentEntryForm,
+          entryNumber: allEntries.length + 1
+        };
+        console.log('Adding NEW entry form to allEntries in edit mode:', currentEntry);
+        allEntries.push(currentEntry);
+      } else if (currentEntryForm.vehicleNumber || currentEntryForm.getpassNumber) {
+        console.log('Current entry form represents existing entry visible in UI, not adding to allEntries');
+      }
+    } else {
+      // For new entries, add current entry form if it has data
+      if (currentEntryForm.vehicleNumber || currentEntryForm.getpassNumber) {
+        // Create base form data without totalBags and totalQuantity to avoid double counting
+        const { totalBags, totalQuantity, ...baseFormWithoutTotals } = baseForm;
+        
+        const newEntry = { 
+          id: Date.now(), 
+          ...baseFormWithoutTotals, 
+          ...currentEntryForm, 
+          entryNumber: inwardEntries.length + 1 
+        };
+        console.log('Adding current entry form to allEntries:', newEntry);
+        allEntries.push(newEntry);
+      }
     }
     
+    console.log('Total entries to save:', allEntries.length);
+    console.log('Entries before validation:', allEntries.map(entry => ({
+      entryNumber: entry.entryNumber,
+      totalBags: entry.totalBags,
+      vehicleNumber: entry.vehicleNumber,
+      getpassNumber: entry.getpassNumber,
+      hasBaseFormData: !!(entry.state && entry.branch && entry.location)
+    })));
+    
+    // Ensure all entries have their totalBags calculated from their stacks
+    allEntries = allEntries.map(entry => {
+      if (entry.stacks && Array.isArray(entry.stacks)) {
+        const stackBagsSum = entry.stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+          return total + (parseInt(stack.numberOfBags) || 0);
+        }, 0);
+        
+        // Only update if the calculated sum differs from current totalBags
+        if (stackBagsSum !== (parseInt(entry.totalBags) || 0)) {
+          console.log(`Updating entry ${entry.entryNumber} totalBags from ${entry.totalBags} to ${stackBagsSum} based on stacks`);
+          return {
+            ...entry,
+            totalBags: stackBagsSum.toString()
+          };
+        }
+      }
+      return entry;
+    });
+    
     if (allEntries.length === 0 && !isEditMode) {
-      alert('Please add at least one inward entry before saving.');
+      alert('Please add at least one inward entry before saving.\n\nClick "Add New Entry" to add your first entry, then click "Submit" when all entries are complete.');
       return;
     }
 
-    // For edit mode, use the current form data
-    if (isEditMode) {
-      allEntries = [{ id: Date.now(), ...baseForm, ...currentEntryForm, entryNumber: 1 }];
+    // Validate that all entries have the required base form data (after applying base form in edit mode)
+    console.log('Validating entries for base form data:', allEntries.length, 'entries');
+    for (const entry of allEntries) {
+      console.log('Checking entry:', {
+        entryNumber: entry.entryNumber,
+        state: entry.state,
+        branch: entry.branch,
+        location: entry.location,
+        warehouseName: entry.warehouseName,
+        client: entry.client,
+        commodity: entry.commodity
+      });
+      
+      if (!entry.state || !entry.branch || !entry.location || !entry.warehouseName || !entry.client || !entry.commodity) {
+        console.error('Entry missing base form data:', entry);
+        alert('One or more entries are missing required base form data. Please ensure all entries have complete information.');
+        return;
+      }
     }
+    console.log('All entries have required base form data');
 
     // --- Insurance selection validation ---
     let selectedInsuranceMeta = null;
@@ -1103,29 +1531,74 @@ export default function InwardPage() {
     }));
 
     // Final validation loop for all entries
+    console.log('Validating', allEntries.length, 'entries...');
+    
+
+    
     for (const entry of allEntries) {
+      console.log('Validating entry:', {
+        entryNumber: entry.entryNumber,
+        vehicleNumber: entry.vehicleNumber,
+        getpassNumber: entry.getpassNumber,
+        totalBags: entry.totalBags,
+        stacks: entry.stacks
+      });
+      
       const missingFields = [];
       if (!entry.vehicleNumber) missingFields.push('Vehicle Number');
       if (!entry.getpassNumber) missingFields.push('Gatepass Number');
-      if (!entry.totalBags) missingFields.push('Total Bags (in Inward Entry)');
+        if (!entry.totalBags) missingFields.push('Total Bags (in Inward Entry)');
       
       if (missingFields.length > 0) {
         alert(`Validation Error in Entry #${entry.entryNumber}:\nPlease fill in these fields: ${missingFields.join(', ')}`);
         return;
       }
 
-      const stackBagsSum = (entry.stacks || []).reduce((sum: number, stack: { numberOfBags: string }) => sum + (parseInt(stack.numberOfBags) || 0), 0);
-      const totalBags = parseInt(entry.totalBags) || 0;
-
-      if (stackBagsSum !== totalBags) {
-        alert(`Validation Error in Entry #${entry.entryNumber}:\nTotal Bags (${totalBags}) does not match the sum of bags in stacks (${stackBagsSum}).`);
+      // Validate stacks structure
+      if (!entry.stacks || !Array.isArray(entry.stacks)) {
+        alert(`Validation Error in Entry #${entry.entryNumber}:\nStacks data is missing or invalid.`);
         return;
       }
     }
+    
+    // Validate that sum of total bags from all entries matches total bags in Commodity Information
+    if (isEditMode) {
+      console.log('=== VALIDATION DEBUG ===');
+      console.log('Number of visible entries being validated:', allEntries.length);
+      console.log('Edit mode: Only validating entries visible in UI');
+      
+      // Calculate total bags from all entries using their totalBags field
+      const entriesTotalBagsSum = allEntries.reduce((sum, entry) => {
+        const entryTotalBags = parseInt(entry.totalBags) || 0;
+        console.log(`Entry ${entry.entryNumber} (${entry.vehicleNumber}) totalBags:`, entryTotalBags);
+        return sum + entryTotalBags;
+      }, 0);
+      
+      const commodityInfoTotalBags = parseInt(baseForm.totalBags) || 0;
+      
+      console.log('Validation: Visible entries total bags sum:', entriesTotalBagsSum, 'Commodity info total bags:', commodityInfoTotalBags);
+      console.log('Visible entries for validation:', allEntries.map(entry => ({
+        entryNumber: entry.entryNumber,
+        totalBags: entry.totalBags,
+        vehicleNumber: entry.vehicleNumber,
+        getpassNumber: entry.getpassNumber
+      })));
+      
+      if (entriesTotalBagsSum !== commodityInfoTotalBags) {
+        alert(`Validation Error: Total Bags mismatch!\n\nSum of Total Bags from visible entries: ${entriesTotalBagsSum}\nTotal Bags in Commodity Information: ${commodityInfoTotalBags}\n\nPlease ensure these values match.`);
+        return;
+      }
+      
+      console.log('=== VALIDATION PASSED ===');
+    }
+    
+    console.log('All entries validated successfully');
 
     // Save to Firebase
     try {
+      console.log('Initializing Firebase collection...');
       const inwardCollection = collection(db, 'inward');
+      console.log('Firebase collection initialized:', inwardCollection);
       
       if (isEditMode && editingRow) {
         // Update existing document
@@ -1146,17 +1619,36 @@ export default function InwardPage() {
           }
           console.log('Document exists, proceeding with update');
           
-          const { id, labResultsValidation, ...entryData } = allEntries[0]; // remove client-side id and validation state
+          // Process all entries for update
+          const processedEntries = allEntries.map((entry, index) => {
+            const { id, labResultsValidation, ...entryData } = entry; // remove client-side id and validation state
 
           // Replace empty string fields with a hyphen
-          const sanitizedData = Object.fromEntries(
+            const sanitizedEntryData = Object.fromEntries(
             Object.entries(entryData).map(([key, value]) => [
               key,
               typeof value === 'string' && value === '' ? '-' : value,
             ])
           );
 
-          console.log('Sanitized data keys:', Object.keys(sanitizedData));
+            // Ensure total bags are calculated from stacks for each entry
+            let finalTotalBags = sanitizedEntryData.totalBags;
+            if (sanitizedEntryData.stacks && Array.isArray(sanitizedEntryData.stacks)) {
+              const stackBagsSum = sanitizedEntryData.stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+                return total + (parseInt(stack.numberOfBags) || 0);
+              }, 0);
+              finalTotalBags = stackBagsSum.toString();
+              console.log(`Entry ${index + 1} total bags calculated from stacks:`, finalTotalBags);
+            }
+            
+            return {
+              ...sanitizedEntryData,
+              entryNumber: index + 1,
+              totalBags: finalTotalBags
+            };
+          });
+
+          console.log('Processed entries for update:', processedEntries);
           console.log('Selected insurance meta:', selectedInsuranceMeta);
 
           // Clean selectedInsurance to remove undefined values
@@ -1165,35 +1657,88 @@ export default function InwardPage() {
             insuranceId: selectedInsuranceMeta.insuranceId || null,
           } : null;
 
-          // Remove insurance-related fields from update data to prevent insurance data changes
-          const { 
-            insuranceManagedBy,
-            firePolicyNumber,
-            firePolicyAmount,
-            firePolicyStart,
-            firePolicyEnd,
-            burglaryPolicyNumber,
-            burglaryPolicyAmount,
-            burglaryPolicyStart,
-            burglaryPolicyEnd,
-            firePolicyCompanyName,
-            burglaryPolicyCompanyName,
-            firePolicyBalance,
-            burglaryPolicyBalance,
-            bankFundedBy,
-            ...nonInsuranceData
-          } = sanitizedData;
+          // Recalculate total bags and quantities from all entries before saving
+          const finalTotalBags = processedEntries.reduce((sum, entry: any) => {
+            return sum + (parseInt(entry.totalBags) || 0);
+          }, 0);
+          
+          const finalTotalQuantity = processedEntries.reduce((sum, entry: any) => {
+            return sum + (parseFloat(entry.totalQuantity) || 0);
+          }, 0);
+          
+          console.log('Recalculated totals from entries - Total Bags:', finalTotalBags, 'Total Quantity:', finalTotalQuantity);
+
+          // Get the base form data (commodity information) from the baseForm with updated totals
+          const baseFormData = {
+            state: baseForm.state,
+            branch: baseForm.branch,
+            location: baseForm.location,
+            warehouseName: baseForm.warehouseName,
+            warehouseCode: baseForm.warehouseCode,
+            warehouseAddress: baseForm.warehouseAddress,
+            businessType: baseForm.businessType,
+            client: baseForm.client,
+            clientCode: baseForm.clientCode,
+            clientAddress: baseForm.clientAddress,
+            dateOfInward: baseForm.dateOfInward,
+            cadNumber: baseForm.cadNumber,
+            commodity: baseForm.commodity,
+            varietyName: baseForm.varietyName,
+            marketRate: baseForm.marketRate,
+            // Use the recalculated totals instead of the old baseForm values
+            totalBags: finalTotalBags.toString(),
+            totalQuantity: finalTotalQuantity.toFixed(3),
+            totalValue: baseForm.totalValue,
+            // Include insurance fields to prevent them from becoming NaN
+            firePolicyAmount: (baseForm.firePolicyAmount || editingRow.firePolicyAmount || '-').toString(),
+            burglaryPolicyAmount: (baseForm.burglaryPolicyAmount || editingRow.burglaryPolicyAmount || '-').toString(),
+            firePolicyNumber: baseForm.firePolicyNumber || editingRow.firePolicyNumber || '-',
+            burglaryPolicyNumber: baseForm.burglaryPolicyNumber || editingRow.burglaryPolicyNumber || '-',
+            firePolicyStart: baseForm.firePolicyStart || editingRow.firePolicyStart || '-',
+            firePolicyEnd: baseForm.firePolicyEnd || editingRow.firePolicyEnd || '-',
+            burglaryPolicyStart: baseForm.burglaryPolicyStart || editingRow.burglaryPolicyStart || '-',
+            burglaryPolicyEnd: baseForm.burglaryPolicyEnd || editingRow.burglaryPolicyEnd || '-',
+            firePolicyCompanyName: baseForm.firePolicyCompanyName || editingRow.firePolicyCompanyName || '-',
+            burglaryPolicyCompanyName: baseForm.burglaryPolicyCompanyName || editingRow.burglaryPolicyCompanyName || '-',
+            firePolicyBalance: baseForm.firePolicyBalance || editingRow.firePolicyBalance || '-',
+            burglaryPolicyBalance: baseForm.burglaryPolicyBalance || editingRow.burglaryPolicyBalance || '-',
+            insuranceManagedBy: baseForm.insuranceManagedBy || editingRow.insuranceManagedBy || '-',
+            bankFundedBy: baseForm.bankFundedBy || editingRow.bankFundedBy || '-',
+          };
 
           const updateData = {
-            ...nonInsuranceData,
+            // Base form data (commodity information) with updated totals
+            ...baseFormData,
+            // All entries as an array
+            inwardEntries: processedEntries,
+            // Document-level fields
             attachmentUrl: uploadedFileUrl,
             updatedAt: new Date().toISOString(),
-            labResults: allEntries[0].labResults || [],
+            // Lab Parameters - stored at document level
+            dateOfSampling: currentEntryForm.dateOfSampling || '',
+            dateOfTesting: currentEntryForm.dateOfTesting || '',
+            labResults: currentEntryForm.labResults || [],
             // Keep the existing selectedInsurance without changes
             selectedInsurance: editingRow.selectedInsurance || null,
           };
 
+          // Update the baseForm state to reflect the new totals in the UI
+          setBaseForm(f => ({
+            ...f,
+            totalBags: finalTotalBags.toString(),
+            totalQuantity: finalTotalQuantity.toFixed(3)
+          }));
+
           console.log('About to update document with data:', updateData);
+          console.log('Number of entries being saved:', processedEntries.length);
+          console.log('Base form data being saved:', baseFormData);
+          console.log('Insurance amounts being saved:', {
+            firePolicyAmount: baseFormData.firePolicyAmount,
+            burglaryPolicyAmount: baseFormData.burglaryPolicyAmount
+          });
+          console.log('Final total bags being saved:', finalTotalBags);
+          console.log('Final total quantity being saved:', finalTotalQuantity);
+          
           await updateDoc(docRef, updateData);
           console.log('Document updated successfully');
           
@@ -1206,49 +1751,178 @@ export default function InwardPage() {
           throw new Error(`No document found with inwardId: ${editingRow.inwardId}`);
         }
       } else {
-        // Create new documents
-        for (const entry of allEntries) {
-          const inwardId = await generateInwardId();
-          const { id, labResultsValidation, ...entryData } = entry; // remove client-side id and validation state
-
-          // Replace empty string fields with a hyphen
-          const sanitizedData = Object.fromEntries(
-            Object.entries(entryData).map(([key, value]) => [
-              key,
-              typeof value === 'string' && value === '' ? '-' : value,
-            ])
-          );
-
-          // Clean selectedInsurance to remove undefined values
-          const cleanSelectedInsurance = selectedInsuranceMeta ? {
-            insuranceTakenBy: selectedInsuranceMeta.insuranceTakenBy || null,
-            insuranceId: selectedInsuranceMeta.insuranceId || null,
-          } : null;
-
-          await addDoc(inwardCollection, {
-            ...sanitizedData,
+          // Create single document with all entries combined
+          console.log('Starting to save', allEntries.length, 'entries as single document to Firebase...');
+          
+          try {
+            let inwardId;
+            try {
+              inwardId = await generateInwardId();
+              console.log('Generated single inward ID:', inwardId);
+              
+              // Validate the generated inward ID
+              if (!inwardId || typeof inwardId !== 'string') {
+                throw new Error('Generated inward ID is invalid');
+              }
+            } catch (idError) {
+              console.error('Error generating inward ID, using fallback:', idError);
+              inwardId = `INW-${Date.now().toString().slice(-3)}`;
+              console.log('Using fallback inward ID:', inwardId);
+              
+              // Validate the fallback inward ID
+              if (!inwardId || typeof inwardId !== 'string') {
+                throw new Error('Fallback inward ID generation failed');
+              }
+            }
+            
+            // Combine all entries into one document
+            const combinedData = {
+              // Base form data (same for all entries)
+              state: baseForm.state,
+              branch: baseForm.branch,
+              location: baseForm.location,
+              warehouseName: baseForm.warehouseName,
+              warehouseCode: baseForm.warehouseCode,
+              warehouseAddress: baseForm.warehouseAddress,
+              businessType: baseForm.businessType,
+              client: baseForm.client,
+              clientCode: baseForm.clientCode,
+              clientAddress: baseForm.clientAddress,
+              dateOfInward: baseForm.dateOfInward,
+              cadNumber: baseForm.cadNumber,
+              commodity: baseForm.commodity,
+              varietyName: baseForm.varietyName,
+              marketRate: baseForm.marketRate,
+              totalBags: baseForm.totalBags,
+              totalQuantity: baseForm.totalQuantity,
+              totalValue: baseForm.totalValue,
+              bankName: baseForm.bankName,
+              bankBranch: baseForm.bankBranch,
+              bankState: baseForm.bankState,
+              ifscCode: baseForm.ifscCode,
+              bankReceipt: baseForm.bankReceipt,
+              billingStatus: baseForm.billingStatus,
+              reservationRate: baseForm.reservationRate,
+              reservationQty: baseForm.reservationQty,
+              reservationStart: baseForm.reservationStart,
+              reservationEnd: baseForm.reservationEnd,
+              billingCycle: baseForm.billingCycle,
+              billingType: baseForm.billingType,
+              billingRate: baseForm.billingRate,
+              insuranceManagedBy: baseForm.insuranceManagedBy,
+              firePolicyNumber: baseForm.firePolicyNumber,
+              firePolicyAmount: baseForm.firePolicyAmount,
+              firePolicyStart: baseForm.firePolicyStart,
+              firePolicyEnd: baseForm.firePolicyEnd,
+              burglaryPolicyNumber: baseForm.burglaryPolicyNumber,
+              burglaryPolicyAmount: baseForm.burglaryPolicyAmount,
+              burglaryPolicyStart: baseForm.burglaryPolicyStart,
+              burglaryPolicyEnd: baseForm.burglaryPolicyEnd,
+              firePolicyCompanyName: baseForm.firePolicyCompanyName,
+              burglaryPolicyCompanyName: baseForm.burglaryPolicyCompanyName,
+              firePolicyBalance: baseForm.firePolicyBalance,
+              burglaryPolicyBalance: baseForm.burglaryPolicyBalance,
+              bankFundedBy: baseForm.bankFundedBy,
+              
+              // Lab Parameters - stored at document level
+              dateOfSampling: currentEntryForm.dateOfSampling || '',
+              dateOfTesting: currentEntryForm.dateOfTesting || '',
+              labResults: currentEntryForm.labResults || [],
+              
+              // Combined entries data (without lab parameters)
+              inwardEntries: allEntries.map((entry, index) => {
+                const { id, labResultsValidation, dateOfSampling, dateOfTesting, labResults, ...entryData } = entry;
+                return {
+                  entryNumber: index + 1,
+                  vehicleNumber: entryData.vehicleNumber,
+                  getpassNumber: entryData.getpassNumber,
+                  weightBridge: entryData.weightBridge,
+                  weightBridgeSlipNumber: entryData.weightBridgeSlipNumber,
+                  grossWeight: entryData.grossWeight,
+                  tareWeight: entryData.tareWeight,
+                  netWeight: entryData.netWeight,
+                  averageWeight: entryData.averageWeight,
+                  totalBags: entryData.totalBags,
+                  totalQuantity: entryData.totalQuantity,
+                  stacks: entryData.stacks || [],
+                };
+              }),
+              
+              // Document metadata
             attachmentUrl: uploadedFileUrl,
             inwardId,
             createdAt: new Date().toISOString(),
-            labResults: entry.labResults || [],
-            selectedInsurance: cleanSelectedInsurance,
-            status: 'pending', // <-- set default status
-          });
-        }
+              selectedInsurance: selectedInsuranceMeta ? {
+                insuranceTakenBy: selectedInsuranceMeta.insuranceTakenBy || null,
+                insuranceId: selectedInsuranceMeta.insuranceId || null,
+              } : null,
+              status: 'pending',
+              
+              // Calculate totals from all entries
+              totalEntries: allEntries.length,
+              totalBagsFromEntries: allEntries.reduce((sum, entry) => sum + (parseInt(entry.totalBags) || 0), 0),
+              totalQuantityFromEntries: allEntries.reduce((sum, entry) => sum + (parseFloat(entry.totalQuantity) || 0), 0),
+            };
+
+            // Validate that inwardId is properly set
+            if (!combinedData.inwardId) {
+              throw new Error('Inward ID is not defined. Please try again.');
+            }
+
+            console.log('Saving combined document with data:', {
+              inwardId: combinedData.inwardId,
+              totalEntries: combinedData.totalEntries,
+              totalBags: combinedData.totalBagsFromEntries,
+              totalQuantity: combinedData.totalQuantityFromEntries
+            });
+
+            await addDoc(inwardCollection, combinedData);
+            console.log('Successfully saved combined document');
         
         toast({
           title: "Success",
-          description: `Successfully saved ${allEntries.length} inward entries.`,
+              description: `Successfully saved inward entry with ${allEntries.length} sub-entries and inward ID: ${combinedData.inwardId}`,
           variant: "default",
         });
+            setHasPendingEntries(false);
+          } catch (saveError: any) {
+            console.error('Error during save process:', saveError);
+            throw new Error(`Failed to save inward entries: ${saveError.message}`);
+          }
       }
       
       // After saving inward entry, update inspection insurance entry (moved inside try-catch)
       try {
     if (selectedInsuranceIndex !== null) {
       const ins = insuranceEntries[selectedInsuranceIndex];
-      const newRemainingFire = (parseFloat(initialRemainingFire) - parseFloat(baseForm.totalValue || '0')).toFixed(2);
-      const newRemainingBurglary = (parseFloat(initialRemainingBurglary) - parseFloat(baseForm.totalValue || '0')).toFixed(2);
+      
+      // Safely parse amounts to avoid NaN
+      const safeParseAmount = (amount: any): string => {
+        if (amount === null || amount === undefined || amount === '') return '0.00';
+        if (typeof amount === 'string' && (amount === '-' || amount === 'N/A' || amount === 'null' || amount === 'undefined')) return '0.00';
+        const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
+        return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
+      };
+      
+      // Get the current total value being processed
+      const currentTotalValue = parseFloat(baseForm.totalValue) || 0;
+      
+      // Get the original insurance amounts from the insurance entry
+      const originalFireAmount = safeParseAmount(ins.firePolicyAmount);
+      const originalBurglaryAmount = safeParseAmount(ins.burglaryPolicyAmount);
+      
+      // Calculate new remaining amounts
+      const newRemainingFire = Math.max(0, parseFloat(originalFireAmount) - currentTotalValue).toFixed(2);
+      const newRemainingBurglary = Math.max(0, parseFloat(originalBurglaryAmount) - currentTotalValue).toFixed(2);
+      
+      console.log('=== FIRST INSURANCE UPDATE DEBUG ===');
+      console.log('Original fire amount:', originalFireAmount);
+      console.log('Original burglary amount:', originalBurglaryAmount);
+      console.log('Current total value:', currentTotalValue);
+      console.log('New remaining fire:', newRemainingFire);
+      console.log('New remaining burglary:', newRemainingBurglary);
+      console.log('=== END FIRST INSURANCE UPDATE DEBUG ===');
+      
       // Update Firestore
       const inspectionsCollection = collection(db, 'inspections');
       const q = query(inspectionsCollection, where('warehouseName', '==', form.warehouseName));
@@ -1262,25 +1936,12 @@ export default function InwardPage() {
         }
         const updatedList = insuranceList.map((i: any) => {
           if (i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber) {
-            if (ins.insuranceTakenBy === 'warehouse owner') {
-              // Swap the update for warehouse owner type
-              return {
-                ...i,
-                burglaryPolicyAmount: newRemainingFire,
-                firePolicyAmount: newRemainingBurglary,
-                remainingFirePolicyAmount: newRemainingFire,
-                remainingBurglaryPolicyAmount: newRemainingBurglary,
-              };
-            } else {
-              // Default update for other types
-              return {
-                ...i,
-                firePolicyAmount: newRemainingFire,
-                burglaryPolicyAmount: newRemainingBurglary,
-                remainingFirePolicyAmount: newRemainingFire,
-                remainingBurglaryPolicyAmount: newRemainingBurglary,
-              };
-            }
+            // Preserve original amounts, only update remaining amounts
+            return {
+              ...i,
+              remainingFirePolicyAmount: newRemainingFire,
+              remainingBurglaryPolicyAmount: newRemainingBurglary,
+            };
           }
           return i;
         });
@@ -1289,14 +1950,50 @@ export default function InwardPage() {
     }
 
     // Also update if insurance is selected in information section
-    if (selectedInsuranceInfoIndex !== null) {
+    if (selectedInsuranceInfoIndex !== null && filteredInsuranceInfoEntries.length > 0 && selectedInsuranceInfoIndex < filteredInsuranceInfoEntries.length) {
       const ins = filteredInsuranceInfoEntries[selectedInsuranceInfoIndex];
-      // Use the already calculated remaining amounts from state
-      const newRemainingFire = remainingFirePolicy;
-      const newRemainingBurglary = remainingBurglaryPolicy;
+      
+      // Debug logging to understand the insurance structure
+      console.log('=== INSURANCE UPDATE DEBUG ===');
+      console.log('Selected insurance entry:', ins);
+      console.log('Insurance properties:', {
+        sourceDocumentId: ins?.sourceDocumentId,
+        sourceCollection: ins?.sourceCollection,
+        insuranceId: ins?.insuranceId,
+        firePolicyNumber: ins?.firePolicyNumber,
+        burglaryPolicyNumber: ins?.burglaryPolicyNumber
+      });
+      console.log('=== END INSURANCE UPDATE DEBUG ===');
+      
+      // Safely get the remaining amounts from state, with fallback to calculated values
+      const safeParseAmount = (amount: any): string => {
+        if (amount === null || amount === undefined || amount === '') return '0.00';
+        if (typeof amount === 'string' && (amount === '-' || amount === 'N/A' || amount === 'null' || amount === 'undefined')) return '0.00';
+        const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
+        return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
+      };
+      
+      // Get the current total value being processed
+      const currentTotalValue = parseFloat(baseForm.totalValue) || 0;
+      
+      // Get the original insurance amounts from the insurance entry
+      const originalFireAmount = safeParseAmount(ins.firePolicyAmount);
+      const originalBurglaryAmount = safeParseAmount(ins.burglaryPolicyAmount);
+      
+      // Calculate new remaining amounts
+      const newRemainingFire = Math.max(0, parseFloat(originalFireAmount) - currentTotalValue).toFixed(2);
+      const newRemainingBurglary = Math.max(0, parseFloat(originalBurglaryAmount) - currentTotalValue).toFixed(2);
+      
+      console.log('=== INSURANCE AMOUNT CALCULATION DEBUG ===');
+      console.log('Original fire amount:', originalFireAmount);
+      console.log('Original burglary amount:', originalBurglaryAmount);
+      console.log('Current total value:', currentTotalValue);
+      console.log('New remaining fire:', newRemainingFire);
+      console.log('New remaining burglary:', newRemainingBurglary);
+      console.log('=== END INSURANCE AMOUNT CALCULATION DEBUG ===');
       
       // Update source collections (clients or agrogreen) based on sourceDocumentId and insuranceId
-      if (ins.sourceDocumentId && ins.insuranceId) {
+      if (ins && validateInsuranceEntry(ins) && ins.sourceDocumentId && ins.insuranceId && ins.sourceCollection) {
           if (ins.sourceCollection === 'clients') {
             // Update client insurance
               const clientDocRef = doc(db, 'clients', ins.sourceDocumentId);
@@ -1311,8 +2008,7 @@ export default function InwardPage() {
                   if (insurance.insuranceId === ins.insuranceId) {
                     return {
                       ...insurance,
-                      firePolicyAmount: newRemainingFire,
-                      burglaryPolicyAmount: newRemainingBurglary,
+                      // Preserve original amounts, only update remaining amounts
                       remainingFirePolicyAmount: newRemainingFire,
                       remainingBurglaryPolicyAmount: newRemainingBurglary,
                     };
@@ -1331,37 +2027,48 @@ export default function InwardPage() {
               
               if (agrogreenDocSnap.exists()) {
                 await updateDoc(agrogreenDocRef, {
-                  firePolicyAmount: newRemainingFire,
-                  burglaryPolicyAmount: newRemainingBurglary,
+                  // Preserve original amounts, only update remaining amounts
                   remainingFirePolicyAmount: newRemainingFire,
                   remainingBurglaryPolicyAmount: newRemainingBurglary,
                 });
               }
         }
+      } else {
+        // Fallback: If no sourceDocumentId or sourceCollection, only update the inspection entry
+        console.log('No sourceDocumentId or sourceCollection found, updating only inspection entry');
+        console.log('Insurance entry validation failed:', {
+          hasInsurance: !!ins,
+          hasSourceProperties: ins ? !!(ins.sourceDocumentId && ins.insuranceId && ins.sourceCollection) : false,
+          sourceDocumentId: ins?.sourceDocumentId,
+          sourceCollection: ins?.sourceCollection,
+          insuranceId: ins?.insuranceId
+        });
       }
       
-      // Update Firestore inspection entry as well
-      const inspectionsCollection = collection(db, 'inspections');
-      const q = query(inspectionsCollection, where('warehouseName', '==', form.warehouseName));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
-        const inspectionData = querySnapshot.docs[0].data();
-        let insuranceList = inspectionData.insuranceEntries || [];
-        if (!Array.isArray(insuranceList) && inspectionData.warehouseInspectionData?.insuranceEntries) {
-          insuranceList = inspectionData.warehouseInspectionData.insuranceEntries;
-        }
-        const updatedList = insuranceList.map((i: any) => {
-          if (i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber) {
-            return {
-              ...i,
-              remainingFirePolicyAmount: newRemainingFire,
-              remainingBurglaryPolicyAmount: newRemainingBurglary,
-            };
+      // Update Firestore inspection entry as well (always do this)
+      if (ins) {
+        const inspectionsCollection = collection(db, 'inspections');
+        const q = query(inspectionsCollection, where('warehouseName', '==', form.warehouseName));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
+          const inspectionData = querySnapshot.docs[0].data();
+          let insuranceList = inspectionData.insuranceEntries || [];
+          if (!Array.isArray(insuranceList) && inspectionData.warehouseInspectionData?.insuranceEntries) {
+            insuranceList = inspectionData.warehouseInspectionData.insuranceEntries;
           }
-          return i;
-        });
-        await updateDoc(docRef, { insuranceEntries: updatedList });
+          const updatedList = insuranceList.map((i: any) => {
+            if (i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber) {
+              return {
+                ...i,
+                remainingFirePolicyAmount: newRemainingFire,
+                remainingBurglaryPolicyAmount: newRemainingBurglary,
+              };
+            }
+            return i;
+          });
+          await updateDoc(docRef, { insuranceEntries: updatedList });
+        }
       }
         }
       } catch (insuranceError) {
@@ -1400,6 +2107,14 @@ export default function InwardPage() {
       toast({
         title: "Error",
         description: errorMessage,
+        variant: "destructive",
+      });
+    }
+    } catch (error: any) {
+      console.error('Error in handleSubmit:', error);
+      toast({
+        title: "Error",
+        description: `An unexpected error occurred: ${error.message || 'Unknown error'}`,
         variant: "destructive",
       });
     }
@@ -1490,6 +2205,7 @@ export default function InwardPage() {
     setInwardEntries([]);
     setCurrentEntryIndex(0);
     setIsUploading(false);
+    setHasPendingEntries(false);
   };
 
   const handleModalClose = () => {
@@ -1547,30 +2263,64 @@ export default function InwardPage() {
     }));
   };
 
-  // Add new stack
-  const addStack = () => {
+  // Handle total bags change (for manual updates)
+  const handleTotalBagsChange = (value: string) => {
     setCurrentEntryForm(f => ({
       ...f,
-      stacks: [...f.stacks, { stackNumber: '', numberOfBags: '' }]
+      totalBags: value,
+      averageWeight: calculateAverageWeight(f.netWeight, value)
     }));
+    
+    // Recalculate total bags in Commodity Information when current entry form changes
+    setTimeout(() => {
+      recalculateTotalBags();
+    }, 0);
+  };
+
+  // Add new stack
+  const addStack = () => {
+    setCurrentEntryForm(f => {
+      const updatedStacks = [...f.stacks, { stackNumber: '', numberOfBags: '' }];
+      
+      return {
+        ...f,
+        stacks: updatedStacks
+        // Don't auto-update totalBags - let user enter it manually
+      };
+    });
+    
+    // Recalculate total bags in Commodity Information when current entry form changes
+    setTimeout(() => {
+      recalculateTotalBags();
+    }, 0);
   };
 
   // Update stack
   const updateStack = (index: number, field: string, value: string) => {
-    setCurrentEntryForm(f => ({
-      ...f,
-      stacks: f.stacks.map((stack, i) => 
+    setCurrentEntryForm(f => {
+      const updatedStacks = f.stacks.map((stack, i) => 
         i === index ? { ...stack, [field]: value } : stack
-      )
-    }));
+      );
+      
+      return {
+        ...f,
+        stacks: updatedStacks
+        // Don't auto-update totalBags - let user enter it manually
+      };
+    });
   };
 
   // Remove stack
   const removeStack = (index: number) => {
-    setCurrentEntryForm(f => ({
-      ...f,
-      stacks: f.stacks.filter((_, i) => i !== index)
-    }));
+    setCurrentEntryForm(f => {
+      const updatedStacks = f.stacks.filter((_, i) => i !== index);
+      
+      return {
+        ...f,
+        stacks: updatedStacks
+        // Don't auto-update totalBags - let user enter it manually
+      };
+    });
   };
 
   // Calculate total bags from stacks
@@ -1580,10 +2330,54 @@ export default function InwardPage() {
     }, 0);
   };
 
-  // Validate stack bags match total bags
+  // Validate stack bags match total bags for current entry form
   const validateStackBags = () => {
     const stackTotal = calculateTotalBagsFromStacks();
     return stackTotal === (parseInt(currentEntryForm.totalBags) || 0);
+  };
+
+  // Validate stack bags match total bags for a specific entry in edit mode
+  const validateEntryStackBags = (entry: any) => {
+    if (!entry.stacks || !Array.isArray(entry.stacks)) return false;
+    const stackTotal = entry.stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+      return total + (parseInt(stack.numberOfBags) || 0);
+    }, 0);
+    return stackTotal === (parseInt(entry.totalBags) || 0);
+  };
+
+  // Simple function to recalculate total bags in Commodity Information
+  const recalculateTotalBags = () => {
+    if (isEditMode) {
+      // In edit mode, calculate total bags only from visible inward entries
+      let totalBagsSum = inwardEntries.reduce((sum, entry) => {
+        return sum + (parseInt(entry.totalBags) || 0);
+      }, 0);
+      
+      console.log('Edit mode - Recalculated total bags sum from visible entries:', totalBagsSum);
+      
+      setBaseForm(f => ({
+        ...f,
+        totalBags: totalBagsSum.toString()
+      }));
+    } else {
+      // For new entries, sum from already saved entries + current entry form
+      let totalBagsSum = inwardEntries.reduce((sum, entry) => {
+        return sum + (parseInt(entry.totalBags) || 0);
+      }, 0);
+      
+      // Add current entry form data if it has a valid total bags value
+      if (currentEntryForm.totalBags && parseInt(currentEntryForm.totalBags) > 0) {
+        totalBagsSum += parseInt(currentEntryForm.totalBags) || 0;
+        console.log('Adding current entry form totalBags to sum:', currentEntryForm.totalBags);
+      }
+      
+      console.log('New entry mode - Recalculated total bags sum:', totalBagsSum);
+      
+      setBaseForm(f => ({
+        ...f,
+        totalBags: totalBagsSum.toString()
+      }));
+    }
   };
 
   // Add new inward entry
@@ -1630,18 +2424,30 @@ export default function InwardPage() {
       return;
     }
     
-    // Save current entry to inwardEntries array
+    // Add current entry to inwardEntries array (without generating inward ID yet)
+    const { dateOfSampling, dateOfTesting, labResults, labResultsValidation, ...entryData } = currentEntryForm;
+    
+    // Create base form data without totalBags and totalQuantity to avoid double counting
+    const { totalBags, totalQuantity, ...baseFormWithoutTotals } = baseForm;
+    
     const newEntry = {
       id: Date.now(),
-      ...baseForm,
-      ...currentEntryForm,
+      ...baseFormWithoutTotals,
+      ...entryData,
       entryNumber: inwardEntries.length + 1
     };
 
     const updatedEntries = [...inwardEntries, newEntry];
+    
     setInwardEntries(updatedEntries);
     
-    // Reset only the current entry form for new entry
+    // Recalculate total bags in Commodity Information
+    setTimeout(() => {
+      recalculateTotalBags();
+    }, 0);
+    setHasPendingEntries(true);
+    
+    // Reset only the current entry form for new entry (keep lab parameters)
     setCurrentEntryForm({
       vehicleNumber: '',
       getpassNumber: '',
@@ -1653,10 +2459,11 @@ export default function InwardPage() {
       averageWeight: '',
       totalBags: '',
       totalQuantity: '',
-      dateOfSampling: '',
-      dateOfTesting: '',
-      labResults: [],
-      labResultsValidation: [],
+      // Keep lab parameters since they are at document level
+      dateOfSampling: currentEntryForm.dateOfSampling || '',
+      dateOfTesting: currentEntryForm.dateOfTesting || '',
+      labResults: currentEntryForm.labResults || [],
+      labResultsValidation: currentEntryForm.labResultsValidation || [],
       stacks: [
         {
           stackNumber: '',
@@ -1665,7 +2472,11 @@ export default function InwardPage() {
       ],
     });
     
-    alert(`Entry ${newEntry.entryNumber} saved successfully! New entry form ready.`);
+    toast({
+      title: "Entry Saved Successfully",
+      description: `Entry ${newEntry.entryNumber} has been saved. You can now add a new entry or click Submit when all entries are complete.`,
+      variant: "default",
+    });
   };
 
   // Auto-calculate Total Value
@@ -1689,6 +2500,7 @@ export default function InwardPage() {
 
   const columns = [
     { accessorKey: "inwardId", header: "Inward Code" },
+
     { accessorKey: "dateOfInward", header: "Date of Inward" },
     { accessorKey: "state", header: "State" },
     { accessorKey: "branch", header: "Branch" },
@@ -1802,15 +2614,20 @@ export default function InwardPage() {
       header: 'SR/WR Status',
       cell: ({ row }: any) => {
         const cirStatus = row.original.cirStatus || 'Pending';
+        
+        // If CIR is not approved, show "-"
         if (cirStatus !== 'Approved') {
           return <span>-</span>;
         }
+        
+        // If CIR is approved, show the SR/WR status
         const status = row.original.status || 'pending';
         let color = 'text-gray-600';
         if (status === 'approve') color = 'text-green-600 font-semibold';
         else if (status === 'rejected') color = 'text-red-600 font-semibold';
         else if (status === 'resubmited') color = 'text-yellow-600 font-semibold';
         else if (status === 'pending') color = 'text-blue-600 font-semibold';
+        
         return (
           <div className="flex items-center space-x-2 justify-center">
             <span className={color}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
@@ -1824,6 +2641,26 @@ export default function InwardPage() {
             </Button>
           </div>
         );
+      }
+    },
+    { 
+      accessorKey: "expand", 
+      header: "Expand",
+      cell: ({ row }: any) => {
+        const totalEntries = row.original.totalEntries;
+        if (totalEntries && totalEntries > 1) {
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExpandEntries(row.original)}
+              className="text-blue-600 border-blue-300 hover:bg-blue-50"
+            >
+              View {totalEntries} Entries
+            </Button>
+          );
+        }
+        return '-';
       }
     },
     {
@@ -1965,6 +2802,64 @@ export default function InwardPage() {
   // Generate sequential inward ID
   const generateInwardId = async () => {
     try {
+      console.log('Starting generateInwardId...');
+      
+      // Check if Firebase is available
+      if (!db) {
+        throw new Error('Firebase database not available');
+      }
+      
+      const inwardCollection = collection(db, 'inward');
+      console.log('Collection reference created');
+      
+      const snapshot = await getDocs(inwardCollection);
+      console.log('Snapshot retrieved, docs count:', snapshot.docs.length);
+      
+      // Extract existing inward IDs and find the highest number
+      const existingIds = snapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          console.log('Document data:', data);
+          return data.inwardId;
+        })
+        .filter(id => id && id.startsWith('INW-'))
+        .map(id => {
+          const match = id.match(/INW-(\d{3})/);
+          return match ? parseInt(match[1], 10) : 0;
+        });
+      
+      console.log('Existing IDs found:', existingIds);
+      const maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
+      const nextId = maxId + 1;
+      const generatedId = `INW-${nextId.toString().padStart(3, '0')}`;
+      
+      console.log('Generated inward ID:', generatedId);
+      
+      // Validate the generated ID
+      if (!generatedId || typeof generatedId !== 'string') {
+        throw new Error('Generated inward ID is invalid');
+      }
+      
+      return generatedId;
+    } catch (error) {
+      console.error('Error generating inward ID:', error);
+      // Fallback to timestamp-based ID if there's an error
+      const timestamp = Date.now();
+      const fallbackId = `INW-${timestamp.toString().slice(-3)}`;
+      console.log('Using fallback ID:', fallbackId);
+      
+      // Validate fallback ID
+      if (!fallbackId || typeof fallbackId !== 'string') {
+        throw new Error('Fallback inward ID generation failed');
+      }
+      
+      return fallbackId;
+    }
+  };
+
+  // Generate multiple inward IDs at once to prevent race conditions
+  const generateMultipleInwardIds = async (count: number) => {
+    try {
       const inwardCollection = collection(db, 'inward');
       const snapshot = await getDocs(inwardCollection);
       
@@ -1978,13 +2873,23 @@ export default function InwardPage() {
         });
       
       const maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
-      const nextId = maxId + 1;
+      const ids = [];
       
-      return `INW-${nextId.toString().padStart(3, '0')}`;
+      for (let i = 1; i <= count; i++) {
+        const nextId = maxId + i;
+        ids.push(`INW-${nextId.toString().padStart(3, '0')}`);
+      }
+      
+      return ids;
     } catch (error) {
-      console.error('Error generating inward ID:', error);
-      // Fallback to timestamp-based ID if there's an error
-      return `INW-${Date.now().toString().slice(-3)}`;
+      console.error('Error generating multiple inward IDs:', error);
+      // Fallback to timestamp-based IDs if there's an error
+      const ids = [];
+      for (let i = 0; i < count; i++) {
+        const timestamp = Date.now() + i;
+        ids.push(`INW-${timestamp.toString().slice(-3)}`);
+      }
+      return ids;
     }
   };
 
@@ -2044,11 +2949,196 @@ export default function InwardPage() {
     });
   };
 
+  // Function to switch between multiple entries in edit mode
+  const handleEntrySwitch = (entryIndex: number) => {
+    if (inwardEntries && inwardEntries.length > entryIndex) {
+      const selectedEntry = inwardEntries[entryIndex];
+      setCurrentEntryIndex(entryIndex);
+      
+      // Update current entry form with selected entry data (excluding lab parameters)
+      setCurrentEntryForm({
+        vehicleNumber: selectedEntry.vehicleNumber || '',
+        getpassNumber: selectedEntry.getpassNumber || '',
+        weightBridge: selectedEntry.weightBridge || '',
+        weightBridgeSlipNumber: selectedEntry.weightBridgeSlipNumber || '',
+        grossWeight: selectedEntry.grossWeight || '',
+        tareWeight: selectedEntry.tareWeight || '',
+        netWeight: selectedEntry.netWeight || '',
+        averageWeight: selectedEntry.averageWeight || '',
+        totalBags: selectedEntry.totalBags || '',
+        totalQuantity: selectedEntry.totalQuantity || '',
+        // Lab parameters are at document level, so keep current values
+        dateOfSampling: currentEntryForm.dateOfSampling || '',
+        dateOfTesting: currentEntryForm.dateOfTesting || '',
+        labResults: currentEntryForm.labResults || [],
+        labResultsValidation: currentEntryForm.labResultsValidation || [],
+        stacks: selectedEntry.stacks || [{ stackNumber: '', numberOfBags: '' }],
+      });
+    }
+  };
+
+  // Function to update an individual entry in the inwardEntries array
+  const handleEntryUpdate = (entryIndex: number, field: string, value: any) => {
+    if (inwardEntries && inwardEntries.length > entryIndex) {
+      const updatedEntries = [...inwardEntries];
+      const entry = updatedEntries[entryIndex];
+      
+      // Update the field
+      entry[field] = value;
+      
+      // Auto-calculate net weight when gross or tare weight changes
+      if (field === 'grossWeight' || field === 'tareWeight') {
+        const grossNum = parseFloat(entry.grossWeight) || 0;
+        const tareNum = parseFloat(entry.tareWeight) || 0;
+        const net = grossNum - tareNum;
+        entry.netWeight = net >= 0 ? net.toFixed(3) : '0.000';
+        
+        // Auto-calculate average weight
+        const totalBags = parseInt(entry.totalBags) || 0;
+        if (net > 0 && totalBags > 0) {
+          const avgWeight = (net / totalBags) * 1000; // Convert MT/bag to Kg/bag
+          entry.averageWeight = avgWeight.toFixed(2);
+        } else {
+          entry.averageWeight = '';
+        }
+      }
+      
+      // Auto-calculate average weight when net weight changes
+      if (field === 'netWeight') {
+        const netWeight = parseFloat(value) || 0;
+        const totalBags = parseInt(entry.totalBags) || 0;
+        if (netWeight > 0 && totalBags > 0) {
+          const avgWeight = (netWeight / totalBags) * 1000; // Convert MT/bag to Kg/bag
+          entry.averageWeight = avgWeight.toFixed(2);
+        } else {
+          entry.averageWeight = '';
+        }
+      }
+      
+      // Auto-calculate average weight when total bags changes
+      if (field === 'totalBags') {
+        const netWeight = parseFloat(entry.netWeight) || 0;
+        const totalBags = parseInt(value) || 0;
+        if (netWeight > 0 && totalBags > 0) {
+          const avgWeight = (netWeight / totalBags) * 1000; // Convert MT/bag to Kg/bag
+          entry.averageWeight = avgWeight.toFixed(2);
+        } else {
+          entry.averageWeight = '';
+        }
+        
+        // Validate that total bags match stack bags
+        if (entry.stacks && Array.isArray(entry.stacks)) {
+          const stackBagsSum = entry.stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+            return total + (parseInt(stack.numberOfBags) || 0);
+          }, 0);
+          
+          if (totalBags !== stackBagsSum) {
+            console.log(`Validation warning: Entry ${entryIndex + 1} total bags (${totalBags}) don't match stack bags (${stackBagsSum})`);
+          }
+        }
+      }
+      
+      setInwardEntries(updatedEntries);
+      
+      // Recalculate total bags in Commodity Information
+      setTimeout(() => {
+        recalculateTotalBags();
+      }, 0);
+    }
+  };
+
+  // Function to update stack information for a specific entry
+  const handleEntryStackUpdate = (entryIndex: number, stackIndex: number, field: string, value: string) => {
+    if (inwardEntries && inwardEntries.length > entryIndex) {
+      const updatedEntries = [...inwardEntries];
+      if (updatedEntries[entryIndex].stacks && updatedEntries[entryIndex].stacks.length > stackIndex) {
+        updatedEntries[entryIndex].stacks[stackIndex] = {
+          ...updatedEntries[entryIndex].stacks[stackIndex],
+          [field]: value
+        };
+        
+        // Auto-calculate total bags from stacks if numberOfBags was updated
+        if (field === 'numberOfBags') {
+          const stackBagsSum = updatedEntries[entryIndex].stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+            return total + (parseInt(stack.numberOfBags) || 0);
+          }, 0);
+          updatedEntries[entryIndex].totalBags = stackBagsSum.toString();
+        }
+        
+        setInwardEntries(updatedEntries);
+        
+        // Recalculate total bags in Commodity Information
+        setTimeout(() => {
+          recalculateTotalBags();
+        }, 0);
+      }
+    }
+  };
+
+  // Function to add a new stack to a specific entry
+  const handleEntryAddStack = (entryIndex: number) => {
+    if (inwardEntries && inwardEntries.length > entryIndex) {
+      const updatedEntries = [...inwardEntries];
+      if (!updatedEntries[entryIndex].stacks) {
+        updatedEntries[entryIndex].stacks = [];
+      }
+      updatedEntries[entryIndex].stacks.push({ stackNumber: '', numberOfBags: '' });
+      
+      // Recalculate total bags from stacks
+      const stackBagsSum = updatedEntries[entryIndex].stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+        return total + (parseInt(stack.numberOfBags) || 0);
+      }, 0);
+      updatedEntries[entryIndex].totalBags = stackBagsSum.toString();
+      
+      setInwardEntries(updatedEntries);
+      
+      // Recalculate total bags in Commodity Information
+      setTimeout(() => {
+        recalculateTotalBags();
+      }, 0);
+    }
+  };
+
+  // Function to remove a stack from a specific entry
+  const handleEntryRemoveStack = (entryIndex: number, stackIndex: number) => {
+    if (inwardEntries && inwardEntries.length > entryIndex) {
+      const updatedEntries = [...inwardEntries];
+      if (updatedEntries[entryIndex].stacks && updatedEntries[entryIndex].stacks.length > stackIndex) {
+        updatedEntries[entryIndex].stacks.splice(stackIndex, 1);
+        
+        // Recalculate total bags from stacks
+        const stackBagsSum = updatedEntries[entryIndex].stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+          return total + (parseInt(stack.numberOfBags) || 0);
+        }, 0);
+        updatedEntries[entryIndex].totalBags = stackBagsSum.toString();
+        
+        setInwardEntries(updatedEntries);
+        
+        // Recalculate total bags in Commodity Information
+        setTimeout(() => {
+          recalculateTotalBags();
+        }, 0);
+      }
+    }
+  };
+
   // Handle edit button click
   const handleEdit = async (row: any) => {
     setIsEditMode(true);
     setEditingRow(row);
     
+    // Debug logging for insurance data being loaded
+    console.log('=== EDIT MODE INSURANCE DATA DEBUG ===');
+    console.log('Row insurance data:', {
+      firePolicyAmount: row.firePolicyAmount,
+      firePolicyAmountType: typeof row.firePolicyAmount,
+      burglaryPolicyAmount: row.burglaryPolicyAmount,
+      burglaryPolicyAmountType: typeof row.burglaryPolicyAmount,
+      firePolicyBalance: row.firePolicyBalance,
+      burglaryPolicyBalance: row.burglaryPolicyBalance
+    });
+    console.log('=== END EDIT MODE INSURANCE DATA DEBUG ===');
+
     // Populate form with row data
     setBaseForm({
       state: row.state || '',
@@ -2085,22 +3175,56 @@ export default function InwardPage() {
       billingRate: row.billingRate || '',
       insuranceManagedBy: row.insuranceManagedBy || '',
       firePolicyNumber: row.firePolicyNumber || '',
-      firePolicyAmount: row.firePolicyAmount || '',
+      firePolicyAmount: row.firePolicyAmount || row.firePolicyAmount === 0 ? String(row.firePolicyAmount) : '',
       firePolicyStart: row.firePolicyStart || '',
       firePolicyEnd: row.firePolicyEnd || '',
       burglaryPolicyNumber: row.burglaryPolicyNumber || '',
-      burglaryPolicyAmount: row.burglaryPolicyAmount || '',
+      burglaryPolicyAmount: row.burglaryPolicyAmount || row.burglaryPolicyAmount === 0 ? String(row.burglaryPolicyAmount) : '',
       burglaryPolicyStart: row.burglaryPolicyStart || '',
       burglaryPolicyEnd: row.burglaryPolicyEnd || '',
       firePolicyCompanyName: row.firePolicyCompanyName || '',
       burglaryPolicyCompanyName: row.burglaryPolicyCompanyName || '',
-      firePolicyBalance: row.firePolicyBalance || '',
-      burglaryPolicyBalance: row.burglaryPolicyBalance || '',
+      firePolicyBalance: row.firePolicyBalance || row.firePolicyBalance === 0 ? String(row.firePolicyBalance) : '',
+      burglaryPolicyBalance: row.burglaryPolicyBalance || row.burglaryPolicyBalance === 0 ? String(row.burglaryPolicyBalance) : '',
       bankFundedBy: row.bankFundedBy || '',
     });
 
-    // Populate current entry form with row data
-    setCurrentEntryForm({
+    // Handle multiple inward entries for edit mode
+    let inwardEntries = [];
+    if (row.inwardEntries && Array.isArray(row.inwardEntries) && row.inwardEntries.length > 0) {
+      // If the row has inwardEntries array, use it
+      inwardEntries = row.inwardEntries.map((entry: any, index: number) => {
+        // Calculate total bags from stacks for each entry
+        let calculatedTotalBags = entry.totalBags;
+        if (entry.stacks && Array.isArray(entry.stacks)) {
+          const stackBagsSum = entry.stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+            return total + (parseInt(stack.numberOfBags) || 0);
+          }, 0);
+          calculatedTotalBags = stackBagsSum.toString();
+          console.log(`Entry ${index + 1} total bags calculated from stacks:`, calculatedTotalBags);
+        }
+        
+        return {
+        ...entry,
+        entryNumber: index + 1,
+        id: Date.now() + index, // Generate unique ID for each entry
+          totalBags: calculatedTotalBags
+        };
+      });
+    } else {
+      // If no inwardEntries array, create a single entry from the row data
+      let calculatedTotalBags = row.totalBags;
+      if (row.stacks && Array.isArray(row.stacks)) {
+        const stackBagsSum = row.stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+          return total + (parseInt(stack.numberOfBags) || 0);
+        }, 0);
+        calculatedTotalBags = stackBagsSum.toString();
+        console.log('Single entry total bags calculated from stacks:', calculatedTotalBags);
+      }
+      
+      inwardEntries = [{
+        id: Date.now(),
+        entryNumber: 1,
       vehicleNumber: row.vehicleNumber || '',
       getpassNumber: row.getpassNumber || '',
       weightBridge: row.weightBridge || '',
@@ -2109,14 +3233,73 @@ export default function InwardPage() {
       tareWeight: row.tareWeight || '',
       netWeight: row.netWeight || '',
       averageWeight: row.averageWeight || '',
+        totalBags: calculatedTotalBags || '',
+      totalQuantity: row.totalQuantity || '',
+      stacks: row.stacks || [{ stackNumber: '', numberOfBags: '' }],
+      }];
+    }
+
+    // Set the inward entries
+    setInwardEntries(inwardEntries);
+
+    // Recalculate total bags from entries to ensure consistency
+    if (inwardEntries.length > 0) {
+      const calculatedTotalBags = inwardEntries.reduce((sum: number, entry: any) => {
+        return sum + (parseInt(entry.totalBags) || 0);
+      }, 0);
+      
+      const calculatedTotalQuantity = inwardEntries.reduce((sum: number, entry: any) => {
+        return sum + (parseFloat(entry.totalQuantity) || 0);
+      }, 0);
+      
+      console.log('Recalculated totals when loading for edit - Total Bags:', calculatedTotalBags, 'Total Quantity:', calculatedTotalQuantity);
+      
+      // Update baseForm with calculated totals
+      setBaseForm(f => ({
+        ...f,
+        totalBags: calculatedTotalBags.toString(),
+        totalQuantity: calculatedTotalQuantity.toFixed(3)
+      }));
+    }
+
+    // Populate current entry form with the first entry data
+    const firstEntry = inwardEntries[0] || {};
+    
+    // Debug logging for edit mode data
+    console.log('=== EDIT MODE DATA DEBUG ===');
+    console.log('Row data:', {
+      totalBags: row.totalBags,
+      totalQuantity: row.totalQuantity,
+      dateOfSampling: row.dateOfSampling,
+      dateOfTesting: row.dateOfTesting,
+      labResults: row.labResults
+    });
+    console.log('First entry data:', firstEntry);
+    
+    const currentEntryFormData = {
+      vehicleNumber: firstEntry.vehicleNumber || '',
+      getpassNumber: firstEntry.getpassNumber || '',
+      weightBridge: firstEntry.weightBridge || '',
+      weightBridgeSlipNumber: firstEntry.weightBridgeSlipNumber || '',
+      grossWeight: firstEntry.grossWeight || '',
+      tareWeight: firstEntry.tareWeight || '',
+      netWeight: firstEntry.netWeight || '',
+      averageWeight: firstEntry.averageWeight || '',
+      // Use document-level totalBags and totalQuantity instead of entry-level
       totalBags: row.totalBags || '',
       totalQuantity: row.totalQuantity || '',
-      dateOfSampling: row.dateOfSampling || '',
-      dateOfTesting: row.dateOfTesting || '',
+      // Lab parameters from document level
+      dateOfSampling: row.dateOfSampling ? (typeof row.dateOfSampling === 'string' ? row.dateOfSampling : new Date(row.dateOfSampling).toISOString().split('T')[0]) : '',
+      dateOfTesting: row.dateOfTesting ? (typeof row.dateOfTesting === 'string' ? row.dateOfTesting : new Date(row.dateOfTesting).toISOString().split('T')[0]) : '',
       labResults: row.labResults || [],
-      labResultsValidation: row.labResultsValidation || [],
-      stacks: row.stacks || [{ stackNumber: '', numberOfBags: '' }],
-    });
+      labResultsValidation: Array.isArray(row.labResults) ? row.labResults.map(() => true) : [],
+      stacks: firstEntry.stacks || [{ stackNumber: '', numberOfBags: '' }],
+    };
+    
+    console.log('Current entry form data to be set:', currentEntryFormData);
+    console.log('=== END EDIT MODE DATA DEBUG ===');
+    
+    setCurrentEntryForm(currentEntryFormData);
 
     // Fetch insurance entries from inspection collection if warehouse is selected
     let inspectionInsuranceEntries = [];
@@ -2170,9 +3353,69 @@ export default function InwardPage() {
         burglaryPolicyAmount: match?.burglaryPolicyAmount,
         burglaryPolicyAmountType: typeof match?.burglaryPolicyAmount
       });
-      console.log('=== END EDIT MODE INSURANCE DEBUG ===');
       
-      setYourInsurance(match || null);
+      // If match found but amounts are missing, try to fetch from source collections
+      if (match) {
+        let enhancedMatch = { ...match };
+        
+        // Check if amounts are missing or invalid
+        const hasValidFireAmount = match.firePolicyAmount && match.firePolicyAmount !== '0' && match.firePolicyAmount !== '0.00' && match.firePolicyAmount !== '-';
+        const hasValidBurglaryAmount = match.burglaryPolicyAmount && match.burglaryPolicyAmount !== '0' && match.burglaryPolicyAmount !== '0.00' && match.burglaryPolicyAmount !== '-';
+        
+        if (!hasValidFireAmount || !hasValidBurglaryAmount) {
+          console.log('Insurance amounts missing from inspection, fetching from source collections...');
+          
+          if (match.sourceDocumentId && match.insuranceId && match.sourceCollection) {
+            try {
+              if (match.sourceCollection === 'clients') {
+                // Fetch from clients collection
+                const clientDocRef = doc(db, 'clients', match.sourceDocumentId);
+                const clientDocSnap = await getDoc(clientDocRef);
+                
+                if (clientDocSnap.exists()) {
+                  const clientData = clientDocSnap.data() as any;
+                  const insurances = clientData.insurances || [];
+                  const sourceInsurance = insurances.find((ins: any) => ins.insuranceId === match.insuranceId);
+                  
+                  if (sourceInsurance) {
+                    console.log('Found source insurance in clients collection:', sourceInsurance);
+                    if (!hasValidFireAmount && sourceInsurance.firePolicyAmount) {
+                      enhancedMatch.firePolicyAmount = sourceInsurance.firePolicyAmount;
+                    }
+                    if (!hasValidBurglaryAmount && sourceInsurance.burglaryPolicyAmount) {
+                      enhancedMatch.burglaryPolicyAmount = sourceInsurance.burglaryPolicyAmount;
+                    }
+                  }
+                }
+              } else if (match.sourceCollection === 'agrogreen') {
+                // Fetch from agrogreen collection
+                const agrogreenDocRef = doc(db, 'agrogreen', match.sourceDocumentId);
+                const agrogreenDocSnap = await getDoc(agrogreenDocRef);
+                
+                if (agrogreenDocSnap.exists()) {
+                  const agrogreenData = agrogreenDocSnap.data() as any;
+                  console.log('Found source insurance in agrogreen collection:', agrogreenData);
+                  if (!hasValidFireAmount && agrogreenData.firePolicyAmount) {
+                    enhancedMatch.firePolicyAmount = agrogreenData.firePolicyAmount;
+                  }
+                  if (!hasValidBurglaryAmount && agrogreenData.burglaryPolicyAmount) {
+                    enhancedMatch.burglaryPolicyAmount = agrogreenData.burglaryPolicyAmount;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error fetching from source collections in edit mode:', error);
+            }
+          }
+        }
+        
+        console.log('Enhanced insurance match with actual amounts:', enhancedMatch);
+        console.log('=== END EDIT MODE INSURANCE DEBUG ===');
+        
+        setYourInsurance(enhancedMatch);
+      } else {
+        setYourInsurance(null);
+      }
     } else {
       setYourInsurance(null);
     }
@@ -2501,6 +3744,11 @@ export default function InwardPage() {
 
   // Handle insurance selection in information section
   const handleInsuranceInfoSelect = async (idx: number) => {
+    if (idx < 0 || idx >= filteredInsuranceInfoEntries.length) {
+      console.error('Invalid insurance index:', idx, 'Array length:', filteredInsuranceInfoEntries.length);
+      return;
+    }
+    
     setSelectedInsuranceInfoIndex(idx);
     const ins = filteredInsuranceInfoEntries[idx];
     
@@ -2694,6 +3942,12 @@ export default function InwardPage() {
       return '0.00';
     }
     
+    // If the amount is 0 or very small, check if it's actually a valid amount
+    if (numAmount === 0 || numAmount < 0.01) {
+      console.warn('Amount is 0 or very small, might be missing data:', amount);
+      return '0.00';
+    }
+    
     return numAmount.toFixed(2);
   };
 
@@ -2817,6 +4071,59 @@ export default function InwardPage() {
   const [cirModalData, setCIRModalData] = useState<any>(null);
   const [cirReadOnly, setCIRReadOnly] = useState(true);
   const [cirRemarks, setCIRRemarks] = useState(''); // <-- CIR remarks state
+  
+  // Add state for expand entries modal
+  const [showExpandModal, setShowExpandModal] = useState(false);
+  const [expandModalData, setExpandModalData] = useState<any>(null);
+  const [isExpandingEntries, setIsExpandingEntries] = useState(false);
+
+  const handleExpandEntries = async (row: any) => {
+    try {
+      setIsExpandingEntries(true);
+      console.log('Expanding entries for row:', row);
+      
+      // Fetch complete inward entries data from the database
+      let inwardEntries = row.inwardEntries || [];
+      
+      // If inwardEntries is missing or empty, fetch from database
+      if ((!inwardEntries || inwardEntries.length === 0) && row.inwardId) {
+        console.log('Fetching inward entries from database for inwardId:', row.inwardId);
+        const inwardCollection = collection(db, 'inward');
+        const q = query(inwardCollection, where('inwardId', '==', row.inwardId));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const docData = querySnapshot.docs[0].data();
+          inwardEntries = docData.inwardEntries || [];
+          console.log('Fetched inward entries from database:', inwardEntries);
+        }
+      }
+      
+      // Calculate total entries count
+      const totalEntries = inwardEntries.length;
+      
+      // Prepare the expand modal data with complete information
+      const expandData = {
+        ...row,
+        inwardEntries: inwardEntries,
+        totalEntries: totalEntries
+      };
+      
+      console.log('Setting expand modal data:', expandData);
+      setExpandModalData(expandData);
+    setShowExpandModal(true);
+      
+    } catch (error) {
+      console.error('Error expanding entries:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load inward entries data.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExpandingEntries(false);
+    }
+  };
 
   const handleCIRView = async (row: any) => {
     setCIRReadOnly(true);
@@ -2872,18 +4179,30 @@ export default function InwardPage() {
     const keys = [
       'vehicleNumber', 'getpassNumber', 'weightBridge', 'weightBridgeSlipNumber',
       'grossWeight', 'tareWeight', 'netWeight', 'averageWeight', 'totalBags', 'totalQuantity',
-      'dateOfSampling', 'dateOfTesting', 'labResults', 'labResultsValidation', 'stacks'
+      'stacks'
     ];
+    
+    // First try to get data from the main row
     for (const key of keys) {
-      if (row[key] !== undefined) {
+      if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
         patchFields[key] = row[key];
-      } else if (inwardEntries && inwardEntries.length > 0) {
-        const entry = inwardEntries[0];
-        if (entry[key] !== undefined) {
-          patchFields[key] = entry[key];
+      }
+    }
+    
+    // If we still have missing data, try to get it from inwardEntries
+    if (inwardEntries && inwardEntries.length > 0) {
+      for (const key of keys) {
+        if ((patchFields[key] === undefined || patchFields[key] === null || patchFields[key] === '') && 
+            inwardEntries[0][key] !== undefined && inwardEntries[0][key] !== null && inwardEntries[0][key] !== '') {
+          patchFields[key] = inwardEntries[0][key];
         }
       }
     }
+    
+    // Lab parameters are now stored at document level, so get them directly from row
+    patchFields.dateOfSampling = row.dateOfSampling || '';
+    patchFields.dateOfTesting = row.dateOfTesting || '';
+    patchFields.labResults = row.labResults || [];
 
     // Set CIR modal data with all required fields
     setCIRModalData({
@@ -4323,10 +5642,10 @@ export default function InwardPage() {
               </div>
             )}
 
-            {/* Saved Inward Entries */}
-            {inwardEntries.length > 0 && (
+            {/* Editable Inward Entries */}
+            {isEditMode && inwardEntries.length > 0 && (
               <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold mb-4 text-green-700">Saved Inward Entries</h3>
+                <h3 className="text-lg font-semibold mb-4 text-green-700">Inward Entries (Editable)</h3>
       <div className="space-y-6">
                   {inwardEntries.map((entry, index) => (
                     <div key={entry.id} className="border border-green-300 rounded-lg p-6 bg-green-50">
@@ -4336,17 +5655,6 @@ export default function InwardPage() {
                           Vehicle: {entry.vehicleNumber} | Gatepass: {entry.getpassNumber}
                         </div>
                       </div>
-                      
-                      {/* Inward ID */}
-                      <div className="mb-4">
-                        <h5 className="text-md font-semibold mb-2 text-green-700">Inward Information</h5>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label className="block font-medium mb-1 text-green-600">Inward ID</Label>
-                            <Input value={entry.inwardId || 'Pending'} readOnly className="bg-white border-green-300 font-mono" />
-                          </div>
-                        </div>
-                      </div>
 
                       {/* Vehicle Information */}
                       <div className="mb-4">
@@ -4354,11 +5662,19 @@ export default function InwardPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <Label className="block font-medium mb-1 text-green-600">Vehicle Number</Label>
-                            <Input value={entry.vehicleNumber} readOnly className="bg-white border-green-300" />
+                            <Input 
+                              value={entry.vehicleNumber || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'vehicleNumber', e.target.value)}
+                              className="bg-white border-green-300" 
+                            />
                           </div>
                           <div>
                             <Label className="block font-medium mb-1 text-green-600">Gatepass Number</Label>
-                            <Input value={entry.getpassNumber} readOnly className="bg-white border-green-300" />
+                            <Input 
+                              value={entry.getpassNumber || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'getpassNumber', e.target.value)}
+                              className="bg-white border-green-300" 
+                            />
                           </div>
                         </div>
                       </div>
@@ -4369,11 +5685,19 @@ export default function InwardPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <Label className="block font-medium mb-1 text-green-600">Weight Bridge</Label>
-                            <Input value={entry.weightBridge} readOnly className="bg-white border-green-300" />
+                            <Input 
+                              value={entry.weightBridge || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'weightBridge', e.target.value)}
+                              className="bg-white border-green-300" 
+                            />
                           </div>
                           <div>
                             <Label className="block font-medium mb-1 text-green-600">Weight Bridge Slip Number</Label>
-                            <Input value={entry.weightBridgeSlipNumber} readOnly className="bg-white border-green-300" />
+                            <Input 
+                              value={entry.weightBridgeSlipNumber || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'weightBridgeSlipNumber', e.target.value)}
+                              className="bg-white border-green-300" 
+                            />
                           </div>
                         </div>
                       </div>
@@ -4384,40 +5708,260 @@ export default function InwardPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div>
                             <Label className="block font-medium mb-1 text-green-600">Gross Weight (MT)</Label>
-                            <Input value={entry.grossWeight} readOnly className="bg-white border-green-300" />
+                            <Input 
+                              value={entry.grossWeight || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'grossWeight', e.target.value)}
+                              className="bg-white border-green-300" 
+                            />
                           </div>
                           <div>
                             <Label className="block font-medium mb-1 text-green-600">Tare Weight (MT)</Label>
-                            <Input value={entry.tareWeight} readOnly className="bg-white border-green-300" />
+                            <Input 
+                              value={entry.tareWeight || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'tareWeight', e.target.value)}
+                              className="bg-white border-green-300" 
+                            />
                           </div>
                           <div>
                             <Label className="block font-medium mb-1 text-green-600">Net Weight (MT)</Label>
-                            <Input value={entry.netWeight} readOnly className="bg-white border-green-300" />
+                            <Input 
+                              value={entry.netWeight || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'netWeight', e.target.value)}
+                              className="bg-white border-green-300" 
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Total Bags</Label>
+                            <Input 
+                              value={entry.totalBags || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'totalBags', e.target.value)}
+                              className={`bg-white ${
+                                entry.totalBags && !validateEntryStackBags(entry) 
+                                  ? 'border-red-500 bg-red-50' 
+                                  : 'border-green-300'
+                              }`}
+                            />
+                            {entry.totalBags && !validateEntryStackBags(entry) && (
+                              <p className="text-xs text-red-600 mt-1">
+                                ⚠️ Total bags must equal sum of stack bags
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Total Quantity (MT)</Label>
+                            <Input 
+                              value={entry.totalQuantity || ''} 
+                              onChange={(e) => handleEntryUpdate(index, 'totalQuantity', e.target.value)}
+                              className="bg-white border-green-300" 
+                            />
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Average Weight (Kg/Bag)</Label>
+                            <Input 
+                              value={entry.averageWeight || ''} 
+                              readOnly
+                              className="bg-gray-100 border-green-300" 
+                            />
                           </div>
                         </div>
                       </div>
 
+
+
                       {/* Stack Information */}
                       <div>
-                        <h5 className="text-md font-semibold mb-2 text-green-700">Stack Information</h5>
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="text-md font-semibold text-green-700">Stack Information</h5>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEntryAddStack(index)}
+                            className="text-green-600 border-green-300 hover:bg-green-50"
+                          >
+                            Add Stack
+                          </Button>
+                        </div>
                         <div className="space-y-3">
-                          {entry.stacks.map((stack: any, stackIndex: number) => (
+                          {entry.stacks && entry.stacks.map((stack: any, stackIndex: number) => (
                             <div key={stackIndex} className="border border-green-200 rounded-lg p-3 bg-white">
                               <div className="flex items-center justify-between mb-2">
                                 <h6 className="font-medium text-green-700">Stack {stackIndex + 1}</h6>
+                                <Button 
+                                  type="button" 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleEntryRemoveStack(index, stackIndex)}
+                                  className="text-red-600 border-red-300 hover:bg-red-50"
+                                >
+                                  Remove
+                                </Button>
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <Label className="block font-medium mb-1 text-green-600">Stack Number</Label>
-                                  <Input value={stack.stackNumber} readOnly className="bg-gray-50 border-green-300" />
+                                  <Input 
+                                    value={stack.stackNumber || ''} 
+                                    onChange={(e) => handleEntryStackUpdate(index, stackIndex, 'stackNumber', e.target.value)}
+                                    className="bg-white border-green-300" 
+                                  />
                                 </div>
                                 <div>
                                   <Label className="block font-medium mb-1 text-green-600">Number of Bags</Label>
-                                  <Input value={stack.numberOfBags} readOnly className="bg-gray-50 border-green-300" />
+                                  <Input 
+                                    value={stack.numberOfBags || ''} 
+                                    onChange={(e) => handleEntryStackUpdate(index, stackIndex, 'numberOfBags', e.target.value)}
+                                    className="bg-white border-green-300" 
+                                  />
                                 </div>
                               </div>
                             </div>
                           ))}
+                        </div>
+                        
+                        {/* Stack Validation Section */}
+                        {entry.totalBags && (
+                          <div className="mt-4 p-3 rounded-lg border border-green-200 bg-green-50">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm">
+                                <span className="font-medium text-green-700">Stack Validation:</span>
+                                <span className={`ml-2 ${validateEntryStackBags(entry) ? 'text-green-600' : 'text-red-600'}`}>
+                                  {validateEntryStackBags(entry) ? '✓ Valid' : '✗ Invalid'}
+                                </span>
+                              </div>
+                              <div className="text-xs text-green-600">
+                                Total Bags: {entry.totalBags} | Stack Bags: {
+                                  entry.stacks ? entry.stacks.reduce((total: number, stack: { numberOfBags: string }) => {
+                                    return total + (parseInt(stack.numberOfBags) || 0);
+                                  }, 0) : 0
+                                }
+                              </div>
+                            </div>
+                            {!validateEntryStackBags(entry) && (
+                              <p className="text-xs text-red-600 mt-1">
+                                Total bags must equal the sum of all stack bags
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Saved Inward Entries Section (Non-Edit Mode) */}
+            {!isEditMode && inwardEntries.length > 0 && (
+              <div className="border-t pt-6 mb-6">
+                <h3 className="text-lg font-semibold mb-4 text-green-700">Saved Inward Entries</h3>
+                <div className="space-y-6">
+                  {inwardEntries.map((entry, index) => (
+                    <div key={entry.id} className="border border-green-300 rounded-lg p-6 bg-green-50">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-semibold text-green-800">Entry #{entry.entryNumber}</h4>
+                        <div className="text-sm text-green-600 font-medium">
+                          Vehicle: {entry.vehicleNumber} | Gatepass: {entry.getpassNumber}
+                        </div>
+                      </div>
+                      
+                      {/* Vehicle Information */}
+                      <div className="mb-4">
+                        <h5 className="text-md font-semibold mb-2 text-green-700">Vehicle Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Vehicle Number</Label>
+                            <Input value={entry.vehicleNumber || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Gatepass Number</Label>
+                            <Input value={entry.getpassNumber || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Weight Bridge Information */}
+                      <div className="mb-4">
+                        <h5 className="text-md font-semibold mb-2 text-green-700">Weight Bridge Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Weight Bridge</Label>
+                            <Input value={entry.weightBridge || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Weight Bridge Slip Number</Label>
+                            <Input value={entry.weightBridgeSlipNumber || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Weight Information */}
+                      <div className="mb-4">
+                        <h5 className="text-md font-semibold mb-2 text-green-700">Weight Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Gross Weight (MT)</Label>
+                            <Input value={entry.grossWeight || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Tare Weight (MT)</Label>
+                            <Input value={entry.tareWeight || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Net Weight (MT)</Label>
+                            <Input value={entry.netWeight || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Additional Information */}
+                      <div className="mb-4">
+                        <h5 className="text-md font-semibold mb-2 text-green-700">Additional Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Average Weight</Label>
+                            <Input value={entry.averageWeight || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Total Bags</Label>
+                            <Input value={entry.totalBags || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                          <div>
+                            <Label className="block font-medium mb-1 text-green-600">Total Quantity</Label>
+                            <Input value={entry.totalQuantity || '-'} readOnly className="bg-white border-green-300" />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Stack Information */}
+                      <div>
+                        <h5 className="text-md font-semibold mb-2 text-green-700">Stack Information</h5>
+                        <div className="space-y-3">
+                          {entry.stacks && Array.isArray(entry.stacks) && entry.stacks.length > 0 ? (
+                            entry.stacks.map((stack: any, stackIndex: number) => (
+                              <div key={stackIndex} className="border border-green-200 rounded-lg p-3 bg-white">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h6 className="font-medium text-green-700">Stack {stackIndex + 1}</h6>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <Label className="block font-medium mb-1 text-green-600">Stack Number</Label>
+                                    <Input value={stack.stackNumber || '-'} readOnly className="bg-gray-50 border-green-300" />
+                                  </div>
+                                  <div>
+                                    <Label className="block font-medium mb-1 text-green-600">Number of Bags</Label>
+                                    <Input value={stack.numberOfBags || '-'} readOnly className="bg-gray-50 border-green-300" />
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-4 text-green-600">
+                              No stack information available
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -4427,9 +5971,17 @@ export default function InwardPage() {
             )}
 
             {/* Inward Entry Section */}
+            {!isEditMode && (
             <div className="border-t pt-6">
               <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
                 <h3 className="text-lg font-semibold text-orange-700">Inward Entry</h3>
+                    {hasPendingEntries && (
+                      <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-medium">
+                        {inwardEntries.length} pending entr{inwardEntries.length === 1 ? 'y' : 'ies'}
+                      </div>
+                    )}
+                  </div>
                 <Button 
                   type="button" 
                   onClick={addNewInwardEntry}
@@ -4522,9 +6074,15 @@ export default function InwardPage() {
                   <Input 
                     type="number"
                     value={currentEntryForm.totalBags}
-                    onChange={e => setCurrentEntryForm(f => ({ ...f, totalBags: e.target.value }))}
+                    onChange={e => handleTotalBagsChange(e.target.value)}
                     placeholder="0"
+                    className={currentEntryForm.totalBags && !validateStackBags() ? 'border-red-500 bg-red-50' : ''}
                   />
+                  {currentEntryForm.totalBags && !validateStackBags() && (
+                    <p className="text-xs text-red-600 mt-1">
+                      ⚠️ Total bags must equal sum of stack bags. Update stack bags to match your entered total.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="block font-semibold mb-2">Total Quantity (MT) <span className="text-red-500">*</span></Label>
@@ -4550,7 +6108,12 @@ export default function InwardPage() {
               {/* Stack Information */}
               <div className="border-t pt-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h4 className="text-md font-semibold text-orange-600">Stack Entry</h4>
+                  <div>
+                    <h4 className="text-md font-semibold text-orange-600">Stack Entry</h4>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Add stacks and ensure the sum of stack bags matches your manually entered total bags
+                    </p>
+                  </div>
                   <Button 
                     type="button" 
                     onClick={addStack}
@@ -4697,6 +6260,93 @@ export default function InwardPage() {
                 </div>
               </div>
             </div>
+            )}
+
+            {/* Lab Parameters Section */}
+            {isEditMode && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-6 text-green-700">Lab Parameters</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <Label className="block font-semibold mb-2">Date of Sampling <span className="text-red-500">*</span></Label>
+                    <Input 
+                      type="date"
+                      value={currentEntryForm.dateOfSampling}
+                      onChange={e => setCurrentEntryForm(f => ({ ...f, dateOfSampling: e.target.value }))}
+                      className="bg-white border-green-300"
+                    />
+                  </div>
+                  <div>
+                    <Label className="block font-semibold mb-2">Date of Testing <span className="text-red-500">*</span></Label>
+                    <Input 
+                      type="date"
+                      value={currentEntryForm.dateOfTesting}
+                      onChange={e => setCurrentEntryForm(f => ({ ...f, dateOfTesting: e.target.value }))}
+                      disabled={!currentEntryForm.dateOfSampling}
+                      min={currentEntryForm.dateOfSampling}
+                      className="bg-white border-green-300"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="block font-semibold mb-2 text-green-600">Quality Parameters (from Commodity & Variety)</Label>
+                  <div className="overflow-x-auto max-w-lg">
+                    <table className="min-w-full border border-green-300 rounded-lg">
+                      <thead className="bg-green-100 text-green-600 font-bold">
+                        <tr>
+                          <th className="px-4 py-2 border-green-300 border">Parameter</th>
+                          <th className="px-4 py-2 border-green-300 border">Min %</th>
+                          <th className="px-4 py-2 border-green-300 border">Max %</th>
+                          <th className="px-4 py-2 border-green-300 border">Actual (%)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          // Find particulars for the current form's commodity and variety
+                          console.log('Quality Parameters table rendering with:', {
+                            formCommodity: form.commodity,
+                            formVariety: form.varietyName,
+                            commoditiesCount: commodities.length
+                          });
+                          
+                          const commodity = commodities.find((c: any) => c.commodityName === form.commodity);
+                          const variety = commodity?.varieties?.find((v: any) => v.varietyName === form.varietyName);
+                          const particulars = variety?.particulars || [];
+                          
+                          console.log('Quality Parameters found:', {
+                            commodity: commodity?.commodityName,
+                            variety: variety?.varietyName,
+                            particularsCount: particulars.length,
+                            particulars: particulars
+                          });
+                          
+                          return particulars.length > 0 ? (
+                            particulars.map((p: any, idx: number) => (
+                          <tr key={idx} className="text-green-800">
+                            <td className="px-4 py-2 border-green-300 border">{p.name}</td>
+                            <td className="px-4 py-2 border-green-300 border">{p.minPercentage}</td>
+                            <td className="px-4 py-2 border-green-300 border">{p.maxPercentage}</td>
+                            <td className="px-4 py-2 border-green-300 border">
+                              <Input
+                                type="number"
+                                value={currentEntryForm.labResults?.[idx] || ''}
+                                onChange={(e) => handleLabResultChange(idx, e.target.value)}
+                                className="w-24 bg-white border border-green-300 text-center"
+                                placeholder="Enter value"
+                              />
+                            </td>
+                          </tr>
+                            ))
+                          ) : (
+                          <tr><td colSpan={4} className="text-center text-gray-400 py-2">No quality parameters found for this variety.</td></tr>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* File Attachment Section */}
             <div className="border-t pt-6">
@@ -5857,6 +7507,181 @@ export default function InwardPage() {
                   <Button onClick={handleCIRSave} color="primary">Save</Button>
                 )
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Expand Entries Modal */}
+      {showExpandModal && (
+        <Dialog open={showExpandModal} onOpenChange={setShowExpandModal}>
+          <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-green-700 text-xl">
+                Saved Inward Entries - {expandModalData?.inwardId}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6">
+              {/* Base Information */}
+              <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+                <h3 className="text-lg font-semibold mb-4 text-green-700">Base Information</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div>
+                    <Label className="block font-medium mb-1 text-green-600">Inward ID</Label>
+                    <Input value={expandModalData?.inwardId || 'Pending'} readOnly className="bg-white border-green-300 font-mono" />
+                  </div>
+                  <div>
+                    <Label className="block font-medium mb-1 text-green-600">Client</Label>
+                    <Input value={expandModalData?.client || '-'} readOnly className="bg-white border-green-300" />
+                  </div>
+                  <div>
+                    <Label className="block font-medium mb-1 text-green-600">Commodity</Label>
+                    <Input value={expandModalData?.commodity || '-'} readOnly className="bg-white border-green-300" />
+                  </div>
+                  <div>
+                    <Label className="block font-medium mb-1 text-green-600">Total Entries</Label>
+                    <Input value={expandModalData?.totalEntries || '0'} readOnly className="bg-white border-green-300" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Entries Display */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 text-green-700">Saved Inward Entries</h3>
+                {isExpandingEntries ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                    <span className="ml-2 text-green-600">Loading entries...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {expandModalData?.inwardEntries?.map((entry: any, index: number) => (
+                      <div key={entry.id || index} className="border border-green-300 rounded-lg p-6 bg-green-50">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-lg font-semibold text-green-800">Entry #{entry.entryNumber || index + 1}</h4>
+                          <div className="text-sm text-green-600 font-medium">
+                            Vehicle: {entry.vehicleNumber || '-'} | Gatepass: {entry.getpassNumber || '-'}
+                          </div>
+                        </div>
+                        
+                        {/* Inward ID */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Inward Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Inward ID</Label>
+                              <Input value={entry.inwardId || expandModalData?.inwardId || 'Pending'} readOnly className="bg-white border-green-300 font-mono" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Vehicle Information */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Vehicle Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Vehicle Number</Label>
+                              <Input value={entry.vehicleNumber || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Gatepass Number</Label>
+                              <Input value={entry.getpassNumber || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Weight Bridge Information */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Weight Bridge Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Weight Bridge</Label>
+                              <Input value={entry.weightBridge || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Weight Bridge Slip Number</Label>
+                              <Input value={entry.weightBridgeSlipNumber || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Weight Information */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Weight Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Gross Weight (MT)</Label>
+                              <Input value={entry.grossWeight || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Tare Weight (MT)</Label>
+                              <Input value={entry.tareWeight || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Net Weight (MT)</Label>
+                              <Input value={entry.netWeight || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Additional Weight Information */}
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Additional Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Average Weight</Label>
+                              <Input value={entry.averageWeight || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Total Bags</Label>
+                              <Input value={entry.totalBags || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                            <div>
+                              <Label className="block font-medium mb-1 text-green-600">Total Quantity</Label>
+                              <Input value={entry.totalQuantity || '-'} readOnly className="bg-white border-green-300" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Stack Information */}
+                        <div>
+                          <h5 className="text-md font-semibold mb-2 text-green-700">Stack Information</h5>
+                          <div className="space-y-3">
+                            {entry.stacks && Array.isArray(entry.stacks) && entry.stacks.length > 0 ? (
+                              entry.stacks.map((stack: any, stackIndex: number) => (
+                                <div key={stackIndex} className="border border-green-200 rounded-lg p-3 bg-white">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <h6 className="font-medium text-green-700">Stack {stackIndex + 1}</h6>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <Label className="block font-medium mb-1 text-green-600">Stack Number</Label>
+                                      <Input value={stack.stackNumber || '-'} readOnly className="bg-gray-50 border-green-300" />
+                                    </div>
+                                    <div>
+                                      <Label className="block font-medium mb-1 text-green-600">Number of Bags</Label>
+                                      <Input value={stack.numberOfBags || '-'} readOnly className="bg-gray-50 border-green-300" />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-center py-4 text-green-600">
+                                No stack information available
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end mt-6">
+              <Button onClick={() => setShowExpandModal(false)} variant="outline" className="border-green-300 text-green-700 hover:bg-green-50">
+                Close
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

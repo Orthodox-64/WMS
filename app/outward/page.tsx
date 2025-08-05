@@ -830,22 +830,22 @@ export default function OutwardPage() {
                                   return {
                                     stackNo: stack.stackNumber || `Stack-${index + 1}`,
                                     bags: '', // User will input this
-                                    quantity: '', // User will input this
+                                quantity: '', // User will input this
                                     inwardBags: parseInt(stack.numberOfBags) || 0
                                   };
                                 });
-                                
-                                setStackEntries(stackData);
+                              
+                              setStackEntries(stackData);
                                 console.log('Set stack entries:', stackData);
-                              } else {
+                            } else {
                                 console.log('No valid stacks found, using default');
-                                setStackEntries([{
-                                  stackNo: 'Stack-1',
-                                  bags: '',
-                                  quantity: '',
-                                  inwardBags: 0
-                                }]);
-                              }
+                              setStackEntries([{
+                                stackNo: 'Stack-1',
+                                bags: '',
+                                quantity: '',
+                                inwardBags: 0
+                              }]);
+                            }
                             } else {
                               console.log('=== NO INWARD DATA FOUND ===');
                               console.log('Could not find inward entry for SR/WR:', srwrNo);
