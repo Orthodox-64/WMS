@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Search, Download, Plus } from 'lucide-react';
+import { Search, Download, Plus, Eye } from 'lucide-react';
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
@@ -17,6 +17,59 @@ import { collection, getDocs, query, where, addDoc, updateDoc } from 'firebase/f
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
 import { DataTable } from '@/components/data-table';
+
+// Helper function to normalize status text for display
+const normalizeStatusText = (status: string) => {
+  const normalizedStatus = status?.toLowerCase().trim() || '';
+  
+  // Approved status
+  if (normalizedStatus === 'approved' || normalizedStatus === 'approve') {
+    return 'Approved';
+  }
+  
+  // Rejected status
+  if (normalizedStatus === 'rejected' || normalizedStatus === 'reject') {
+    return 'Rejected';
+  }
+  
+  // Resubmitted status  
+  if (normalizedStatus === 'resubmitted' || normalizedStatus === 'resubmit') {
+    return 'Resubmitted';
+  }
+  
+  // Pending status (keep as "Pending" - not past tense)
+  if (normalizedStatus === 'pending') {
+    return 'Pending';
+  }
+  
+  // Default - capitalize first letter for any other status
+  return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+};
+
+// Helper function to get status styling
+const getStatusStyling = (status: string) => {
+  const normalizedStatus = status?.toLowerCase().trim() || '';
+  
+  // Pending/inactive/closed - yellow background, black font
+  if (normalizedStatus === 'pending' || normalizedStatus === 'inactive' || normalizedStatus === 'closed') {
+    return 'bg-yellow-100 text-black px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Approve/activate/reactive - light green background, dark green font
+  if (normalizedStatus === 'approved' || normalizedStatus === 'activate' || normalizedStatus === 'reactivate' || 
+      normalizedStatus === 'approve' || normalizedStatus === 'reactive') {
+    return 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Resubmit/reject - baby pink background, red font
+  if (normalizedStatus === 'resubmit' || normalizedStatus === 'reject' || normalizedStatus === 'rejected' || 
+      normalizedStatus === 'resubmitted') {
+    return 'bg-pink-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Default styling for unknown status
+  return 'bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+};
 
 export default function DeliveryOrderPage() {
   const { user } = useAuth();
@@ -153,9 +206,24 @@ export default function DeliveryOrderPage() {
     { accessorKey: 'doQuantity', header: 'DO Quantity', cell: ({ row }: any) => <div>{row.original.doQuantity || ''}</div> },
     { accessorKey: 'balanceBags', header: 'Balance Bags', cell: ({ row }: any) => <div>{getBalanceBags(row.original)}</div> },
     { accessorKey: 'balanceQuantity', header: 'Balance Quantity', cell: ({ row }: any) => <div>{getBalanceQty(row.original)}</div> },
-    { accessorKey: 'doStatus', header: 'DO Status', cell: ({ row }: any) => (
-      <Button variant="link" className="text-blue-600 underline p-0" onClick={() => { setSelectedDO(row.original); setShowDODetails(true); }}>{row.original.doStatus || 'pending'}</Button>
-    ) },
+    { accessorKey: 'doStatus', header: 'DO Status', cell: ({ row }: any) => {
+      const status = row.original.doStatus || 'pending';
+      const statusClass = getStatusStyling(status);
+      
+      return (
+        <div className="flex items-center space-x-2 justify-center">
+          <span className={statusClass}>{status}</span>
+          <Button
+            onClick={() => { setSelectedDO(row.original); setShowDODetails(true); }}
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-green-600 hover:text-green-800 hover:bg-green-50"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+        </div>
+      );
+    }},
   ];
 
   // Placeholder handler for export
@@ -952,13 +1020,17 @@ export default function DeliveryOrderPage() {
                       <td className="px-2 py-1 border">{getBalanceBags(do_item)}</td>
                       <td className="px-2 py-1 border">{getBalanceQty(do_item)}</td>
                       <td className="px-2 py-1 border">
-                        <Button 
-                          variant="link" 
-                          className="text-blue-600 underline p-0" 
-                          onClick={() => { setSelectedDO(do_item); setShowDODetails(true); }}
-                        >
-                          {do_item.doStatus || 'pending'}
-                        </Button>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className={getStatusStyling(do_item.doStatus || 'pending')}>{normalizeStatusText(do_item.doStatus || 'pending')}</span>
+                          <Button
+                            onClick={() => { setSelectedDO(do_item); setShowDODetails(true); }}
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-green-600 hover:text-green-800 hover:bg-green-50"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                     {expandedRows[do_item.srwrNo] && groupedDOs[do_item.srwrNo] && groupedDOs[do_item.srwrNo].length > 0 && (
@@ -991,12 +1063,9 @@ export default function DeliveryOrderPage() {
                                       <td className="px-2 py-1 border text-center">{entry.balanceQuantity}</td>
                                       <td className="px-2 py-1 border text-center">
                                         <div className="flex items-center justify-center gap-2">
-                                          <span>{entry.doStatus || 'pending'}</span>
+                                          <span className={getStatusStyling(entry.doStatus || 'pending')}>{normalizeStatusText(entry.doStatus || 'pending')}</span>
                                           <Button variant="ghost" size="sm" className="p-1" title="View Details" onClick={() => { setSelectedDO(entry); setShowDODetails(true); }}>
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4 text-blue-600">
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12z" />
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
-                                            </svg>
+                                            <Eye className="h-4 w-4 text-green-600" />
                                           </Button>
                                         </div>
                                       </td>

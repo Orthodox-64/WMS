@@ -1141,6 +1141,10 @@ export default function WarehouseInspectionForm({
       'license': { label: 'License', elementId: 'license' },
       'licenseNumber': { label: 'License Number', elementId: 'licenseNumber' },
       'dateOfInspection': { label: 'Date of Inspection', elementId: 'dateOfInspection' },
+      'bankState': { label: 'Bank State', elementId: 'bankState' },
+      'bankBranch': { label: 'Bank Branch', elementId: 'bankBranch' },
+      'bankName': { label: 'Bank Name', elementId: 'bankName' },
+      'ifscCode': { label: 'IFSC Code', elementId: 'ifscCode' },
       'godownOwnership': { label: 'Godown Ownership', elementId: 'godownOwnership' },
       'nameOfClient': { label: 'Name of Client', elementId: 'nameOfClient' },
       'godownOwnerName': { label: 'Godown Owner Name', elementId: 'godownOwnerName' },
@@ -1316,6 +1320,26 @@ export default function WarehouseInspectionForm({
       if (!formData.temperatureMaintained) {
         missingFieldsRaw.push('temperatureMaintained');
         missingFields.push('temperature maintained');
+      }
+    }
+
+    // Special validation for CM type warehouses - must have bank details
+    if (formData.typeOfWarehouse === 'CM' || formData.typeOfWarehouse === 'cm' || formData.customWarehouseType?.toLowerCase() === 'cm') {
+      if (!formData.bankState) {
+        missingFieldsRaw.push('bankState');
+        missingFields.push('bank state');
+      }
+      if (!formData.bankBranch) {
+        missingFieldsRaw.push('bankBranch');
+        missingFields.push('bank branch');
+      }
+      if (!formData.bankName) {
+        missingFieldsRaw.push('bankName');
+        missingFields.push('bank name');
+      }
+      if (!formData.ifscCode) {
+        missingFieldsRaw.push('ifscCode');
+        missingFields.push('IFSC code');
       }
     }
 
@@ -2406,6 +2430,7 @@ export default function WarehouseInspectionForm({
                     <SelectItem value="silo" className="text-orange-600" style={{ color: '#ea580c' }}>Silo</SelectItem>
                     <SelectItem value="tank" className="text-orange-600" style={{ color: '#ea580c' }}>Tank</SelectItem>
                     <SelectItem value="factory premises" className="text-orange-600" style={{ color: '#ea580c' }}>Factory Premises</SelectItem>
+                    <SelectItem value="CM" className="text-orange-600" style={{ color: '#ea580c' }}>CM</SelectItem>
                     {customWarehouseTypes.map(type => (
                       <SelectItem key={type} value={type} style={{ color: '#ea580c' }}>{type}</SelectItem>
                     ))}
@@ -2512,6 +2537,11 @@ export default function WarehouseInspectionForm({
                 <div className="mb-6 p-4 border border-green-200 rounded-lg bg-green-50">
                   <Label className="text-sm font-medium text-green-700 mb-3 block">
                     {isViewMode ? "Bank Details for this Inspection:" : "Select Bank Details:"}
+                    {(formData.typeOfWarehouse === 'CM' || formData.typeOfWarehouse === 'cm' || formData.customWarehouseType?.toLowerCase() === 'cm') && (
+                      <span className="text-red-600 text-xs font-medium block mt-1">
+                        ⚠️ Bank details are mandatory for CM type warehouses
+                      </span>
+                    )}
                   </Label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -2520,11 +2550,9 @@ export default function WarehouseInspectionForm({
                         id="bankState"
                         value={formData.bankState || ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, bankState: e.target.value }))}
-                  className="text-orange-600"
                         readOnly={isFieldReadOnly('bankState')}
                         className={isFieldReadOnly('bankState') ? "bg-gray-50 text-orange-600" : "text-orange-600"}
-                        className="text-orange-600"
-                  required
+                        required
                       />
                     </div>
                     <div className="space-y-2">
@@ -2533,11 +2561,9 @@ export default function WarehouseInspectionForm({
                         id="bankBranch"
                         value={formData.bankBranch || ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, bankBranch: e.target.value }))}
-                  className="text-orange-600"
                         readOnly={isFieldReadOnly('bankBranch')}
                         className={isFieldReadOnly('bankBranch') ? "bg-gray-50 text-orange-600" : "text-orange-600"}
-                        className="text-orange-600"
-                  required
+                        required
                       />
                     </div>
                     <div className="space-y-2">
@@ -2546,11 +2572,9 @@ export default function WarehouseInspectionForm({
                         id="bankName"
                         value={formData.bankName || ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, bankName: e.target.value }))}
-                  className="text-orange-600"
                         readOnly={isFieldReadOnly('bankName')}
                         className={isFieldReadOnly('bankName') ? "bg-gray-50 text-orange-600" : "text-orange-600"}
-                        className="text-orange-600"
-                  required
+                        required
                       />
                     </div>
                     <div className="space-y-2">
@@ -2559,11 +2583,9 @@ export default function WarehouseInspectionForm({
                         id="ifscCode"
                         value={formData.ifscCode || ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, ifscCode: e.target.value }))}
-                  className="text-orange-600"
                         readOnly={isFieldReadOnly('ifscCode')}
                         className={isFieldReadOnly('ifscCode') ? "bg-gray-50 text-orange-600" : "text-orange-600"}
-                        className="text-orange-600"
-                  required
+                        required
                       />
                     </div>
                   </div>
@@ -2870,7 +2892,6 @@ export default function WarehouseInspectionForm({
                         </div>
                       </div>
                     </CardContent>
-          )}
                   </Card>
                 ))}
               </div>
@@ -5063,7 +5084,6 @@ export default function WarehouseInspectionForm({
                   value={formData.contactNumber}
                   onChange={(e) => setFormData(prev => ({ ...prev, contactNumber: e.target.value }))}
                   className="text-orange-600"
-                  className="text-orange-600"
                   required
                 />
               </div>
@@ -5074,7 +5094,6 @@ export default function WarehouseInspectionForm({
                   id="place"
                   value={formData.place}
                   onChange={(e) => setFormData(prev => ({ ...prev, place: e.target.value }))}
-                  className="text-orange-600"
                   className="text-orange-600"
                   required
                 />

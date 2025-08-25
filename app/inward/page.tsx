@@ -881,6 +881,77 @@ export default function InwardPage() {
     }
   }, []);
 
+  // Helper function to check if reservation has expired
+  const isReservationExpired = (reservationEnd: string) => {
+    if (!reservationEnd || reservationEnd === '' || reservationEnd === '-') return false;
+    
+    try {
+      const endDate = new Date(reservationEnd);
+      const today = new Date();
+      // Set time to start of day for accurate comparison
+      today.setHours(0, 0, 0, 0);
+      endDate.setHours(0, 0, 0, 0);
+      
+      return endDate < today;
+    } catch (error) {
+      console.error('Error parsing reservation end date:', error);
+      return false;
+    }
+  };
+
+  // Helper function to normalize status text for display
+  const normalizeStatusText = (status: string) => {
+    const normalizedStatus = status?.toLowerCase().trim() || '';
+    
+    // Approved status
+    if (normalizedStatus === 'approved' || normalizedStatus === 'approve') {
+      return 'Approved';
+    }
+    
+    // Rejected status
+    if (normalizedStatus === 'rejected' || normalizedStatus === 'reject') {
+      return 'Rejected';
+    }
+    
+    // Resubmitted status  
+    if (normalizedStatus === 'resubmitted' || normalizedStatus === 'resubmit') {
+      return 'Resubmitted';
+    }
+    
+    // Pending status (keep as "Pending" - not past tense)
+    if (normalizedStatus === 'pending') {
+      return 'Pending';
+    }
+    
+    // Default - capitalize first letter for any other status
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+  };
+
+  // Helper function to get status styling
+  const getStatusStyling = (status: string) => {
+    const normalizedStatus = status?.toLowerCase().trim() || '';
+    
+    // Pending/inactive/closed - yellow background, black font
+    if (normalizedStatus === 'pending' || normalizedStatus === 'inactive' || normalizedStatus === 'closed') {
+      return 'bg-yellow-100 text-black px-2 py-1 rounded-full text-xs font-medium inline-block';
+    }
+    
+    // Approve/activate/reactive - light green background, dark green font
+    if (normalizedStatus === 'approved' || normalizedStatus === 'activate' || normalizedStatus === 'reactivate' || 
+        normalizedStatus === 'approve' || normalizedStatus === 'reactive') {
+      return 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium inline-block';
+    }
+    
+    // Resubmit/reject - baby pink background, red font
+    if (normalizedStatus === 'resubmit' || normalizedStatus === 'reject' || normalizedStatus === 'rejected' || 
+        normalizedStatus === 'resubmitted') {
+      return 'bg-pink-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+    }
+    
+    // Default styling for unknown status
+    return 'bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  };
+
   // Form state
   const [baseForm, setBaseForm] = useState({
     state: '',
@@ -1058,28 +1129,43 @@ export default function InwardPage() {
           businessType: wh.businessType || ''
         }));
         
-        // Fetch reservation data for this warehouse
-        const warehouseReservation = reservations.find((r: any) => 
-          r.warehouse === form.warehouseName && 
-          r.state === form.state && 
-          r.branch === form.branch && 
-          r.location === form.location
-        );
-        
-        if (warehouseReservation) {
-          setBaseForm(f => ({
-            ...f,
-            billingStatus: warehouseReservation.billingStatus || '',
-            reservationRate: warehouseReservation.reservationRate || '',
-            reservationQty: warehouseReservation.reservationQty || '',
-            reservationStart: warehouseReservation.reservationStart || '',
-            reservationEnd: warehouseReservation.reservationEnd || '',
-            billingCycle: warehouseReservation.billingCycle || '',
-            billingType: warehouseReservation.billingType || '',
-            billingRate: warehouseReservation.billingRate || '',
-          }));
+        // Fetch reservation data for this warehouse only if it's not CM type
+        if (wh.businessType !== 'cm') {
+          const warehouseReservation = reservations.find((r: any) => 
+            r.warehouse === form.warehouseName && 
+            r.state === form.state && 
+            r.branch === form.branch && 
+            r.location === form.location
+          );
+          
+          if (warehouseReservation) {
+            setBaseForm(f => ({
+              ...f,
+              billingStatus: warehouseReservation.billingStatus || '',
+              reservationRate: warehouseReservation.reservationRate || '',
+              reservationQty: warehouseReservation.reservationQty || '',
+              reservationStart: warehouseReservation.reservationStart || '',
+              reservationEnd: warehouseReservation.reservationEnd || '',
+              billingCycle: warehouseReservation.billingCycle || '',
+              billingType: warehouseReservation.billingType || '',
+              billingRate: warehouseReservation.billingRate || '',
+            }));
+          } else {
+            // Clear reservation fields if no reservation found
+            setBaseForm(f => ({
+              ...f,
+              billingStatus: '',
+              reservationRate: '',
+              reservationQty: '',
+              reservationStart: '',
+              reservationEnd: '',
+              billingCycle: '',
+              billingType: '',
+              billingRate: '',
+            }));
+          }
         } else {
-          // Clear reservation fields if no reservation found
+          // Clear reservation fields for CM type warehouses
           setBaseForm(f => ({
             ...f,
             billingStatus: '',
@@ -2590,13 +2676,12 @@ export default function InwardPage() {
       header: 'CIR Status',
       cell: ({ row }: any) => {
         const cirStatus = row.original.cirStatus || 'Pending';
-        let color = 'text-blue-600 font-semibold';
-        if (cirStatus === 'Approved') color = 'text-green-600 font-semibold';
-        else if (cirStatus === 'Rejected') color = 'text-red-600 font-semibold';
-        else if (cirStatus === 'Resubmitted') color = 'text-yellow-600 font-semibold';
+        const normalizedStatusText = normalizeStatusText(cirStatus);
+        const statusClass = getStatusStyling(cirStatus);
+        
         return (
           <div className="flex items-center space-x-2 justify-center">
-            <span className={color}>{cirStatus}</span>
+            <span className={statusClass}>{normalizedStatusText}</span>
             <Button
               onClick={() => handleCIRView(row.original)}
               size="sm"
@@ -2616,21 +2701,18 @@ export default function InwardPage() {
         const cirStatus = row.original.cirStatus || 'Pending';
         
         // If CIR is not approved, show "-"
-        if (cirStatus !== 'Approved') {
+        if (normalizeStatusText(cirStatus) !== 'Approved') {
           return <span>-</span>;
         }
         
         // If CIR is approved, show the SR/WR status
         const status = row.original.status || 'pending';
-        let color = 'text-gray-600';
-        if (status === 'approve') color = 'text-green-600 font-semibold';
-        else if (status === 'rejected') color = 'text-red-600 font-semibold';
-        else if (status === 'resubmited') color = 'text-yellow-600 font-semibold';
-        else if (status === 'pending') color = 'text-blue-600 font-semibold';
+        const normalizedStatusText = normalizeStatusText(status);
+        const statusClass = getStatusStyling(status);
         
         return (
           <div className="flex items-center space-x-2 justify-center">
-            <span className={color}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
+            <span className={statusClass}>{normalizedStatusText}</span>
             <Button
               onClick={() => handleViewSR(row.original)}
               size="sm"
@@ -3541,7 +3623,7 @@ export default function InwardPage() {
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'approve', srGenerationDate: todayISO, hologramNumber, remarks });
+        await updateDoc(docRef, { status: 'approved', srGenerationDate: todayISO, hologramNumber, remarks });
       }
     } catch (error) {
       console.error('Error updating status to approve:', error);
@@ -3984,7 +4066,7 @@ export default function InwardPage() {
   </div>
   // ...
   // Render the print area visibly if debug is on, otherwise keep it hidden as before:
-  {(isFormApproved || selectedRowForSR?.status === 'approve') && (
+  {(isFormApproved || selectedRowForSR?.status === 'approved') && (
     <div style={showPrintDebug ? { position: 'static', margin: '32px 0', zIndex: 1000, background: '#fff' } : { position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
       <div ref={printRef}>
         <StorageReceipt
@@ -4436,6 +4518,25 @@ export default function InwardPage() {
                   <div>
                     <Label className="block font-semibold mb-1">Reservation End Date</Label>
                     <Input value={cirModalData?.reservationEnd || ''} readOnly disabled />
+                  </div>
+                </div>
+              )}
+
+              {/* Expired Reservation Alert in CIR Modal */}
+              {cirModalData?.billingStatus === 'reservation' && isReservationExpired(cirModalData?.reservationEnd || '') && (
+                <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800">Reservation Expired</h3>
+                      <p className="mt-1 text-sm text-red-700">
+                        The reservation end date ({cirModalData?.reservationEnd}) has expired. Please update the reservation details in the <strong>Reservation & Billing</strong> section.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -5344,6 +5445,25 @@ export default function InwardPage() {
                   </div>
                 )}
 
+                {/* Expired Reservation Alert */}
+                {form.billingStatus === 'reservation' && isReservationExpired(form.reservationEnd) && (
+                  <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-red-800">Reservation Expired</h3>
+                        <p className="mt-1 text-sm text-red-700">
+                          The reservation end date ({form.reservationEnd}) has expired. Please update the reservation details in the <strong>Reservation & Billing</strong> section to continue with inward operations.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {form.billingStatus === 'post-reservation' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -5363,7 +5483,7 @@ export default function InwardPage() {
               </div>
             )}
 
-            {form.warehouseName && !form.billingStatus && (
+            {form.warehouseName && !form.billingStatus && form.businessType !== 'cm' && (
               <div className="border-t pt-4">
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-yellow-800 text-sm">
@@ -6849,7 +6969,7 @@ export default function InwardPage() {
               {/* Approve/Reject/Resubmit Buttons and Print Button */}
               {(() => {
                 const status = selectedRowForSR?.status;
-                if (isFormApproved || status === 'approve') {
+                if (isFormApproved || status === 'approved') {
                   return (
                     <div className="flex justify-end mt-4">
                       <Button
@@ -6892,7 +7012,7 @@ export default function InwardPage() {
                 }
               })()}
               {/* Hidden printRef for PDF export - New Layout */}
-              {(isFormApproved || selectedRowForSR?.status === 'approve') && (
+              {(isFormApproved || selectedRowForSR?.status === 'approved') && (
                 <div style={showPrintDebug ? { position: 'static', margin: '32px 0', zIndex: 1000, background: '#fff' } : { position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
                   <div ref={printableReceiptRef}>
                     <PrintableWarehouseReceipt
@@ -7184,6 +7304,25 @@ export default function InwardPage() {
                       <div>
                         <Label className="block font-semibold mb-1">Reservation End Date</Label>
                         <Input value={cirModalData?.reservationEnd || ''} readOnly disabled />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expired Reservation Alert in Second CIR Modal */}
+                  {cirModalData?.billingStatus === 'reservation' && isReservationExpired(cirModalData?.reservationEnd || '') && (
+                    <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-red-800">Reservation Expired</h3>
+                          <p className="mt-1 text-sm text-red-700">
+                            The reservation end date ({cirModalData?.reservationEnd}) has expired. Please update the reservation details in the <strong>Reservation & Billing</strong> section.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}

@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, Download, Plus, AlertTriangle, Trash2, PlusCircle } from 'lucide-react';
+import { Search, Download, Plus, AlertTriangle, Trash2, PlusCircle, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -15,6 +15,59 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import PrintableOutwardReceipt from '@/components/PrintableOutwardReceipt';
+
+// Helper function to normalize status text for display
+const normalizeStatusText = (status: string) => {
+  const normalizedStatus = status?.toLowerCase().trim() || '';
+  
+  // Approved status
+  if (normalizedStatus === 'approved' || normalizedStatus === 'approve') {
+    return 'Approved';
+  }
+  
+  // Rejected status
+  if (normalizedStatus === 'rejected' || normalizedStatus === 'reject') {
+    return 'Rejected';
+  }
+  
+  // Resubmitted status  
+  if (normalizedStatus === 'resubmitted' || normalizedStatus === 'resubmit') {
+    return 'Resubmitted';
+  }
+  
+  // Pending status (keep as "Pending" - not past tense)
+  if (normalizedStatus === 'pending') {
+    return 'Pending';
+  }
+  
+  // Default - capitalize first letter for any other status
+  return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+};
+
+// Helper function to get status styling
+const getStatusStyling = (status: string) => {
+  const normalizedStatus = status?.toLowerCase().trim() || '';
+  
+  // Pending/inactive/closed - yellow background, black font
+  if (normalizedStatus === 'pending' || normalizedStatus === 'inactive' || normalizedStatus === 'closed') {
+    return 'bg-yellow-100 text-black px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Approve/activate/reactive - light green background, dark green font
+  if (normalizedStatus === 'approved' || normalizedStatus === 'activate' || normalizedStatus === 'reactivate' || 
+      normalizedStatus === 'approve' || normalizedStatus === 'reactive') {
+    return 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Resubmit/reject - baby pink background, red font
+  if (normalizedStatus === 'resubmit' || normalizedStatus === 'reject' || normalizedStatus === 'rejected' || 
+      normalizedStatus === 'resubmitted') {
+    return 'bg-pink-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Default styling for unknown status
+  return 'bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+};
 
 export default function OutwardPage() {
   const { user } = useAuth();
@@ -327,16 +380,23 @@ export default function OutwardPage() {
                         <td className="px-3 py-2 border">{getBalanceBags(outward)}</td>
                         <td className="px-3 py-2 border">{getBalanceQty(outward)}</td>
                         <td className="px-3 py-2 border">
-                          <Button 
-                            variant="link" 
-                            className="text-blue-600 underline p-0" 
-                            onClick={() => { 
-                              setSelectedOutward(outward); 
-                              setShowOutwardDetails(true); 
-                            }}
-                          >
-                            {outward.outwardStatus || 'pending'}
-                          </Button>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className={getStatusStyling(outward.outwardStatus || 'pending')}>
+                              {normalizeStatusText(outward.outwardStatus || 'pending')}
+                            </span>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="p-1" 
+                              title="View Details" 
+                              onClick={() => { 
+                                setSelectedOutward(outward); 
+                                setShowOutwardDetails(true); 
+                              }}
+                            >
+                              <Eye className="h-4 w-4 text-green-600" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                       
@@ -375,7 +435,9 @@ export default function OutwardPage() {
                                           <td className="px-2 py-1 border text-center">{getBalanceQty(entry)}</td>
                                           <td className="px-2 py-1 border text-center">
                                             <div className="flex items-center justify-center gap-2">
-                                              <span>{entry.outwardStatus || 'pending'}</span>
+                                              <span className={getStatusStyling(entry.outwardStatus || 'pending')}>
+                                                {normalizeStatusText(entry.outwardStatus || 'pending')}
+                                              </span>
                                               <Button 
                                                 variant="ghost" 
                                                 size="sm" 
@@ -386,10 +448,7 @@ export default function OutwardPage() {
                                                   setShowOutwardDetails(true); 
                                                 }}
                                               >
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4 text-blue-600">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12z" />
-                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
-                                                </svg>
+                                                <Eye className="h-4 w-4 text-green-600" />
                                               </Button>
                                             </div>
                                           </td>
@@ -1361,146 +1420,303 @@ export default function OutwardPage() {
       
       {/* Outward Details Dialog */}
       <Dialog open={showOutwardDetails} onOpenChange={setShowOutwardDetails}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl w-full p-2">
           <DialogHeader>
-            <DialogTitle className="text-xl text-center text-blue-600 font-bold">
-              Outward Entry Details
-              {selectedOutward && (
-                <div className="mt-1 text-sm font-normal text-gray-600">
-                  {selectedOutward.outwardCode} | {selectedOutward.srwrNo} | {selectedOutward.doCode}
+            <DialogTitle>Outward Details</DialogTitle>
+          </DialogHeader>
+          {selectedOutward && (
+            <form id="outward-details-form" className="max-h-[80vh] overflow-y-auto p-2">
+              {/* CIR-style header */}
+              <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#e67c1f', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>Outward Details</div>
+              </div>
+              {/* Two-column grid for fields */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '0 32px',
+                  marginTop: 32,
+                }}
+              >
+                {/* All fields except attachments */}
+                {[
+                  { label: 'Outward Code', value: selectedOutward.outwardCode },
+                  { label: 'Status', value: normalizeStatusText(selectedOutward.outwardStatus || 'pending') },
+                  { label: 'SR/WR No.', value: selectedOutward.srwrNo },
+                  { label: 'DO Code', value: selectedOutward.doCode },
+                  { label: 'CAD Number', value: selectedOutward.cadNumber },
+                  { label: 'State', value: selectedOutward.state },
+                  { label: 'Branch', value: selectedOutward.branch },
+                  { label: 'Location', value: selectedOutward.location },
+                  { label: 'Warehouse Name', value: selectedOutward.warehouseName },
+                  { label: 'Warehouse Code', value: selectedOutward.warehouseCode },
+                  { label: 'Warehouse Address', value: selectedOutward.warehouseAddress },
+                  { label: 'Client Name', value: selectedOutward.client },
+                  { label: 'Client Code', value: selectedOutward.clientCode },
+                  { label: 'Client Address', value: selectedOutward.clientAddress },
+                  { label: 'DO Bags', value: selectedOutward.doBags },
+                  { label: 'DO Quantity (MT)', value: selectedOutward.doQuantity },
+                  { label: 'Outward Bags', value: selectedOutward.outwardBags },
+                  { label: 'Outward Quantity (MT)', value: selectedOutward.outwardQuantity },
+                  { label: 'Balance Bags', value: selectedOutward.balanceBags },
+                  { label: 'Balance Quantity (MT)', value: selectedOutward.balanceQuantity },
+                  { label: 'Vehicle Number', value: selectedOutward.vehicleNumber },
+                  { label: 'Gate Pass', value: selectedOutward.gatepass },
+                  { label: 'Weighbridge Name', value: selectedOutward.weighbridgeName },
+                  { label: 'Weighbridge Slip No.', value: selectedOutward.weighbridgeSlipNo },
+                  { label: 'Remark', value: selectedOutward.remark },
+                ].map((f, idx) => (
+                  <div key={idx} style={{ marginBottom: 12 }}>
+                    <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>{f.label}</div>
+                    <div style={{ fontWeight: 500, color: '#222', fontSize: 16, marginBottom: 8, background: '#f6fef9', borderRadius: 8, padding: '6px 12px', border: '1px solid #e0f2e9' }}>{f.value ?? '-'}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Stack Entries */}
+              {selectedOutward.stackEntries && selectedOutward.stackEntries.length > 0 && (
+                <div style={{ marginTop: 24, gridColumn: '1 / -1' }}>
+                  <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Stack Details</div>
+                  <div style={{ background: '#f6fef9', borderRadius: 8, padding: '12px', border: '1px solid #e0f2e9' }}>
+                    {selectedOutward.stackEntries.map((stack: any, idx: number) => (
+                      <div key={idx} style={{ marginBottom: 8 }}>
+                        <strong>Stack {stack.stackNo}:</strong> {stack.bags} bags, {stack.quantity} MT
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-            </DialogTitle>
-          </DialogHeader>
-          
-          {selectedOutward && (
-            <>
-              <div className="mb-4">
-                <div className="bg-blue-50 rounded p-3 mb-4 flex flex-wrap justify-between items-center">
-                  <div className="text-sm">
-                    <span className="font-medium">Status: </span>
-                    <span className={`inline-block px-2 py-1 rounded ${
-                      selectedOutward.outwardStatus === 'approved' ? 'bg-green-100 text-green-800' :
-                      selectedOutward.outwardStatus === 'rejected' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {(selectedOutward.outwardStatus || 'Pending').toUpperCase()}
-                    </span>
+              {/* Attachments row below grid */}
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Attachment</div>
+                {Array.isArray(selectedOutward.attachmentUrls) && selectedOutward.attachmentUrls.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {selectedOutward.attachmentUrls.map((url: string, idx: number) => {
+                      const ext = url.split('.').pop()?.toLowerCase();
+                      let label = 'View File';
+                      if (ext === 'pdf') label = 'View PDF';
+                      else if (ext === 'docx') label = 'View DOCX';
+                      else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
+                      return (
+                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db', textDecoration: 'underline', fontSize: 15 }}>
+                          {label} {idx + 1}
+                        </a>
+                      );
+                    })}
                   </div>
-                  
-                  <div className="flex space-x-2">
-                    {/* Approval buttons for manager/admin only */}
-                    {(userRole === 'checker' || userRole === 'admin') && 
-                      selectedOutward.outwardStatus !== 'approved' && 
-                      selectedOutward.outwardStatus !== 'rejected' && (
-                      <>
-                        <Button 
-                          onClick={async () => {
-                            setOutwardStatusUpdating(true);
-                            try {
-                              const outwardRef = doc(db, 'outwards', selectedOutward.id);
-                              await updateDoc(outwardRef, {
-                                outwardStatus: 'approved',
-                                statusUpdatedBy: userRole,
-                                statusUpdatedAt: new Date().toISOString()
-                              });
-                              setShowOutwardDetails(false);
-                              
-                              // Reload list after status change
-                              const outwardCol = collection(db, 'outwards');
-                              const snap = await getDocs(outwardCol);
-                              const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                              setOutwardEntries(data);
-                              setOutwardStatusUpdating(false);
-                            } catch (error) {
-                              console.error('Error updating outward status:', error);
-                              setOutwardStatusUpdating(false);
-                            }
-                          }}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                          disabled={outwardStatusUpdating}
-                        >
-                          Approve
-                        </Button>
-                        <Button 
-                          onClick={async () => {
-                            const remarkInput = prompt('Enter rejection reason:');
-                            if (!remarkInput) return;
-                            
-                            setOutwardStatusUpdating(true);
-                            try {
-                              const outwardRef = doc(db, 'outwards', selectedOutward.id);
-                              await updateDoc(outwardRef, {
-                                outwardStatus: 'rejected',
-                                statusRemark: remarkInput,
-                                statusUpdatedBy: userRole,
-                                statusUpdatedAt: new Date().toISOString()
-                              });
-                              setShowOutwardDetails(false);
-                              
-                              // Reload list after status change
-                              const outwardCol = collection(db, 'outwards');
-                              const snap = await getDocs(outwardCol);
-                              const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                              setOutwardEntries(data);
-                              setOutwardStatusUpdating(false);
-                            } catch (error) {
-                              console.error('Error updating outward status:', error);
-                              setOutwardStatusUpdating(false);
-                            }
-                          }}
-                          className="bg-red-600 hover:bg-red-700 text-white"
-                          disabled={outwardStatusUpdating}
-                        >
-                          Reject
-                        </Button>
-                      </>
-                    )}
-                    
-                    {/* Print button */}
+                ) : (
+                  <span style={{ color: '#888', fontSize: 15 }}>No file</span>
+                )}
+              </div>
+              {/* Action buttons at bottom right */}
+              <div className="flex justify-end gap-4 mt-6 pt-4 border-t border-gray-200">
+                {/* Show all buttons when pending or resubmitted */}
+                {(selectedOutward.outwardStatus === 'pending' || selectedOutward.outwardStatus === 'resubmitted') && (userRole === 'checker' || userRole === 'admin') && (
+                  <>
                     <Button 
-                      onClick={() => {
-                        // Open printable view in new window
-                        const printWindow = window.open('', '_blank');
-                        if (printWindow) {
-                          printWindow.document.write(`
-                            <html>
-                              <head>
-                                <title>Outward Receipt - ${selectedOutward.outwardCode}</title>
-                                <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-                              </head>
-                              <body>
-                                <div id="print-content">
-                                  ${document.getElementById('outward-receipt-content')?.innerHTML || ''}
-                                </div>
-                                <script>
-                                  window.onload = function() { window.print(); }
-                                </script>
-                              </body>
-                            </html>
-                          `);
-                          printWindow.document.close();
+                      onClick={async () => {
+                        setOutwardStatusUpdating(true);
+                        try {
+                          const outwardRef = doc(db, 'outwards', selectedOutward.id);
+                          await updateDoc(outwardRef, {
+                            outwardStatus: 'approved',
+                            statusUpdatedBy: userRole,
+                            statusUpdatedAt: new Date().toISOString()
+                          });
+                          setShowOutwardDetails(false);
+                          
+                          // Reload list after status change
+                          const outwardCol = collection(db, 'outwards');
+                          const snap = await getDocs(outwardCol);
+                          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                          setOutwardEntries(data);
+                          setOutwardStatusUpdating(false);
+                        } catch (error) {
+                          console.error('Error updating outward status:', error);
+                          setOutwardStatusUpdating(false);
                         }
                       }}
-                      variant="outline"
-                      className="border-blue-300 text-blue-600"
+                      className="bg-green-600 hover:bg-green-700 text-white px-6"
+                      disabled={outwardStatusUpdating}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2">
-                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                        <rect x="6" y="14" width="12" height="8"></rect>
-                      </svg>
-                      Print
+                      Approve
                     </Button>
-                  </div>
-                </div>
+                    <Button 
+                      onClick={async () => {
+                        const remarkInput = prompt('Enter rejection reason:');
+                        if (!remarkInput) return;
+                        
+                        setOutwardStatusUpdating(true);
+                        try {
+                          const outwardRef = doc(db, 'outwards', selectedOutward.id);
+                          await updateDoc(outwardRef, {
+                            outwardStatus: 'rejected',
+                            statusRemark: remarkInput,
+                            statusUpdatedBy: userRole,
+                            statusUpdatedAt: new Date().toISOString()
+                          });
+                          setShowOutwardDetails(false);
+                          
+                          // Reload list after status change
+                          const outwardCol = collection(db, 'outwards');
+                          const snap = await getDocs(outwardCol);
+                          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                          setOutwardEntries(data);
+                          setOutwardStatusUpdating(false);
+                        } catch (error) {
+                          console.error('Error updating outward status:', error);
+                          setOutwardStatusUpdating(false);
+                        }
+                      }}
+                      className="bg-red-600 hover:bg-red-700 text-white px-6"
+                      disabled={outwardStatusUpdating}
+                    >
+                      Reject
+                    </Button>
+                    <Button 
+                      onClick={async () => {
+                        setOutwardStatusUpdating(true);
+                        try {
+                          const outwardRef = doc(db, 'outwards', selectedOutward.id);
+                          await updateDoc(outwardRef, {
+                            outwardStatus: 'resubmitted',
+                            statusUpdatedBy: userRole,
+                            statusUpdatedAt: new Date().toISOString()
+                          });
+                          setShowOutwardDetails(false);
+                          
+                          // Reload list after status change
+                          const outwardCol = collection(db, 'outwards');
+                          const snap = await getDocs(outwardCol);
+                          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                          setOutwardEntries(data);
+                          setOutwardStatusUpdating(false);
+                        } catch (error) {
+                          console.error('Error updating outward status:', error);
+                          setOutwardStatusUpdating(false);
+                        }
+                      }}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-6"
+                      disabled={outwardStatusUpdating}
+                    >
+                      Resubmit
+                    </Button>
+                  </>
+                )}
                 
-                {/* Printable receipt content */}
-                <div id="outward-receipt-content">
-                  <PrintableOutwardReceipt outwardData={selectedOutward} />
-                </div>
+                {/* Generate Receipt button - only show when approved */}
+                {selectedOutward.outwardStatus === 'approved' && (
+                  <Button 
+                    type="button" 
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                    onClick={async () => {
+                    try {
+                      // Import required libraries
+                      const html2canvas = (await import('html2canvas')).default;
+                      const jsPDF = (await import('jspdf')).default;
+                      const ReactDOMClient = (await import('react-dom/client')).default;
+                      
+                      // Import PrintableOutwardReceipt component dynamically to avoid SSR issues
+                      const PrintableOutwardReceipt = (await import('../../components/PrintableOutwardReceipt')).default;
+                      
+                      // Create a proper React element with the receipt component
+                      const receiptElement = document.createElement('div');
+                      receiptElement.id = "temp-pdf-container";
+                      receiptElement.style.width = '100%';
+                      receiptElement.style.position = 'absolute';
+                      receiptElement.style.top = '-9999px';
+                      receiptElement.style.left = '-9999px';
+                      receiptElement.style.zIndex = '-1000';
+                      receiptElement.style.overflow = 'hidden';
+                      document.body.appendChild(receiptElement);
+                      
+                      // Create root and render component
+                      const root = ReactDOMClient.createRoot(receiptElement);
+                      root.render(<PrintableOutwardReceipt outwardData={selectedOutward} />);
+                      
+                      // Add a small delay for rendering
+                      await new Promise(resolve => setTimeout(resolve, 500));
+                      
+                      // Get the rendered receipt
+                      const printableReceipt = document.getElementById('printable-outward-receipt');
+                      if (!printableReceipt) {
+                        throw new Error("Could not find printable receipt element");
+                      }
+                      
+                      // Create canvas with higher scale for better quality
+                      const canvas = await html2canvas(printableReceipt, { 
+                        scale: 2, 
+                        useCORS: true, 
+                        backgroundColor: '#fff',
+                        logging: false,
+                        allowTaint: true
+                      });
+                      
+                      // Create PDF with proper dimensions
+                      const pdf = new jsPDF('p', 'mm', 'a4');
+                      const pageWidth = pdf.internal.pageSize.getWidth();
+                      const pageHeight = pdf.internal.pageSize.getHeight();
+                      
+                      // Calculate image dimensions to fit page width
+                      const imgWidth = pageWidth;
+                      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                      
+                      // Split across multiple pages if needed
+                      let heightLeft = imgHeight;
+                      let position = 0;
+                      let pageCount = 0;
+                      
+                      while (heightLeft > 0) {
+                        // Add image to page
+                        pdf.addImage(
+                          canvas.toDataURL('image/jpeg', 1.0),
+                          'JPEG',
+                          0,
+                          position,
+                          imgWidth,
+                          imgHeight,
+                          `page-${pageCount}`,
+                          'FAST'
+                        );
+                        
+                        heightLeft -= pageHeight;
+                        position -= pageHeight;
+                        
+                        // Add new page if there's more content
+                        if (heightLeft > 0) {
+                          pdf.addPage();
+                          pageCount++;
+                        }
+                      }
+                      
+                      // Save PDF
+                      pdf.save(`outward-receipt-${selectedOutward.outwardCode || ''}.pdf`);
+                      
+                      // Clean up - remove the temporary element
+                      const tempContainer = document.getElementById("temp-pdf-container");
+                      if (tempContainer) {
+                        document.body.removeChild(tempContainer);
+                      }
+                      
+                    } catch (error) {
+                      console.error("PDF Generation Error:", error);
+                      alert("Failed to generate PDF. Please try again.");
+                    }
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                  </svg>
+                  Generate Receipt
+                </Button>
+                )}
               </div>
-            </>
+            </form>
           )}
           
           <DialogFooter>

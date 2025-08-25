@@ -1,172 +1,145 @@
 import React from 'react';
 
-interface PrintableOutwardReceiptProps {
-  outwardData: {
-    outwardCode?: string;
-    srwrNo?: string;
-    doCode?: string;
-    client?: string;
-    commodity?: string;
-    warehouseName?: string;
-    warehouseCode?: string;
-    state?: string;
-    district?: string;
-    branch?: string;
-    outwardDate?: string;
-    vehicleNumber?: string;
-    gatepass?: string;
-    weighbridgeName?: string;
-    weighbridgeSlipNo?: string;
-    outwardBags?: number;
-    outwardQuantity?: number;
-    stacks?: Array<{
-      stackNo: string;
-      bags: number;
-      quantity: number;
-    }>;
-    attachmentUrls?: string[];
-    balanceBags?: number;
-    balanceQuantity?: number;
-    status?: string;
-    remarks?: string;
+export default function PrintableOutwardReceipt({ outwardData }: { outwardData: any }) {
+  // CIR-style layout
+  const labelStyle = {
+    fontWeight: 700,
+    color: '#1aad4b',
+    fontSize: 16,
+    marginBottom: 4,
+    marginTop: 12,
+    letterSpacing: 0.2,
   };
-}
+  const valueStyle = {
+    fontWeight: 500,
+    color: '#222',
+    fontSize: 16,
+    marginBottom: 8,
+    background: '#f6fef9',
+    borderRadius: 8,
+    padding: '6px 12px',
+    border: '1px solid #e0f2e9',
+  };
 
-const PrintableOutwardReceipt: React.FC<PrintableOutwardReceiptProps> = ({ outwardData }) => {
+  // All fields in two-column grid
+  const fields = [
+    { label: 'Outward Code', value: outwardData.outwardCode },
+    { label: 'Status', value: outwardData.outwardStatus || 'pending' },
+    { label: 'SR/WR No.', value: outwardData.srwrNo },
+    { label: 'DO Code', value: outwardData.doCode },
+    { label: 'CAD Number', value: outwardData.cadNumber },
+    { label: 'State', value: outwardData.state },
+    { label: 'Branch', value: outwardData.branch },
+    { label: 'Location', value: outwardData.location },
+    { label: 'Warehouse Name', value: outwardData.warehouseName },
+    { label: 'Warehouse Code', value: outwardData.warehouseCode },
+    { label: 'Warehouse Address', value: outwardData.warehouseAddress },
+    { label: 'Client Name', value: outwardData.client },
+    { label: 'Client Code', value: outwardData.clientCode },
+    { label: 'Client Address', value: outwardData.clientAddress },
+    { label: 'DO Bags', value: outwardData.doBags },
+    { label: 'DO Quantity (MT)', value: outwardData.doQuantity },
+    { label: 'Outward Bags', value: outwardData.outwardBags },
+    { label: 'Outward Quantity (MT)', value: outwardData.outwardQuantity },
+    { label: 'Vehicle Number', value: outwardData.vehicleNumber },
+    { label: 'Gate Pass', value: outwardData.gatepass },
+    { label: 'Weighbridge Name', value: outwardData.weighbridgeName },
+    { label: 'Weighbridge Slip No', value: outwardData.weighbridgeSlipNo },
+    { label: 'Balance Bags', value: outwardData.balanceBags },
+    { label: 'Balance Quantity (MT)', value: outwardData.balanceQuantity },
+    { label: 'Remark', value: outwardData.remark },
+  ];
+
   return (
-    <div className="min-h-screen bg-white p-8 print:p-4 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="border-b-2 border-gray-800 pb-4 mb-4">
-        <div className="flex justify-between items-center">
-          <div className="w-1/4">
-            <img src="/AGlogo.webp" alt="Company Logo" className="max-h-20 print:max-h-16" />
+    <div
+      style={{
+        width: 900,
+        margin: '24px auto',
+        background: '#fff',
+        borderRadius: 16,
+        fontFamily: 'Arial, sans-serif',
+        color: '#222',
+        boxShadow: '0 4px 24px #e0f2e9',
+        padding: 36,
+      }}
+      id="printable-outward-receipt"
+    >
+      {/* Header with logo and address */}
+      <div style={{ textAlign: 'center', marginBottom: 8 }}>
+        <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
+        <div style={{ fontSize: 28, fontWeight: 700, color: '#e67c1f', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+        <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>Outward Details</div>
+      </div>
+      
+      {/* Two-column grid for fields */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '0 32px',
+          marginTop: 32,
+        }}
+      >
+        {fields.map((f, idx) => (
+          <div key={idx} style={{ marginBottom: 12 }}>
+            <div style={labelStyle}>{f.label}</div>
+            <div style={valueStyle}>{f.value ?? '-'}</div>
           </div>
-          <div className="w-1/2 text-center">
-            <h1 className="text-3xl print:text-2xl font-bold uppercase">Outward Receipt</h1>
-            <p className="text-lg print:text-sm">AG Warehousing & Storage Solution Pvt. Ltd.</p>
-            <p className="text-sm print:text-xs">GSTIN: 12ABCDE6789F1Z0</p>
-          </div>
-          <div className="w-1/4 text-right">
-            <p className="text-sm print:text-xs font-semibold">Receipt No: {outwardData.outwardCode}</p>
-            <p className="text-sm print:text-xs">Date: {outwardData.outwardDate || new Date().toLocaleDateString('en-GB')}</p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Main Content */}
-      <div className="mb-8">
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold border-b">Client Information</h3>
-              <p className="mt-1"><span className="font-semibold">Client Name:</span> {outwardData.client}</p>
-              <p><span className="font-semibold">DO Code:</span> {outwardData.doCode}</p>
-              <p><span className="font-semibold">SR/WR No:</span> {outwardData.srwrNo}</p>
-              <p><span className="font-semibold">Commodity:</span> {outwardData.commodity}</p>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold border-b">Warehouse Details</h3>
-              <p className="mt-1"><span className="font-semibold">Warehouse:</span> {outwardData.warehouseName}</p>
-              <p><span className="font-semibold">Code:</span> {outwardData.warehouseCode}</p>
-              <p><span className="font-semibold">State:</span> {outwardData.state}</p>
-              <p><span className="font-semibold">Branch:</span> {outwardData.branch}</p>
-            </div>
-          </div>
-          
-          <div>
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold border-b">Transport Details</h3>
-              <p className="mt-1"><span className="font-semibold">Vehicle Number:</span> {outwardData.vehicleNumber}</p>
-              <p><span className="font-semibold">Gate Pass No:</span> {outwardData.gatepass}</p>
-              <p><span className="font-semibold">Weighbridge:</span> {outwardData.weighbridgeName}</p>
-              <p><span className="font-semibold">WB Slip No:</span> {outwardData.weighbridgeSlipNo}</p>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold border-b">Outward Summary</h3>
-              <p className="mt-1"><span className="font-semibold">Total Bags:</span> {outwardData.outwardBags}</p>
-              <p><span className="font-semibold">Total Quantity (MT):</span> {outwardData.outwardQuantity}</p>
-              <p><span className="font-semibold">Remaining Bags:</span> {outwardData.balanceBags}</p>
-              <p><span className="font-semibold">Remaining Quantity (MT):</span> {outwardData.balanceQuantity}</p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Stack Details Table */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold border-b mb-2">Stack Details</h3>
-          <table className="min-w-full border border-gray-300">
+      {/* Stack Entries Section */}
+      {outwardData.stackEntries && outwardData.stackEntries.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#1aad4b', marginBottom: 12, textAlign: 'center' }}>Stack Details</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e0f2e9', marginBottom: 16 }}>
             <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2 text-left">Stack No</th>
-                <th className="border p-2 text-left">Number of Bags</th>
-                <th className="border p-2 text-left">Quantity (MT)</th>
+              <tr style={{ backgroundColor: '#f6fef9' }}>
+                <th style={{ border: '1px solid #e0f2e9', padding: '8px', color: '#1aad4b', fontWeight: 700 }}>Stack No.</th>
+                <th style={{ border: '1px solid #e0f2e9', padding: '8px', color: '#1aad4b', fontWeight: 700 }}>Bags</th>
+                <th style={{ border: '1px solid #e0f2e9', padding: '8px', color: '#1aad4b', fontWeight: 700 }}>Quantity (MT)</th>
               </tr>
             </thead>
             <tbody>
-              {outwardData.stacks && outwardData.stacks.length > 0 ? (
-                outwardData.stacks.map((stack, index) => (
-                  <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : ''}>
-                    <td className="border p-2">{stack.stackNo}</td>
-                    <td className="border p-2">{stack.bags}</td>
-                    <td className="border p-2">{stack.quantity}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td className="border p-2 text-center" colSpan={3}>No stack details available</td>
+              {outwardData.stackEntries.map((stack: any, index: number) => (
+                <tr key={index} style={{ backgroundColor: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                  <td style={{ border: '1px solid #e0f2e9', padding: '8px', textAlign: 'center' }}>{stack.stackNo}</td>
+                  <td style={{ border: '1px solid #e0f2e9', padding: '8px', textAlign: 'center' }}>{stack.bags}</td>
+                  <td style={{ border: '1px solid #e0f2e9', padding: '8px', textAlign: 'center' }}>{stack.quantity}</td>
                 </tr>
-              )}
-              <tr className="font-semibold bg-gray-100">
-                <td className="border p-2">Total</td>
-                <td className="border p-2">{outwardData.outwardBags}</td>
-                <td className="border p-2">{outwardData.outwardQuantity}</td>
-              </tr>
+              ))}
             </tbody>
           </table>
         </div>
-        
-        {/* Remarks */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold border-b mb-2">Remarks</h3>
-          <p className="p-2 min-h-[60px] border rounded">{outwardData.remarks || 'No remarks'}</p>
-        </div>
-      </div>
+      )}
 
-      {/* Footer with Signatures */}
-      <div className="grid grid-cols-3 gap-4 mt-8 print:mt-4">
-        <div className="text-center">
-          <div className="h-16 print:h-10"></div>
-          <div className="border-t border-gray-400 pt-1">
-            <p className="text-sm font-semibold">Warehouse Incharge</p>
+      {/* Attachments */}
+      <div style={{ marginTop: 24 }}>
+        <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Attachment</div>
+        {Array.isArray(outwardData.attachmentUrls) && outwardData.attachmentUrls.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {outwardData.attachmentUrls.map((url: string, idx: number) => {
+              const ext = url.split('.').pop()?.toLowerCase();
+              let label = 'View File';
+              if (ext === 'pdf') label = 'View PDF';
+              else if (ext === 'docx') label = 'View DOCX';
+              else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
+              return (
+                <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db', textDecoration: 'underline', fontSize: 15 }}>
+                  {label} {idx + 1}
+                </a>
+              );
+            })}
           </div>
-        </div>
-        <div className="text-center">
-          <div className="h-16 print:h-10"></div>
-          <div className="border-t border-gray-400 pt-1">
-            <p className="text-sm font-semibold">Quality Inspector</p>
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="h-16 print:h-10"></div>
-          <div className="border-t border-gray-400 pt-1">
-            <p className="text-sm font-semibold">Client Representative</p>
-          </div>
-        </div>
+        ) : (
+          <span style={{ color: '#888', fontSize: 15 }}>No file</span>
+        )}
       </div>
-
-      {/* Terms and Conditions */}
-      <div className="mt-8 print:mt-4 text-xs">
-        <h4 className="font-semibold">Terms & Conditions:</h4>
-        <ol className="list-decimal list-inside pl-2">
-          <li>This is an electronically generated receipt and does not require physical signature.</li>
-          <li>Please verify all details and report any discrepancies within 24 hours of receipt.</li>
-          <li>Subject to terms of the warehousing agreement.</li>
-        </ol>
+      
+      <div style={{ fontSize: 13, color: '#555', textAlign: 'right', marginTop: 24 }}>
+        <b>Generated on:</b> {new Date().toLocaleString()}
       </div>
     </div>
   );
-};
-
-export default PrintableOutwardReceipt;
+}

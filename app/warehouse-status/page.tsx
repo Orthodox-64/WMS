@@ -11,6 +11,31 @@ import { collection, getDocs } from 'firebase/firestore';
 import { DataTable } from '@/components/data-table';
 import { useRouter } from "next/navigation";
 
+// Helper function to get status styling
+const getStatusStyling = (status: string) => {
+  const normalizedStatus = status?.toLowerCase().trim() || '';
+  
+  // Pending/inactive/closed - yellow background, black font
+  if (normalizedStatus === 'pending' || normalizedStatus === 'inactive' || normalizedStatus === 'closed') {
+    return 'bg-yellow-100 text-black px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Approve/activate/reactive - light green background, dark green font
+  if (normalizedStatus === 'approved' || normalizedStatus === 'activate' || normalizedStatus === 'reactivate' || 
+      normalizedStatus === 'approve' || normalizedStatus === 'reactive' || normalizedStatus === 'activated' || normalizedStatus === 'active') {
+    return 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Resubmit/reject - baby pink background, red font
+  if (normalizedStatus === 'resubmit' || normalizedStatus === 'reject' || normalizedStatus === 'rejected' || 
+      normalizedStatus === 'resubmitted') {
+    return 'bg-pink-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Default styling for unknown status
+  return 'bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+};
+
 const columns = [
   {
     accessorKey: "state",
@@ -42,29 +67,8 @@ const columns = [
     header: "Warehouse Status",
     cell: ({ row }: any) => {
       const status = row.getValue("status");
-      let color = "";
-      switch ((status || "").toLowerCase()) {
-        case "activated":
-        case "active":
-          color = "bg-green-200 text-green-800";
-          break;
-        case "pending":
-          color = "bg-yellow-200 text-yellow-800";
-          break;
-        case "closed":
-          color = "bg-red-200 text-red-800";
-          break;
-        case "reactivated":
-        case "reactive":
-          color = "bg-blue-200 text-blue-800";
-          break;
-        case "rejected":
-          color = "bg-gray-200 text-gray-800";
-          break;
-        default:
-          color = "bg-gray-100 text-gray-700";
-      }
-      return <span className={`px-2 py-1 rounded ${color}`}>{status}</span>;
+      const statusClass = getStatusStyling(status);
+      return <span className={statusClass}>{status}</span>;
     },
   },
 ];

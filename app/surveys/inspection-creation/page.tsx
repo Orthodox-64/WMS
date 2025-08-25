@@ -11,6 +11,32 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { ArrowLeft, ClipboardCheck, Plus, Download, Eye, Edit, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+
+// Helper function to get status styling
+const getStatusStyling = (status: string) => {
+  const normalizedStatus = status?.toLowerCase().trim() || '';
+  
+  // Pending/inactive/closed - yellow background, black font
+  if (normalizedStatus === 'pending' || normalizedStatus === 'inactive' || normalizedStatus === 'closed') {
+    return 'bg-yellow-100 text-black px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Approve/activate/reactive - light green background, dark green font
+  if (normalizedStatus === 'approved' || normalizedStatus === 'activate' || normalizedStatus === 'reactivate' || 
+      normalizedStatus === 'approve' || normalizedStatus === 'reactive' || normalizedStatus === 'activated' || 
+      normalizedStatus === 'submitted') {
+    return 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Resubmit/reject - baby pink background, red font
+  if (normalizedStatus === 'resubmit' || normalizedStatus === 'reject' || normalizedStatus === 'rejected' || 
+      normalizedStatus === 'resubmitted') {
+    return 'bg-pink-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Default styling for unknown status
+  return 'bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+};
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -435,21 +461,16 @@ export default function InspectionCreationPage() {
 
   // Get status badge
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending: { color: 'bg-yellow-100 text-yellow-800', label: 'Pending' },
-      submitted: { color: 'bg-blue-100 text-blue-800', label: 'Submitted' },
-      activated: { color: 'bg-green-100 text-green-800', label: 'Activated' },
-      rejected: { color: 'bg-red-100 text-red-800', label: 'Rejected' },
-      resubmitted: { color: 'bg-purple-100 text-purple-800', label: 'Resubmitted' },
-      closed: { color: 'bg-gray-100 text-gray-800', label: 'Closed' }
-    };
+    const statusClass = getStatusStyling(status);
+    const normalizedStatus = status?.toLowerCase().trim() || '';
     
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
+    // Capitalize first letter for display
+    const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
     
     return (
-      <Badge className={`${config.color} cursor-pointer hover:opacity-80`}>
-        {config.label}
-      </Badge>
+      <span className={`${statusClass} cursor-pointer hover:opacity-80`}>
+        {displayStatus}
+      </span>
     );
   };
 

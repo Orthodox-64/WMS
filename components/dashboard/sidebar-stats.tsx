@@ -35,30 +35,64 @@ export function SidebarStats() {
 
   useEffect(() => {
     async function fetchStats() {
-      // Number of Warehouses (unique warehouseName in inspections)
-      const inspectionsSnap = await getDocs(collection(db, 'inspections'));
-      const warehouseSet = new Set();
-      let pendingSurveys = 0;
-      inspectionsSnap.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.warehouseName) warehouseSet.add(data.warehouseName);
-        if (!data.status || data.status === 'pending') pendingSurveys++;
-      });
-      // Pending Inward Entries (inward entries with status not 'approve')
-      const inwardSnap = await getDocs(collection(db, 'inward'));
-      let pendingInward = 0;
-      inwardSnap.docs.forEach(doc => {
-        const data = doc.data();
-        if (!data.status || data.status !== 'approve') pendingInward++;
-      });
-      setStats({
-        warehouseCount: warehouseSet.size,
-        pendingSurveys,
-        pendingInward,
-        pendingOutward: 0,
-        pendingDO: 0,
-        pendingRO: 0,
-      });
+      try {
+        // Number of Warehouses (unique warehouseName in inspections)
+        const inspectionsSnap = await getDocs(collection(db, 'inspections'));
+        const warehouseSet = new Set();
+        let pendingSurveys = 0;
+        inspectionsSnap.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.warehouseName) warehouseSet.add(data.warehouseName);
+          if (!data.status || data.status === 'pending') pendingSurveys++;
+        });
+
+        // Pending Inward Entries (inward entries with status not 'approve')
+        const inwardSnap = await getDocs(collection(db, 'inward'));
+        let pendingInward = 0;
+        inwardSnap.docs.forEach(doc => {
+          const data = doc.data();
+          if (!data.status || data.status !== 'approve') pendingInward++;
+        });
+
+        // Pending Outward Entries (outward entries with status not 'approved')
+        const outwardSnap = await getDocs(collection(db, 'outward'));
+        let pendingOutward = 0;
+        outwardSnap.docs.forEach(doc => {
+          const data = doc.data();
+          const status = data.outwardStatus || data.status;
+          if (!status || (status !== 'approved' && status !== 'approve')) {
+            pendingOutward++;
+          }
+        });
+
+        // Pending DO Entries (delivery order entries with status not 'approved')
+        const doSnap = await getDocs(collection(db, 'deliveryOrders'));
+        let pendingDO = 0;
+        doSnap.docs.forEach(doc => {
+          const data = doc.data();
+          if (!data.doStatus || (data.doStatus !== 'approved' && data.doStatus !== 'approve')) pendingDO++;
+        });
+
+        // Pending RO Entries (release order entries with status not 'approved')
+        const roSnap = await getDocs(collection(db, 'releaseOrders'));
+        let pendingRO = 0;
+        roSnap.docs.forEach(doc => {
+          const data = doc.data();
+          if (!data.roStatus || (data.roStatus !== 'approved' && data.roStatus !== 'approve')) pendingRO++;
+        });
+
+        setStats({
+          warehouseCount: warehouseSet.size,
+          pendingSurveys,
+          pendingInward,
+          pendingOutward,
+          pendingDO,
+          pendingRO,
+        });
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+        // Keep existing values on error
+      }
     }
     fetchStats();
   }, []);
@@ -85,15 +119,15 @@ export function SidebarStats() {
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending Outward Entries</TableCell>
-              <TableCell className="text-right text-orange-400">0</TableCell>
+              <TableCell className="text-right text-orange-400">{stats.pendingOutward}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending DO Entries</TableCell>
-              <TableCell className="text-right text-orange-400">0</TableCell>
+              <TableCell className="text-right text-orange-400">{stats.pendingDO}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell className="font-medium">Pending RO Entries</TableCell>
-              <TableCell className="text-right text-orange-400">0</TableCell>
+              <TableCell className="text-right text-orange-400">{stats.pendingRO}</TableCell>
             </TableRow>
           </TableBody>
         </Table>
