@@ -21,10 +21,9 @@ export default function PrintableROReceipt({ data }: { data: any }) {
     border: '1px solid #e0f2e9',
   };
 
-  // All fields in two-column grid
+  // All fields in three-column grid
   const fields = [
     { label: 'RO Code', value: data.roCode },
-    { label: 'Status', value: data.roStatus },
     { label: 'SR/WR No.', value: data.srwrNo },
     { label: 'CAD Number', value: data.cadNumber },
     { label: 'State', value: data.state },
@@ -42,7 +41,6 @@ export default function PrintableROReceipt({ data }: { data: any }) {
     { label: 'Release Quantity (MT)', value: data.releaseQuantity },
     { label: 'Balance Bags', value: data.balanceBags },
     { label: 'Balance Quantity (MT)', value: data.balanceQuantity },
-    { label: 'Remark', value: data.remark },
   ];
 
   return (
@@ -67,12 +65,12 @@ export default function PrintableROReceipt({ data }: { data: any }) {
         <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>RO Details</div>
       </div>
       
-      {/* Two-column grid for fields */}
+      {/* Three-column grid for fields */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '0 32px',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gap: '0 24px',
           marginTop: 32,
         }}
       >

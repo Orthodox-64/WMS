@@ -619,12 +619,18 @@ export default function InspectionCreationPage() {
       { field: formData.location, name: 'Location' },
       { field: formData.businessType, name: 'Business Type' },
       { field: formData.warehouseStatus, name: 'Warehouse Status' },
-      { field: formData.bankState, name: 'Bank State' },
-      { field: formData.bankBranch, name: 'Bank Branch' },
-      { field: formData.bankName, name: 'Bank Name' },
-      { field: formData.ifscCode, name: 'IFSC Code' },
       { field: formData.receiptType, name: 'Receipt Type' }
     ];
+
+    // Add bank fields as required only if business type is CM (Collateral Management)
+    if (formData.businessType === 'cm') {
+      requiredFields.push(
+        { field: formData.bankState, name: 'Bank State' },
+        { field: formData.bankBranch, name: 'Bank Branch' },
+        { field: formData.bankName, name: 'Bank Name' },
+        { field: formData.ifscCode, name: 'IFSC Code' }
+      );
+    }
 
     // Check warehouse name based on status
     if (formData.warehouseStatus === 'new') {
@@ -643,6 +649,52 @@ export default function InspectionCreationPage() {
         variant: "destructive",
       });
       return;
+    }
+
+    // Validation for duplicate receipt types on existing warehouses
+    if (formData.warehouseStatus === 'existing' && formData.existingWarehouse && formData.receiptType) {
+      const selectedWarehouseName = formData.existingWarehouse;
+      const selectedReceiptType = formData.receiptType;
+      
+      // Check if there's already an inspection for this warehouse with the same receipt type
+      const duplicateInspection = inspections.find(inspection => {
+        const sameWarehouse = inspection.warehouseName === selectedWarehouseName;
+        const sameReceiptType = inspection.receiptType === (selectedReceiptType === 'storage' ? 'SR' : selectedReceiptType === 'warehouse' ? 'WR' : selectedReceiptType);
+        const notCurrentInspection = (!isEditing || inspection.id !== editingInspectionId);
+        
+        // For CM business type, also check if bank is different
+        if (formData.businessType === 'cm' && sameWarehouse && sameReceiptType && notCurrentInspection) {
+          // If bank is different, allow creation (no duplicate)
+          const sameBank = inspection.bankName === formData.bankName && 
+                          inspection.bankBranch === formData.bankBranch && 
+                          inspection.ifscCode === formData.ifscCode;
+          return sameBank; // Only consider duplicate if bank is also same
+        }
+        
+        // For non-CM business types, original logic (warehouse + receipt type)
+        return sameWarehouse && sameReceiptType && notCurrentInspection;
+      });
+
+      if (duplicateInspection) {
+        const receiptTypeDisplay = selectedReceiptType === 'storage' ? 'Storage Receipt (SR)' : 
+                                 selectedReceiptType === 'warehouse' ? 'Warehouse Receipt (WR)' : 
+                                 selectedReceiptType;
+        
+        if (formData.businessType === 'cm') {
+          toast({
+            title: "Duplicate Receipt Type with Same Bank",
+            description: `An inspection for warehouse "${selectedWarehouseName}" with receipt type "${receiptTypeDisplay}" and the same bank already exists. Please change the bank or select a different receipt type.`,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Duplicate Receipt Type",
+            description: `An inspection for warehouse "${selectedWarehouseName}" with receipt type "${receiptTypeDisplay}" already exists. Please select a different receipt type.`,
+            variant: "destructive",
+          });
+        }
+        return;
+      }
     }
     
     // Convert receipt type for Firebase storage
@@ -1016,8 +1068,8 @@ export default function InspectionCreationPage() {
                 <h3 className="text-lg font-medium border-b pb-2">Bank Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="bankState">Bank State <span className="text-red-500">*</span></Label>
-                    <Select value={formData.bankState} onValueChange={(value) => setFormData(prev => ({ ...prev, bankState: value }))} required>
+                    <Label htmlFor="bankState">Bank State {formData.businessType === 'cm' && <span className="text-red-500">*</span>}</Label>
+                    <Select value={formData.bankState} onValueChange={(value) => setFormData(prev => ({ ...prev, bankState: value }))} required={formData.businessType === 'cm'}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select State" />
                       </SelectTrigger>
@@ -1030,8 +1082,8 @@ export default function InspectionCreationPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="bank">Bank <span className="text-red-500">*</span></Label>
-                    <Select value={formData.bank} onValueChange={(value) => setFormData(prev => ({ ...prev, bank: value }))} disabled={!formData.bankState} required>
+                    <Label htmlFor="bank">Bank {formData.businessType === 'cm' && <span className="text-red-500">*</span>}</Label>
+                    <Select value={formData.bank} onValueChange={(value) => setFormData(prev => ({ ...prev, bank: value }))} disabled={!formData.bankState} required={formData.businessType === 'cm'}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select Bank" />
                       </SelectTrigger>

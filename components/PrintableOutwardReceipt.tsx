@@ -21,10 +21,9 @@ export default function PrintableOutwardReceipt({ outwardData }: { outwardData: 
     border: '1px solid #e0f2e9',
   };
 
-  // All fields in two-column grid
+  // All fields in three-column grid
   const fields = [
     { label: 'Outward Code', value: outwardData.outwardCode },
-    { label: 'Status', value: outwardData.outwardStatus || 'pending' },
     { label: 'SR/WR No.', value: outwardData.srwrNo },
     { label: 'DO Code', value: outwardData.doCode },
     { label: 'CAD Number', value: outwardData.cadNumber },
@@ -47,7 +46,6 @@ export default function PrintableOutwardReceipt({ outwardData }: { outwardData: 
     { label: 'Weighbridge Slip No', value: outwardData.weighbridgeSlipNo },
     { label: 'Balance Bags', value: outwardData.balanceBags },
     { label: 'Balance Quantity (MT)', value: outwardData.balanceQuantity },
-    { label: 'Remark', value: outwardData.remark },
   ];
 
   return (
@@ -72,12 +70,12 @@ export default function PrintableOutwardReceipt({ outwardData }: { outwardData: 
         <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>Outward Details</div>
       </div>
       
-      {/* Two-column grid for fields */}
+      {/* Three-column grid for fields */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '0 32px',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gap: '0 24px',
           marginTop: 32,
         }}
       >

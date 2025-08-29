@@ -13,10 +13,29 @@ interface Field {
 }
 
 export default function PrintableDOReceipt({ data }: { data: any }) {
+  // Helper functions for calculations
+  const getBalanceBags = (data: any) => {
+    const inward = parseFloat(data.totalBags) || 0;
+    const release = parseFloat(data.releaseBags) || 0;
+    const doQty = parseFloat(data.doBags) || 0;
+    return (inward - release - doQty).toString();
+  };
+
+  const getBalanceQty = (data: any) => {
+    const inward = parseFloat(data.totalQuantity) || 0;
+    const release = parseFloat(data.releaseQuantity) || 0;
+    const doQty = parseFloat(data.doQuantity) || 0;
+    return (inward - release - doQty).toFixed(2);
+  };
+
+  const normalizeStatusText = (status: string) => {
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+  };
+
   // CIR-style layout
   const labelStyle = {
     fontWeight: 700,
-    color: '#1aad4b',
+    color: '#e67c1f',
     fontSize: 16,
     marginBottom: 4,
     marginTop: 12,
@@ -27,15 +46,16 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
     color: '#222',
     fontSize: 16,
     marginBottom: 8,
-    background: '#f6fef9',
+    background: '#fff7f0',
     borderRadius: 8,
     padding: '6px 12px',
-    border: '1px solid #e0f2e9',
+    border: '1px solid #fed7aa',
   };
 
-  // All fields in two-column grid
+  // All fields in three-column grid (excluding remark field)
   const fields: Field[] = [
-
+    { label: 'DO Code', value: data.doCode },
+    { label: 'Status', value: normalizeStatusText(data.doStatus || 'pending') },
     { label: 'SR/WR No.', value: data.srwrNo },
     { label: 'CAD Number', value: data.cadNumber },
     { label: 'State', value: data.state },
@@ -48,9 +68,9 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
     { label: 'Client Code', value: data.clientCode },
     { label: 'Client Address', value: data.clientAddress },
     { label: 'Inward Bags', value: data.totalBags },
-    { label: 'Inward Quantity', value: data.totalQuantity },
+    { label: 'Inward Quantity (MT)', value: data.totalQuantity },
     { label: 'Release RO Bags', value: data.releaseBags },
-    { label: 'Release RO Quantity', value: data.releaseQuantity },
+    { label: 'Release RO Quantity (MT)', value: data.releaseQuantity },
     { 
       label: 'DO Bags', 
       value: data.doBags, 
@@ -62,7 +82,7 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
       } 
     },
     { 
-      label: 'DO Quantity', 
+      label: 'DO Quantity (MT)', 
       value: data.doQuantity,
       highlightStyle: { 
         background: '#fff3e6', 
@@ -71,9 +91,8 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
         fontWeight: 700 
       }
     },
-    { label: 'Balance Bags', value: data.balanceBags },
-    { label: 'Balance Quantity', value: data.balanceQuantity },
- 
+    { label: 'Balance Bags', value: getBalanceBags(data) },
+    { label: 'Balance Quantity (MT)', value: getBalanceQty(data) },
   ];
 
   return (
@@ -95,15 +114,15 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
         <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
         <div style={{ fontSize: 28, fontWeight: 700, color: '#e67c1f', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
         <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>DO Details</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>DO RECEIPT</div>
       </div>
       
-      {/* Two-column grid for fields */}
+      {/* Three-column grid for fields */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '0 32px',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gap: '0 24px',
           marginTop: 32,
         }}
       >
@@ -126,11 +145,18 @@ export default function PrintableDOReceipt({ data }: { data: any }) {
         <div style={{ marginTop: 24, marginBottom: 12 }}>
           <div style={labelStyle}>Attachments</div>
           <div style={{ ...valueStyle, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {data.attachmentUrls.map((url: string, idx: number) => (
-              <span key={idx} style={{ color: '#1a56db' }}>
-                {`Attachment ${idx + 1}`}
-              </span>
-            ))}
+            {data.attachmentUrls.map((url: string, idx: number) => {
+              const ext = url.split('.').pop()?.toLowerCase();
+              let label = 'View File';
+              if (ext === 'pdf') label = 'View PDF';
+              else if (ext === 'docx') label = 'View DOCX';  
+              else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
+              return (
+                <span key={idx} style={{ color: '#1a56db' }}>
+                  {label} {idx + 1}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}

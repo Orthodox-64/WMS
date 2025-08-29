@@ -1439,110 +1439,81 @@ export default function DeliveryOrderPage() {
                   </div>
                 </div>
                 
-                {/* DO Details in bordered container */}
-                <div className="w-full max-w-2xl mx-auto mt-8 mb-4 border border-gray-200 rounded-lg p-4 bg-gray-50" style={{ maxWidth: '900px' }}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <Label className="font-semibold mb-1">SR/WR No.</Label>
-                      <Input readOnly value={selectedDO.srwrNo || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">CAD Number</Label>
-                      <Input readOnly value={selectedDO.cadNumber || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">State</Label>
-                      <Input readOnly value={selectedDO.state || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Branch</Label>
-                      <Input readOnly value={selectedDO.branch || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Location</Label>
-                      <Input readOnly value={selectedDO.location || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Warehouse Name</Label>
-                      <Input readOnly value={selectedDO.warehouseName || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Warehouse Code</Label>
-                      <Input readOnly value={selectedDO.warehouseCode || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Warehouse Address</Label>
-                      <Input readOnly value={selectedDO.warehouseAddress || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Client Name</Label>
-                      <Input readOnly value={selectedDO.client || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Client Code</Label>
-                      <Input readOnly value={selectedDO.clientCode || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Client Address</Label>
-                      <Input readOnly value={selectedDO.clientAddress || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Inward Bags</Label>
-                      <Input readOnly value={selectedDO.totalBags || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Inward Quantity (MT)</Label>
-                      <Input readOnly value={selectedDO.totalQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Release RO Bags</Label>
-                      <Input readOnly value={selectedDO.releaseBags || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Release RO Quantity (MT)</Label>
-                      <Input readOnly value={selectedDO.releaseQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">DO Bags</Label>
-                      <Input readOnly value={selectedDO.doBags || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">DO Quantity (MT)</Label>
-                      <Input readOnly value={selectedDO.doQuantity || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Balance Bags</Label>
-                      <Input readOnly value={getBalanceBags(selectedDO) || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                    <div>
-                      <Label className="font-semibold mb-1">Balance Quantity (MT)</Label>
-                      <Input readOnly value={getBalanceQty(selectedDO) || ''} className="w-full bg-white border-green-300 text-green-800" />
-                    </div>
-                  </div>
+                {/* CIR-style header */}
+                <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                  <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#e67c1f', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>DO Details</div>
                 </div>
-
-                {/* Attachments section */}
-                <div className="w-full max-w-2xl mx-auto mt-4 mb-4">
-                  <Label className="font-semibold mb-1 block">Attachments</Label>
-                  <div className="w-full bg-white border-green-300 text-green-800 rounded border p-3">
-                    {Array.isArray(selectedDO.attachmentUrls) && selectedDO.attachmentUrls.length > 0 ? (
-                      <div className="flex flex-col gap-2">
-                        {selectedDO.attachmentUrls.map((url: string, idx: number) => {
-                          const ext = url.split('.').pop()?.toLowerCase();
-                          let label = 'View File';
-                          if (ext === 'pdf') label = 'View PDF';
-                          else if (ext === 'docx') label = 'View DOCX';
-                          else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
-                          return (
-                            <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">
-                              {label} {idx + 1}
-                            </a>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <span className="text-gray-500">No files attached</span>
-                    )}
+                
+                {/* Three-column grid for fields */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: '0 24px',
+                    marginTop: 32,
+                  }}
+                >
+                  {/* All fields except attachments and remarks */}
+                  {[
+                    { label: 'DO Code', value: selectedDO.doCode },
+                    { label: 'SR/WR No.', value: selectedDO.srwrNo },
+                    { label: 'CAD Number', value: selectedDO.cadNumber },
+                    { label: 'State', value: selectedDO.state },
+                    { label: 'Branch', value: selectedDO.branch },
+                    { label: 'Location', value: selectedDO.location },
+                    { label: 'Warehouse Name', value: selectedDO.warehouseName },
+                    { label: 'Warehouse Code', value: selectedDO.warehouseCode },
+                    { label: 'Warehouse Address', value: selectedDO.warehouseAddress },
+                    { label: 'Client Name', value: selectedDO.client },
+                    { label: 'Client Code', value: selectedDO.clientCode },
+                    { label: 'Client Address', value: selectedDO.clientAddress },
+                    { label: 'Inward Bags', value: selectedDO.totalBags },
+                    { label: 'Inward Quantity (MT)', value: selectedDO.totalQuantity },
+                    { label: 'Release RO Bags', value: selectedDO.releaseBags },
+                    { label: 'Release RO Quantity (MT)', value: selectedDO.releaseQuantity },
+                    { label: 'DO Bags', value: selectedDO.doBags },
+                    { label: 'DO Quantity (MT)', value: selectedDO.doQuantity },
+                    { label: 'Balance Bags', value: getBalanceBags(selectedDO) },
+                    { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedDO) },
+                  ].map((f, idx) => (
+                    <div key={idx} style={{ marginBottom: 12 }}>
+                      <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>{f.label}</div>
+                      <div style={{ fontWeight: 500, color: '#222', fontSize: 16, marginBottom: 8, background: '#f6fef9', borderRadius: 8, padding: '6px 12px', border: '1px solid #e0f2e9' }}>{f.value ?? '-'}</div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Attachments row below grid */}
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Attachment</div>
+                  {Array.isArray(selectedDO.attachmentUrls) && selectedDO.attachmentUrls.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {selectedDO.attachmentUrls.map((url: string, idx: number) => {
+                        const ext = url.split('.').pop()?.toLowerCase();
+                        let label = 'View File';
+                        if (ext === 'pdf') label = 'View PDF';
+                        else if (ext === 'docx') label = 'View DOCX';
+                        else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
+                        return (
+                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db', textDecoration: 'underline', fontSize: 15 }}>
+                            {label} {idx + 1}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <span style={{ color: '#888', fontSize: 15 }}>No file</span>
+                  )}
+                </div>
+                
+                {/* Remark section - positioned in left bottom corner */}
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Remark</div>
+                  <div style={{ fontWeight: 500, color: '#222', fontSize: 16, marginBottom: 8, background: '#f6fef9', borderRadius: 8, padding: '6px 12px', border: '1px solid #e0f2e9', minHeight: '40px' }}>
+                    {selectedDO.remark || '-'}
                   </div>
                 </div>
                 
@@ -1555,89 +1526,95 @@ export default function DeliveryOrderPage() {
                         // Import required libraries
                         const html2canvas = (await import('html2canvas')).default;
                         const jsPDF = (await import('jspdf')).default;
-                        const ReactDOMClient = (await import('react-dom/client')).default;
                         
-                        // Import PrintableDOReceipt component dynamically to avoid SSR issues
-                        const PrintableDOReceipt = (await import('@/components/PrintableDOReceipt')).default;
+                        const tempElement = document.createElement('div');
+                        tempElement.style.position = 'absolute';
+                        tempElement.style.left = '-9999px';
+                        tempElement.style.top = '0';
+                        tempElement.style.padding = '40px';
+                        tempElement.style.backgroundColor = 'white';
+                        tempElement.style.fontFamily = 'Arial, sans-serif';
                         
-                        // Create a proper React element with the receipt component
-                        const receiptElement = document.createElement('div');
-                        receiptElement.id = "temp-pdf-container";
-                        receiptElement.style.width = '100%';
-                        receiptElement.style.position = 'absolute';
-                        receiptElement.style.top = '-9999px';
-                        receiptElement.style.left = '-9999px';
-                        receiptElement.style.zIndex = '-1000';
-                        receiptElement.style.overflow = 'hidden';
-                        document.body.appendChild(receiptElement);
+                        tempElement.innerHTML = `
+                          <div style="text-align: center; margin-bottom: 30px;">
+                            <img src="/Group 86.png" alt="Agrogreen Logo" style="width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 8px;">
+                            <div style="font-size: 28px; font-weight: 700; color: #e67c1f; letter-spacing: 0.5px; margin-bottom: 2px;">AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                            <div style="font-size: 18px; font-weight: 500; color: #1aad4b; margin-bottom: 8px;">603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                            <div style="font-size: 20px; font-weight: 700; color: #e67c1f; margin: 24px 0 0 0; text-decoration: underline;">DO RECEIPT</div>
+                          </div>
+
+                          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 24px; margin-top: 32px;">
+                            ${[
+                              { label: 'DO Code', value: selectedDO.doCode },
+                              { label: 'SR/WR No.', value: selectedDO.srwrNo },
+                              { label: 'CAD Number', value: selectedDO.cadNumber },
+                              { label: 'State', value: selectedDO.state },
+                              { label: 'Branch', value: selectedDO.branch },
+                              { label: 'Location', value: selectedDO.location },
+                              { label: 'Warehouse Name', value: selectedDO.warehouseName },
+                              { label: 'Warehouse Code', value: selectedDO.warehouseCode },
+                              { label: 'Warehouse Address', value: selectedDO.warehouseAddress },
+                              { label: 'Client Name', value: selectedDO.client },
+                              { label: 'Client Code', value: selectedDO.clientCode },
+                              { label: 'Client Address', value: selectedDO.clientAddress },
+                              { label: 'Inward Bags', value: selectedDO.totalBags },
+                              { label: 'Inward Quantity (MT)', value: selectedDO.totalQuantity },
+                              { label: 'Release RO Bags', value: selectedDO.releaseBags },
+                              { label: 'Release RO Quantity (MT)', value: selectedDO.releaseQuantity },
+                              { label: 'DO Bags', value: selectedDO.doBags },
+                              { label: 'DO Quantity (MT)', value: selectedDO.doQuantity },
+                              { label: 'Balance Bags', value: getBalanceBags(selectedDO) },
+                              { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedDO) }
+                            ].map(field => `
+                              <div style="margin-bottom: 12px;">
+                                <div style="font-weight: 700; color: #e67c1f; font-size: 16px; margin-bottom: 4px; margin-top: 12px; letter-spacing: 0.2px;">${field.label}</div>
+                                <div style="font-weight: 500; color: #222; font-size: 16px; margin-bottom: 8px; background: #fff7f0; border-radius: 8px; padding: 6px 12px; border: 1px solid #fed7aa;">${field.value ?? '-'}</div>
+                              </div>
+                            `).join('')}
+                          </div>
+
+                          ${selectedDO.attachmentUrls && Array.isArray(selectedDO.attachmentUrls) && selectedDO.attachmentUrls.length > 0 ? `
+                            <div style="margin-top: 24px;">
+                              <div style="font-weight: 700; color: #e67c1f; font-size: 16px; margin-bottom: 4px; margin-top: 12px; letter-spacing: 0.2px;">Attachment</div>
+                              <div style="display: flex; flex-direction: column; gap: 4px;">
+                                ${selectedDO.attachmentUrls.map((url: string, idx: number) => {
+                                  const ext = url.split('.').pop()?.toLowerCase();
+                                  let label = 'View File';
+                                  if (ext === 'pdf') label = 'View PDF';
+                                  else if (ext === 'docx') label = 'View DOCX';  
+                                  else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
+                                  return `<a href="${url}" style="color: #1a56db; text-decoration: underline; font-size: 15px;">${label} ${idx + 1}</a>`;
+                                }).join('')}
+                              </div>
+                            </div>
+                          ` : ''}
+                        `;
                         
-                        // Create root and render component
-                        const root = ReactDOMClient.createRoot(receiptElement);
-                        root.render(React.createElement(PrintableDOReceipt, { data: selectedDO }));
+                        document.body.appendChild(tempElement);
                         
-                        // Add a small delay for rendering
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        
-                        // Get the rendered receipt
-                        const printableReceipt = document.getElementById('printable-do-receipt');
-                        if (!printableReceipt) {
-                          throw new Error("Could not find printable receipt element");
-                        }
-                        
-                        // Create canvas with higher scale for better quality
-                        const canvas = await html2canvas(printableReceipt, { 
-                          scale: 2, 
-                          useCORS: true, 
-                          backgroundColor: '#fff',
-                          logging: false,
-                          allowTaint: true
+                        const canvas = await html2canvas(tempElement, {
+                          scale: 2,
+                          useCORS: true,
+                          allowTaint: true,
+                          backgroundColor: '#ffffff'
                         });
                         
-                        // Create PDF with proper dimensions
+                        const imgData = canvas.toDataURL('image/png');
                         const pdf = new jsPDF('p', 'mm', 'a4');
-                        const pageWidth = pdf.internal.pageSize.getWidth();
-                        const pageHeight = pdf.internal.pageSize.getHeight();
                         
-                        // Calculate image dimensions to fit page width
-                        const imgWidth = pageWidth;
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = pdf.internal.pageSize.getHeight();
+                        const imgWidth = canvas.width;
+                        const imgHeight = canvas.height;
                         
-                        // Split across multiple pages if needed
-                        let heightLeft = imgHeight;
-                        let position = 0;
-                        let pageCount = 0;
+                        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+                        const imgX = (pdfWidth - imgWidth * ratio) / 2;
+                        const imgY = 30;
                         
-                        while (heightLeft > 0) {
-                          // Add image to page
-                          pdf.addImage(
-                            canvas.toDataURL('image/jpeg', 1.0),
-                            'JPEG',
-                            0,
-                            position,
-                            imgWidth,
-                            imgHeight,
-                            `page-${pageCount}`,
-                            'FAST'
-                          );
-                          
-                          heightLeft -= pageHeight;
-                          position -= pageHeight;
-                          
-                          // Add new page if there's more content
-                          if (heightLeft > 0) {
-                            pdf.addPage();
-                            pageCount++;
-                          }
-                        }
+                        pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+                        pdf.save(`DO-Receipt-${selectedDO.doCode}.pdf`);
                         
-                        // Save PDF
-                        pdf.save(`delivery-order-receipt-${selectedDO.doCode || ''}.pdf`);
-                        
-                        // Clean up - remove the temporary element
-                        const tempContainer = document.getElementById("temp-pdf-container");
-                        if (tempContainer) {
-                          document.body.removeChild(tempContainer);
-                        }
+                        document.body.removeChild(tempElement);
                         
                         alert("PDF generated successfully!");
                       } catch (error: any) {

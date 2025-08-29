@@ -286,7 +286,7 @@ export default function OutwardPage() {
           <Button onClick={() => router.push('/dashboard')} variant="ghost" className="flex items-center bg-orange-500 text-white hover:bg-orange-600">
             ← Dashboard
           </Button>
-          <h1 className="text-3xl font-bold text-orange-600 text-center flex-1">Outward Management</h1>
+          <h1 className="text-3xl font-bold text-orange-600 text-center flex-1">Outward Module</h1>
           <Button onClick={() => setShowAddModal(true)} className="bg-green-500 hover:bg-green-600 text-white">
             <Plus className="h-4 w-4 mr-2" /> Add Outward
           </Button>
@@ -1433,19 +1433,18 @@ export default function OutwardPage() {
                 <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>Outward Details</div>
               </div>
-              {/* Two-column grid for fields */}
+              {/* Three-column grid for fields */}
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '0 32px',
+                  gridTemplateColumns: '1fr 1fr 1fr',
+                  gap: '0 24px',
                   marginTop: 32,
                 }}
               >
                 {/* All fields except attachments */}
                 {[
                   { label: 'Outward Code', value: selectedOutward.outwardCode },
-                  { label: 'Status', value: normalizeStatusText(selectedOutward.outwardStatus || 'pending') },
                   { label: 'SR/WR No.', value: selectedOutward.srwrNo },
                   { label: 'DO Code', value: selectedOutward.doCode },
                   { label: 'CAD Number', value: selectedOutward.cadNumber },
@@ -1468,7 +1467,6 @@ export default function OutwardPage() {
                   { label: 'Gate Pass', value: selectedOutward.gatepass },
                   { label: 'Weighbridge Name', value: selectedOutward.weighbridgeName },
                   { label: 'Weighbridge Slip No.', value: selectedOutward.weighbridgeSlipNo },
-                  { label: 'Remark', value: selectedOutward.remark },
                 ].map((f, idx) => (
                   <div key={idx} style={{ marginBottom: 12 }}>
                     <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>{f.label}</div>
@@ -1510,6 +1508,13 @@ export default function OutwardPage() {
                 ) : (
                   <span style={{ color: '#888', fontSize: 15 }}>No file</span>
                 )}
+              </div>
+              {/* Remark section - positioned in left bottom corner */}
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Remark</div>
+                <div style={{ fontWeight: 500, color: '#222', fontSize: 16, marginBottom: 8, background: '#f6fef9', borderRadius: 8, padding: '6px 12px', border: '1px solid #e0f2e9', minHeight: '40px' }}>
+                  {selectedOutward.remark || '-'}
+                </div>
               </div>
               {/* Action buttons at bottom right */}
               <div className="flex justify-end gap-4 mt-6 pt-4 border-t border-gray-200">
@@ -1613,107 +1618,176 @@ export default function OutwardPage() {
                     type="button" 
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6"
                     onClick={async () => {
-                    try {
-                      // Import required libraries
-                      const html2canvas = (await import('html2canvas')).default;
-                      const jsPDF = (await import('jspdf')).default;
-                      const ReactDOMClient = (await import('react-dom/client')).default;
-                      
-                      // Import PrintableOutwardReceipt component dynamically to avoid SSR issues
-                      const PrintableOutwardReceipt = (await import('../../components/PrintableOutwardReceipt')).default;
-                      
-                      // Create a proper React element with the receipt component
-                      const receiptElement = document.createElement('div');
-                      receiptElement.id = "temp-pdf-container";
-                      receiptElement.style.width = '100%';
-                      receiptElement.style.position = 'absolute';
-                      receiptElement.style.top = '-9999px';
-                      receiptElement.style.left = '-9999px';
-                      receiptElement.style.zIndex = '-1000';
-                      receiptElement.style.overflow = 'hidden';
-                      document.body.appendChild(receiptElement);
-                      
-                      // Create root and render component
-                      const root = ReactDOMClient.createRoot(receiptElement);
-                      root.render(<PrintableOutwardReceipt outwardData={selectedOutward} />);
-                      
-                      // Add a small delay for rendering
-                      await new Promise(resolve => setTimeout(resolve, 500));
-                      
-                      // Get the rendered receipt
-                      const printableReceipt = document.getElementById('printable-outward-receipt');
-                      if (!printableReceipt) {
-                        throw new Error("Could not find printable receipt element");
-                      }
-                      
-                      // Create canvas with higher scale for better quality
-                      const canvas = await html2canvas(printableReceipt, { 
-                        scale: 2, 
-                        useCORS: true, 
-                        backgroundColor: '#fff',
-                        logging: false,
-                        allowTaint: true
-                      });
-                      
-                      // Create PDF with proper dimensions
-                      const pdf = new jsPDF('p', 'mm', 'a4');
-                      const pageWidth = pdf.internal.pageSize.getWidth();
-                      const pageHeight = pdf.internal.pageSize.getHeight();
-                      
-                      // Calculate image dimensions to fit page width
-                      const imgWidth = pageWidth;
-                      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                      
-                      // Split across multiple pages if needed
-                      let heightLeft = imgHeight;
-                      let position = 0;
-                      let pageCount = 0;
-                      
-                      while (heightLeft > 0) {
-                        // Add image to page
-                        pdf.addImage(
-                          canvas.toDataURL('image/jpeg', 1.0),
-                          'JPEG',
-                          0,
-                          position,
-                          imgWidth,
-                          imgHeight,
-                          `page-${pageCount}`,
-                          'FAST'
-                        );
+                      try {
+                        // Import required libraries
+                        const html2canvas = (await import('html2canvas')).default;
+                        const jsPDF = (await import('jspdf')).default;
                         
-                        heightLeft -= pageHeight;
-                        position -= pageHeight;
+                        // Create a temporary container for the receipt
+                        const tempContainer = document.createElement('div');
+                        tempContainer.style.position = 'absolute';
+                        tempContainer.style.top = '-9999px';
+                        tempContainer.style.left = '-9999px';
+                        tempContainer.style.width = '900px';
+                        tempContainer.style.background = '#fff';
+                        tempContainer.style.fontFamily = 'Arial, sans-serif';
+                        tempContainer.style.color = '#222';
+                        tempContainer.style.padding = '36px';
+                        document.body.appendChild(tempContainer);
+
+                        // Create the receipt HTML content
+                        tempContainer.innerHTML = `
+                          <div id="printable-outward-receipt" style="width: 900px; margin: 0; background: #fff; border-radius: 16px; font-family: Arial, sans-serif; color: #222; padding: 36px;">
+                            <!-- Header with logo and address -->
+                            <div style="text-align: center; margin-bottom: 8px;">
+                              <img src="/Group 86.png" alt="Agrogreen Logo" style="width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 8px;" />
+                              <div style="font-size: 28px; font-weight: 700; color: #e67c1f; letter-spacing: 0.5px; margin-bottom: 2px;">AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                              <div style="font-size: 18px; font-weight: 500; color: #1aad4b; margin-bottom: 8px;">603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                              <div style="font-size: 20px; font-weight: 700; color: #e67c1f; margin: 24px 0 0 0; text-decoration: underline;">Outward Details</div>
+                            </div>
+                            
+                            <!-- Three-column grid for fields -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 24px; margin-top: 32px;">
+                              ${[
+                                { label: 'Outward Code', value: selectedOutward.outwardCode },
+                                { label: 'Status', value: normalizeStatusText(selectedOutward.outwardStatus || 'pending') },
+                                { label: 'SR/WR No.', value: selectedOutward.srwrNo },
+                                { label: 'DO Code', value: selectedOutward.doCode },
+                                { label: 'CAD Number', value: selectedOutward.cadNumber },
+                                { label: 'State', value: selectedOutward.state },
+                                { label: 'Branch', value: selectedOutward.branch },
+                                { label: 'Location', value: selectedOutward.location },
+                                { label: 'Warehouse Name', value: selectedOutward.warehouseName },
+                                { label: 'Warehouse Code', value: selectedOutward.warehouseCode },
+                                { label: 'Warehouse Address', value: selectedOutward.warehouseAddress },
+                                { label: 'Client Name', value: selectedOutward.client },
+                                { label: 'Client Code', value: selectedOutward.clientCode },
+                                { label: 'Client Address', value: selectedOutward.clientAddress },
+                                { label: 'DO Bags', value: selectedOutward.doBags },
+                                { label: 'DO Quantity (MT)', value: selectedOutward.doQuantity },
+                                { label: 'Outward Bags', value: selectedOutward.outwardBags },
+                                { label: 'Outward Quantity (MT)', value: selectedOutward.outwardQuantity },
+                                { label: 'Vehicle Number', value: selectedOutward.vehicleNumber },
+                                { label: 'Gate Pass', value: selectedOutward.gatepass },
+                                { label: 'Weighbridge Name', value: selectedOutward.weighbridgeName },
+                                { label: 'Weighbridge Slip No.', value: selectedOutward.weighbridgeSlipNo },
+                                { label: 'Balance Bags', value: selectedOutward.balanceBags },
+                                { label: 'Balance Quantity (MT)', value: selectedOutward.balanceQuantity },
+                              ].map((f) => `
+                                <div style="margin-bottom: 12px;">
+                                  <div style="font-weight: 700; color: #1aad4b; font-size: 16px; margin-bottom: 4px; margin-top: 12px; letter-spacing: 0.2px;">${f.label}</div>
+                                  <div style="font-weight: 500; color: #222; font-size: 16px; margin-bottom: 8px; background: #f6fef9; border-radius: 8px; padding: 6px 12px; border: 1px solid #e0f2e9;">${f.value ?? '-'}</div>
+                                </div>
+                              `).join('')}
+                            </div>
+                            
+                            ${selectedOutward.stackEntries && selectedOutward.stackEntries.length > 0 ? `
+                              <!-- Stack Details Section -->
+                              <div style="margin-top: 24px;">
+                                <div style="font-size: 18px; font-weight: 700; color: #1aad4b; margin-bottom: 12px; text-align: center;">Stack Details</div>
+                                <table style="width: 100%; border-collapse: collapse; border: 1px solid #e0f2e9; margin-bottom: 16px;">
+                                  <thead>
+                                    <tr style="background-color: #f6fef9;">
+                                      <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Stack No.</th>
+                                      <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Bags</th>
+                                      <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Quantity (MT)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    ${selectedOutward.stackEntries.map((stack: any, index: number) => `
+                                      <tr style="background-color: ${index % 2 === 0 ? '#fff' : '#f9f9f9'};">
+                                        <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.stackNo}</td>
+                                        <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.bags}</td>
+                                        <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.quantity}</td>
+                                      </tr>
+                                    `).join('')}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ` : ''}
+                            
+                            <div style="font-size: 13px; color: #555; text-align: right; margin-top: 24px;">
+                              <b>Generated on:</b> ${new Date().toLocaleString()}
+                            </div>
+                          </div>
+                        `;
+
+                        // Wait for images to load
+                        await new Promise(resolve => setTimeout(resolve, 1000));
                         
-                        // Add new page if there's more content
-                        if (heightLeft > 0) {
-                          pdf.addPage();
-                          pageCount++;
+                        // Get the rendered receipt
+                        const printableReceipt = tempContainer.querySelector('#printable-outward-receipt');
+                        if (!printableReceipt) {
+                          throw new Error("Could not find printable receipt element");
                         }
-                      }
-                      
-                      // Save PDF
-                      pdf.save(`outward-receipt-${selectedOutward.outwardCode || ''}.pdf`);
-                      
-                      // Clean up - remove the temporary element
-                      const tempContainer = document.getElementById("temp-pdf-container");
-                      if (tempContainer) {
+                        
+                        // Create canvas with higher scale for better quality
+                        const canvas = await html2canvas(printableReceipt as HTMLElement, { 
+                          scale: 2, 
+                          useCORS: true, 
+                          backgroundColor: '#fff',
+                          logging: false,
+                          allowTaint: true,
+                          width: 900,
+                          height: printableReceipt.scrollHeight
+                        });
+                        
+                        // Create PDF with proper dimensions
+                        const pdf = new jsPDF('p', 'mm', 'a4');
+                        const pageWidth = pdf.internal.pageSize.getWidth();
+                        const pageHeight = pdf.internal.pageSize.getHeight();
+                        
+                        // Calculate image dimensions to fit page width
+                        const imgWidth = pageWidth;
+                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                        
+                        // Split across multiple pages if needed
+                        let heightLeft = imgHeight;
+                        let position = 0;
+                        let pageCount = 0;
+                        
+                        while (heightLeft > 0) {
+                          // Add image to page
+                          pdf.addImage(
+                            canvas.toDataURL('image/jpeg', 1.0),
+                            'JPEG',
+                            0,
+                            position,
+                            imgWidth,
+                            imgHeight,
+                            `page-${pageCount}`,
+                            'FAST'
+                          );
+                          
+                          heightLeft -= pageHeight;
+                          position -= pageHeight;
+                          
+                          // Add new page if there's more content
+                          if (heightLeft > 0) {
+                            pdf.addPage();
+                            pageCount++;
+                          }
+                        }
+                        
+                        // Save PDF
+                        pdf.save(`outward-receipt-${selectedOutward.outwardCode || ''}.pdf`);
+                        
+                        // Clean up - remove the temporary element
                         document.body.removeChild(tempContainer);
+                        
+                      } catch (error: any) {
+                        console.error("PDF Generation Error:", error);
+                        alert(`Failed to generate PDF: ${error?.message || 'Unknown error'}`);
                       }
-                      
-                    } catch (error) {
-                      console.error("PDF Generation Error:", error);
-                      alert("Failed to generate PDF. Please try again.");
-                    }
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2">
-                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                    <rect x="6" y="14" width="12" height="8"></rect>
-                  </svg>
-                  Generate Receipt
-                </Button>
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2">
+                      <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                      <rect x="6" y="14" width="12" height="8"></rect>
+                    </svg>
+                    Generate Receipt
+                  </Button>
                 )}
               </div>
             </form>

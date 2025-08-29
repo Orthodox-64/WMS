@@ -770,19 +770,18 @@ export default function ReleaseOrderPage() {
                   <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>RO Details</div>
                 </div>
-                {/* Two-column grid for fields */}
+                {/* Three-column grid for fields */}
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '0 32px',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: '0 24px',
                     marginTop: 32,
                   }}
                 >
                   {/* All fields except attachments */}
                   {[
                     { label: 'RO Code', value: selectedRO.roCode },
-                    { label: 'Status', value: selectedRO.roStatus },
                     { label: 'SR/WR No.', value: selectedRO.srwrNo },
                     { label: 'CAD Number', value: selectedRO.cadNumber },
                     { label: 'State', value: selectedRO.state },
@@ -838,31 +837,70 @@ export default function ReleaseOrderPage() {
                         // Import required libraries
                         const html2canvas = (await import('html2canvas')).default;
                         const jsPDF = (await import('jspdf')).default;
-                        const ReactDOMClient = (await import('react-dom/client')).default;
                         
-                        // Import PrintableROReceipt component dynamically to avoid SSR issues
-                        const PrintableROReceipt = (await import('../../components/PrintableROReceipt')).default;
-                        
-                        // Create a proper React element with the receipt component
-                        const receiptElement = document.createElement('div');
-                        receiptElement.id = "temp-pdf-container";
-                        receiptElement.style.width = '100%';
-                        receiptElement.style.position = 'absolute';
-                        receiptElement.style.top = '-9999px';
-                        receiptElement.style.left = '-9999px';
-                        receiptElement.style.zIndex = '-1000';
-                        receiptElement.style.overflow = 'hidden';
-                        document.body.appendChild(receiptElement);
-                        
-                        // Create root and render component
-                        const root = ReactDOMClient.createRoot(receiptElement);
-                        root.render(<PrintableROReceipt data={selectedRO} />);
-                        
-                        // Add a small delay for rendering
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // Create a temporary container for the receipt
+                        const tempContainer = document.createElement('div');
+                        tempContainer.style.position = 'absolute';
+                        tempContainer.style.top = '-9999px';
+                        tempContainer.style.left = '-9999px';
+                        tempContainer.style.width = '900px';
+                        tempContainer.style.background = '#fff';
+                        tempContainer.style.fontFamily = 'Arial, sans-serif';
+                        tempContainer.style.color = '#222';
+                        tempContainer.style.padding = '36px';
+                        document.body.appendChild(tempContainer);
+
+                        // Create the receipt HTML content
+                        tempContainer.innerHTML = `
+                          <div id="printable-ro-receipt" style="width: 900px; margin: 0; background: #fff; border-radius: 16px; font-family: Arial, sans-serif; color: #222; padding: 36px;">
+                            <!-- Header with logo and address -->
+                            <div style="text-align: center; margin-bottom: 8px;">
+                              <img src="/Group 86.png" alt="Agrogreen Logo" style="width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 8px;" />
+                              <div style="font-size: 28px; font-weight: 700; color: #e67c1f; letter-spacing: 0.5px; margin-bottom: 2px;">AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                              <div style="font-size: 18px; font-weight: 500; color: #1aad4b; margin-bottom: 8px;">603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                              <div style="font-size: 20px; font-weight: 700; color: #e67c1f; margin: 24px 0 0 0; text-decoration: underline;">RO Details</div>
+                            </div>
+                            
+                            <!-- Three-column grid for fields -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 24px; margin-top: 32px;">
+                              ${[
+                                { label: 'RO Code', value: selectedRO.roCode },                                
+                                { label: 'SR/WR No.', value: selectedRO.srwrNo },
+                                { label: 'CAD Number', value: selectedRO.cadNumber },
+                                { label: 'State', value: selectedRO.state },
+                                { label: 'Branch', value: selectedRO.branch },
+                                { label: 'Location', value: selectedRO.location },
+                                { label: 'Warehouse Name', value: selectedRO.warehouseName },
+                                { label: 'Warehouse Code', value: selectedRO.warehouseCode },
+                                { label: 'Warehouse Address', value: selectedRO.warehouseAddress },
+                                { label: 'Client Name', value: selectedRO.client },
+                                { label: 'Client Code', value: selectedRO.clientCode },
+                                { label: 'Client Address', value: selectedRO.clientAddress },
+                                { label: 'Inward Bags', value: selectedRO.totalBags },
+                                { label: 'Inward Quantity (MT)', value: selectedRO.totalQuantity },
+                                { label: 'Release Bags', value: selectedRO.releaseBags },
+                                { label: 'Release Quantity (MT)', value: selectedRO.releaseQuantity },
+                                { label: 'Balance Bags', value: getBalanceBags(selectedRO) },
+                                { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedRO) },
+                              ].map((f) => `
+                                <div style="margin-bottom: 12px;">
+                                  <div style="font-weight: 700; color: #1aad4b; font-size: 16px; margin-bottom: 4px; margin-top: 12px; letter-spacing: 0.2px;">${f.label}</div>
+                                  <div style="font-weight: 500; color: #222; font-size: 16px; margin-bottom: 8px; background: #f6fef9; border-radius: 8px; padding: 6px 12px; border: 1px solid #e0f2e9;">${f.value ?? '-'}</div>
+                                </div>
+                              `).join('')}
+                            </div>
+                            
+                            <div style="font-size: 13px; color: #555; text-align: right; margin-top: 24px;">
+                              <b>Generated on:</b> ${new Date().toLocaleString()}
+                            </div>
+                          </div>
+                        `;
+
+                        // Wait for images to load
+                        await new Promise(resolve => setTimeout(resolve, 1000));
                         
                         // Get the rendered receipt
-                        const printableReceipt = document.getElementById('printable-ro-receipt');
+                        const printableReceipt = tempContainer.querySelector('#printable-ro-receipt');
                         if (!printableReceipt) {
                           throw new Error("Could not find printable receipt element");
                         }
@@ -873,7 +911,9 @@ export default function ReleaseOrderPage() {
                           useCORS: true, 
                           backgroundColor: '#fff',
                           logging: false,
-                          allowTaint: true
+                          allowTaint: true,
+                          width: 900,
+                          height: printableReceipt.scrollHeight
                         });
                         
                         // Create PDF with proper dimensions
@@ -917,14 +957,11 @@ export default function ReleaseOrderPage() {
                         pdf.save(`release-order-receipt-${selectedRO.roCode || ''}.pdf`);
                         
                         // Clean up - remove the temporary element
-                        const tempContainer = document.getElementById("temp-pdf-container");
-                        if (tempContainer) {
-                          document.body.removeChild(tempContainer);
-                        }
+                        document.body.removeChild(tempContainer);
                         
                       } catch (error) {
                         console.error("PDF Generation Error:", error);
-                        alert("Failed to generate PDF. Please try again.");
+                        alert(`Failed to generate PDF: ${error.message || 'Unknown error'}`);
                       }
                     }}>
                       Generate Receipt
