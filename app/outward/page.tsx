@@ -294,7 +294,7 @@ export default function OutwardPage() {
 
         {/* Search and Export */}
         <div className="bg-blue-50 rounded-lg p-4 mb-6 border border-blue-200">
-          <div className="text-lg font-semibold text-blue-800 mb-3">Search & Export Options</div>
+          <div className="text-lg font-semibold text-orange-500 mb-3">Search & Export Options</div>
           <div className="flex justify-between items-center">
             <div className="flex items-center">
               <span className="mr-2 text-gray-600">Search:</span>
@@ -318,7 +318,7 @@ export default function OutwardPage() {
         {/* Main Table */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="py-3 px-4 bg-blue-50 border-b border-blue-100">
-            <h2 className="text-blue-700 text-xl font-semibold">Outward Entries</h2>
+            <h2 className="text-orange-500 text-xl font-semibold">Outward Entries</h2>
           </div>
           <div className="overflow-x-auto">
             {outwardEntries.length === 0 ? (

@@ -237,6 +237,7 @@ export default function InwardPage() {
   const [hologramNumber, setHologramNumber] = useState('');
   const [isFormApproved, setIsFormApproved] = useState(false);
   const [srGenerationDate, setSrGenerationDate] = useState('');
+  const [remarks, setRemarks] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
   const testCertRef = useRef<HTMLDivElement>(null);
   const printableReceiptRef = useRef<HTMLDivElement>(null);
@@ -2292,6 +2293,7 @@ export default function InwardPage() {
     setCurrentEntryIndex(0);
     setIsUploading(false);
     setHasPendingEntries(false);
+    setRemarks('');
   };
 
   const handleModalClose = () => {
@@ -2299,6 +2301,10 @@ export default function InwardPage() {
     setIsEditMode(false);
     setEditingRow(null);
     resetForm();
+    setRemarks('');
+    setHologramNumber('');
+    setSrGenerationDate('');
+    setIsFormApproved(false);
   };
 
   // Calculate net weight when gross or tare weight changes
@@ -3547,6 +3553,7 @@ export default function InwardPage() {
     } else {
       setSrGenerationDate('');
     }
+    setIsFormApproved(row.status === 'approved');
     
     // Fetch insurance data from inspection collection
     try {
@@ -3614,35 +3621,80 @@ export default function InwardPage() {
       });
       return;
     }
+    
+    if (!remarks.trim()) {
+      toast({
+        title: 'Remarks Required',
+        description: 'Please enter remarks before proceeding.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     // Update status, srGenerationDate, and hologramNumber in Firestore
     const today = new Date();
     const todayISO = today.toISOString().slice(0, 10);
+    
     try {
       const inwardCollection = collection(db, 'inward');
       const q = query(inwardCollection, where('inwardId', '==', sr.inwardId));
       const querySnapshot = await getDocs(q);
+      
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'approved', srGenerationDate: todayISO, hologramNumber, remarks });
+        
+        // Update the document with all required fields in one operation
+        await updateDoc(docRef, { 
+          status: 'approved', 
+          srGenerationDate: todayISO, 
+          hologramNumber, 
+          remarks: remarks || '',
+          updatedAt: new Date().toISOString()
+        });
+        
+        console.log('Successfully updated inward document with srGenerationDate:', todayISO);
+        
+        // Update local state
+        setIsFormApproved(true);
+        setSrGenerationDate(todayISO);
+        
+        // Update the selectedRowForSR to reflect the changes
+        setSelectedRowForSR(prev => ({
+          ...prev,
+          status: 'approved',
+          srGenerationDate: todayISO,
+          hologramNumber
+        }));
+        
+        toast({
+          title: 'Approved Successfully',
+          description: 'The receipt has been approved and is now ready for printing.',
+          variant: 'default',
+        });
+      } else {
+        throw new Error(`No inward document found with inwardId: ${sr.inwardId}`);
       }
     } catch (error) {
       console.error('Error updating status to approve:', error);
-    }
-    setIsFormApproved(true);
-    setSrGenerationDate(todayISO);
-    toast({
-      title: 'Approved Successfully',
-      description: 'The receipt has been approved and is now ready for printing.',
-      variant: 'default',
-    });
-    // Update the inward document with remarks
-    if (sr && sr.id) {
-      const inwardDocRef = doc(db, 'inward', sr.id);
-      await updateDoc(inwardDocRef, { remarks });
+      toast({
+        title: 'Error',
+        description: `Failed to approve receipt: ${error.message}`,
+        variant: 'destructive',
+      });
+      return;
     }
   };
 
   const handleRejectSR = async (sr: any) => {
+    if (!remarks.trim()) {
+      toast({
+        title: 'Remarks Required',
+        description: 'Please enter remarks before proceeding.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     // Update status in Firestore
     try {
       const inwardCollection = collection(db, 'inward');
@@ -3650,7 +3702,7 @@ export default function InwardPage() {
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'rejected', remarks });
+        await updateDoc(docRef, { status: 'rejected', remarks: remarks || '' });
       }
     } catch (error) {
       console.error('Error updating status to rejected:', error);
@@ -3659,6 +3711,15 @@ export default function InwardPage() {
   };
 
   const handleResubmitSR = async (sr: any) => {
+    if (!remarks.trim()) {
+      toast({
+        title: 'Remarks Required',
+        description: 'Please enter remarks before proceeding.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     // Update status in Firestore
     try {
       const inwardCollection = collection(db, 'inward');
@@ -3666,7 +3727,7 @@ export default function InwardPage() {
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
-        await updateDoc(docRef, { status: 'resubmited', remarks });
+        await updateDoc(docRef, { status: 'resubmited', remarks: remarks || '' });
       }
     } catch (error) {
       console.error('Error updating status to resubmited:', error);
@@ -4047,9 +4108,6 @@ export default function InwardPage() {
       setRemainingBurglaryPolicy(remainingBurglary >= 0 ? remainingBurglary.toFixed(2) : '0.00');
     }
   }, [selectedInsuranceInfoIndex, initialRemainingFire, initialRemainingBurglary, baseForm.totalValue]);
-
-  // Add remarks state in InwardPage component
-  const [remarks, setRemarks] = useState('');
 
   // ... inside InwardPage component, after other useState hooks ...
   const [isPrinting, setIsPrinting] = useState(false);
