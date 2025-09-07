@@ -89,6 +89,10 @@ export default function OutwardPage() {
   const [gatepass, setGatepass] = React.useState('');
   const [weighbridgeName, setWeighbridgeName] = React.useState('');
   const [weighbridgeSlipNo, setWeighbridgeSlipNo] = React.useState('');
+  const [grossWeight, setGrossWeight] = React.useState('');
+  const [tareWeight, setTareWeight] = React.useState('');
+  const [netWeight, setNetWeight] = React.useState('');
+  const [totalBagsOutward, setTotalBagsOutward] = React.useState('');
   const [stackEntries, setStackEntries] = React.useState<any[]>([]);
   const [fileAttachments, setFileAttachments] = React.useState<File[]>([]);
   
@@ -105,6 +109,39 @@ export default function OutwardPage() {
   const [selectedOutward, setSelectedOutward] = React.useState<any>(null);
   const [remark, setRemark] = React.useState('');
   const [outwardStatusUpdating, setOutwardStatusUpdating] = React.useState(false);
+  
+  // Calculate net weight automatically when gross weight or tare weight changes
+  React.useEffect(() => {
+    const gross = parseFloat(grossWeight) || 0;
+    const tare = parseFloat(tareWeight) || 0;
+    const calculated = gross - tare;
+    setNetWeight(calculated > 0 ? calculated.toFixed(3) : '0.000');
+  }, [grossWeight, tareWeight]);
+  
+  // Input validation functions
+  const handleGrossWeightChange = (value: string) => {
+    // Allow only numbers and decimal point, max 3 decimal places
+    const regex = /^\d*\.?\d{0,3}$/;
+    if (regex.test(value) || value === '') {
+      setGrossWeight(value);
+    }
+  };
+
+  const handleTareWeightChange = (value: string) => {
+    // Allow only numbers and decimal point, max 3 decimal places
+    const regex = /^\d*\.?\d{0,3}$/;
+    if (regex.test(value) || value === '') {
+      setTareWeight(value);
+    }
+  };
+
+  const handleTotalBagsOutwardChange = (value: string) => {
+    // Allow only integers
+    const regex = /^\d*$/;
+    if (regex.test(value) || value === '') {
+      setTotalBagsOutward(value);
+    }
+  };
   
   // Inward entry data for reference
   const [selectedInwardEntry, setSelectedInwardEntry] = React.useState<any>(null);
@@ -480,11 +517,9 @@ export default function OutwardPage() {
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl text-center text-blue-600 font-bold">
-              Create New Outward Entry
-              <div className="mt-1 text-sm font-normal text-gray-600">
-                Create an outward entry based on a Delivery Order (DO)
-              </div>
+            <DialogTitle className="text-xl text-left text-orange-600 font-bold">
+              New Outward Entry
+              
             </DialogTitle>
           </DialogHeader>
           
@@ -623,6 +658,10 @@ export default function OutwardPage() {
                 gatepass,
                 weighbridgeName,
                 weighbridgeSlipNo,
+                grossWeight: parseFloat(grossWeight) || 0,
+                tareWeight: parseFloat(tareWeight) || 0,
+                netWeight: parseFloat(netWeight) || 0,
+                totalBagsOutward: parseInt(totalBagsOutward) || 0,
                 
                 // Stack entries
                 stackEntries: stackEntries.map(stack => ({
@@ -655,6 +694,10 @@ export default function OutwardPage() {
               setGatepass('');
               setWeighbridgeName('');
               setWeighbridgeSlipNo('');
+              setGrossWeight('');
+              setTareWeight('');
+              setNetWeight('');
+              setTotalBagsOutward('');
               setStackEntries([]);
               setFileAttachments([]);
               setRemark('');
@@ -674,7 +717,7 @@ export default function OutwardPage() {
             <div className="space-y-5 pt-4">
               {/* DO Selection */}
               <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-                <Label htmlFor="do-select" className="text-blue-800 font-semibold text-lg mb-2 block">
+                <Label htmlFor="do-select" className="text-green-800 font-semibold text-lg mb-2 block">
                   Select Delivery Order
                 </Label>
                 <div className="relative">
@@ -711,7 +754,7 @@ export default function OutwardPage() {
                   )}
                   
                   {/* Debug info */}
-                  <div className="text-xs mb-2 text-blue-600">
+                  <div className="text-xs mb-2 text-orange-600">
                     Available DOs: {doOptions.length} | 
                     Filtered: {filteredDOOptions.length} | 
                     With positive balance: {filteredDOOptions.filter(opt => 
@@ -981,70 +1024,70 @@ export default function OutwardPage() {
               {selectedDO && (
                 <div className="grid grid-cols-2 gap-6 p-4 bg-blue-50 rounded-md border border-blue-200">
                   <div>
-                    <Label className="text-blue-800 font-medium">SR/WR NO</Label>
+                    <Label className="text-green-800 font-medium">SR/WR NO</Label>
                     <Input value={selectedDO.srwrNo || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">CAD NUMBER</Label>
+                    <Label className="text-green-800 font-medium">CAD NUMBER</Label>
                     <Input value={selectedDO.cadNumber || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">STATE</Label>
+                    <Label className="text-green-800 font-medium">STATE</Label>
                     <Input value={selectedDO.state || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">BRANCH</Label>
+                    <Label className="text-green-800 font-medium">BRANCH</Label>
                     <Input value={selectedDO.branch || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">LOCATION</Label>
+                    <Label className="text-green-800 font-medium">LOCATION</Label>
                     <Input value={selectedDO.location || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">WAREHOUSE NAME</Label>
+                    <Label className="text-green-800 font-medium">WAREHOUSE NAME</Label>
                     <Input value={selectedDO.warehouseName || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">WAREHOUSE CODE</Label>
+                    <Label className="text-green-800 font-medium">WAREHOUSE CODE</Label>
                     <Input value={selectedDO.warehouseCode || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">WAREHOUSE ADDRESS</Label>
+                    <Label className="text-green-800 font-medium">WAREHOUSE ADDRESS</Label>
                     <Input value={selectedDO.warehouseAddress || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">CLIENT NAME</Label>
+                    <Label className="text-green-800 font-medium">CLIENT NAME</Label>
                     <Input value={selectedDO.client || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">CLIENT CODE</Label>
+                    <Label className="text-green-800 font-medium">CLIENT CODE</Label>
                     <Input value={selectedDO.clientCode || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div className="col-span-2">
-                    <Label className="text-blue-800 font-medium">CLIENT ADDRESS</Label>
+                    <Label className="text-green-800 font-medium">CLIENT ADDRESS</Label>
                     <Input value={selectedDO.clientAddress || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   
                   <div>
-                    <Label className="text-blue-800 font-medium">INWARD BAGS</Label>
+                    <Label className="text-green-800 font-medium">INWARD BAGS</Label>
                     <Input value={selectedDO.totalBags || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">INWARD QUANTITY (MT)</Label>
+                    <Label className="text-green-800 font-medium">INWARD QUANTITY (MT)</Label>
                     <Input value={selectedDO.totalQuantity || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">DO BAGS</Label>
+                    <Label className="text-green-800 font-medium">DO BAGS</Label>
                     <Input value={selectedDO.doBags || ''} readOnly className="bg-white border-blue-100" />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">DO QUANTITY (MT)</Label>
+                    <Label className="text-green-800 font-medium">DO QUANTITY (MT)</Label>
                     <Input value={selectedDO.doQuantity || ''} readOnly className="bg-white border-blue-100" />
                   </div>
 
                   {/* Outward entry input fields */}
                   <div>
-                    <Label htmlFor="outwardBags" className="text-blue-600 font-medium">OUTWARD BAGS</Label>
+                    <Label htmlFor="outwardBags" className="text-green-600 font-medium">OUTWARD BAGS</Label>
                     <Input
                       id="outwardBags"
                       type="number"
@@ -1055,7 +1098,7 @@ export default function OutwardPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="outwardQty" className="text-blue-600 font-medium">OUTWARD QUANTITY (MT)</Label>
+                    <Label htmlFor="outwardQty" className="text-green-600 font-medium">OUTWARD QUANTITY (MT)</Label>
                     <Input
                       id="outwardQty"
                       type="number"
@@ -1069,7 +1112,7 @@ export default function OutwardPage() {
 
                   {/* Auto calculated balance fields */}
                   <div>
-                    <Label className="text-blue-800 font-medium">BALANCE BAGS</Label>
+                    <Label className="text-green-800 font-medium">BALANCE BAGS</Label>
                     <Input 
                       value={currentBalanceBags !== null && outwardBags ? 
                         Math.max(0, Number(currentBalanceBags) - Number(outwardBags || 0)).toString() : 
@@ -1079,7 +1122,7 @@ export default function OutwardPage() {
                     />
                   </div>
                   <div>
-                    <Label className="text-blue-800 font-medium">BALANCE QUANTITY (MT)</Label>
+                    <Label className="text-green-800 font-medium">BALANCE QUANTITY (MT)</Label>
                     <Input 
                       value={currentBalanceQty !== null && outwardQty ? 
                         Math.max(0, Number(currentBalanceQty) - Number(outwardQty || 0)).toFixed(2) : 
@@ -1091,10 +1134,10 @@ export default function OutwardPage() {
                   
                   {/* Outward entry details */}
                   <div className="col-span-2 mt-4">
-                    <h3 className="text-blue-800 font-semibold mb-3 border-b border-blue-200 pb-1">Outward Entry Details</h3>
+                    <h3 className="text-orange-800 font-semibold mb-3 border-b border-blue-200 pb-1">Outward Entry Details</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="vehicleNumber" className="text-blue-600 font-medium">VEHICLE NUMBER</Label>
+                        <Label htmlFor="vehicleNumber" className="text-green-600 font-medium">VEHICLE NUMBER</Label>
                         <Input
                           id="vehicleNumber"
                           value={vehicleNumber}
@@ -1105,7 +1148,7 @@ export default function OutwardPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="gatepass" className="text-blue-600 font-medium">GATE PASS</Label>
+                        <Label htmlFor="gatepass" className="text-green-600 font-medium">GATE PASS</Label>
                         <Input
                           id="gatepass"
                           value={gatepass}
@@ -1116,7 +1159,7 @@ export default function OutwardPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="weighbridgeName" className="text-blue-600 font-medium">WEIGHBRIDGE NAME</Label>
+                        <Label htmlFor="weighbridgeName" className="text-green-600 font-medium">WEIGHBRIDGE NAME</Label>
                         <Input
                           id="weighbridgeName"
                           value={weighbridgeName}
@@ -1127,7 +1170,7 @@ export default function OutwardPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="weighbridgeSlipNo" className="text-blue-600 font-medium">WEIGHBRIDGE SLIP NO</Label>
+                        <Label htmlFor="weighbridgeSlipNo" className="text-green-600 font-medium">WEIGHBRIDGE SLIP NO</Label>
                         <Input
                           id="weighbridgeSlipNo"
                           value={weighbridgeSlipNo}
@@ -1137,12 +1180,59 @@ export default function OutwardPage() {
                           placeholder="e.g. WB98765"
                         />
                       </div>
+                      <div>
+                        <Label htmlFor="grossWeight" className="text-green-600 font-medium">GROSS WEIGHT (MT)</Label>
+                        <Input
+                          id="grossWeight"
+                          value={grossWeight}
+                          onChange={(e) => handleGrossWeightChange(e.target.value)}
+                          required
+                          className="bg-white border-blue-200"
+                          placeholder="e.g. 25.500"
+                          type="text"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="tareWeight" className="text-green-600 font-medium">TARE WEIGHT (MT)</Label>
+                        <Input
+                          id="tareWeight"
+                          value={tareWeight}
+                          onChange={(e) => handleTareWeightChange(e.target.value)}
+                          required
+                          className="bg-white border-blue-200"
+                          placeholder="e.g. 2.500"
+                          type="text"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="netWeight" className="text-green-600 font-medium">NET WEIGHT (MT)</Label>
+                        <Input
+                          id="netWeight"
+                          value={netWeight}
+                          readOnly
+                          className="bg-gray-100 border-blue-200 text-gray-700"
+                          placeholder="Auto calculated"
+                          type="text"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="totalBagsOutward" className="text-green-600 font-medium">TOTAL BAGS OUTWARD</Label>
+                        <Input
+                          id="totalBagsOutward"
+                          value={totalBagsOutward}
+                          onChange={(e) => handleTotalBagsOutwardChange(e.target.value)}
+                          required
+                          className="bg-white border-blue-200"
+                          placeholder="e.g. 500"
+                          type="text"
+                        />
+                      </div>
                     </div>
                   </div>
                   
                   {/* Stack-wise Entry Details */}
                   <div className="col-span-2 mt-4">
-                    <h3 className="text-blue-800 font-semibold mb-3 border-b border-blue-200 pb-1">Stack-wise Entry Details</h3>
+                    <h3 className="text-orange-800 font-semibold mb-3 border-b border-blue-200 pb-1">Stack-wise Entry Details</h3>
                     
                     {/* Stack entries will be loaded dynamically based on inward data */}
                     <div className="mb-4">
@@ -1345,7 +1435,7 @@ export default function OutwardPage() {
                   
                   {/* Attachment - Mandatory */}
                   <div className="col-span-2">
-                    <Label htmlFor="attachment" className="text-blue-600 font-medium flex items-center">
+                    <Label htmlFor="attachment" className="text-green-600 font-medium flex items-center">
                       ATTACHMENT (ALL FILE TYPES ALLOWED) 
                       <span className="text-red-500 ml-1">*</span>
                     </Label>
@@ -1393,7 +1483,7 @@ export default function OutwardPage() {
 
                   {/* Remark */}
                   <div className="col-span-2">
-                    <Label htmlFor="remark" className="text-blue-800 font-medium">REMARK</Label>
+                    <Label htmlFor="remark" className="text-green-800 font-medium">REMARK</Label>
                     <Input
                       id="remark"
                       value={remark}
@@ -1467,6 +1557,10 @@ export default function OutwardPage() {
                   { label: 'Gate Pass', value: selectedOutward.gatepass },
                   { label: 'Weighbridge Name', value: selectedOutward.weighbridgeName },
                   { label: 'Weighbridge Slip No.', value: selectedOutward.weighbridgeSlipNo },
+                  { label: 'Gross Weight (MT)', value: selectedOutward.grossWeight },
+                  { label: 'Tare Weight (MT)', value: selectedOutward.tareWeight },
+                  { label: 'Net Weight (MT)', value: selectedOutward.netWeight },
+                  { label: 'Total Bags Outward', value: selectedOutward.totalBagsOutward },
                 ].map((f, idx) => (
                   <div key={idx} style={{ marginBottom: 12 }}>
                     <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>{f.label}</div>
@@ -1671,6 +1765,10 @@ export default function OutwardPage() {
                                 { label: 'Gate Pass', value: selectedOutward.gatepass },
                                 { label: 'Weighbridge Name', value: selectedOutward.weighbridgeName },
                                 { label: 'Weighbridge Slip No.', value: selectedOutward.weighbridgeSlipNo },
+                                { label: 'Gross Weight (MT)', value: selectedOutward.grossWeight },
+                                { label: 'Tare Weight (MT)', value: selectedOutward.tareWeight },
+                                { label: 'Net Weight (MT)', value: selectedOutward.netWeight },
+                                { label: 'Total Bags Outward', value: selectedOutward.totalBagsOutward },
                                 { label: 'Balance Bags', value: selectedOutward.balanceBags },
                                 { label: 'Balance Quantity (MT)', value: selectedOutward.balanceQuantity },
                               ].map((f) => `

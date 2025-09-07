@@ -44,6 +44,10 @@ export default function PrintableOutwardReceipt({ outwardData }: { outwardData: 
     { label: 'Gate Pass', value: outwardData.gatepass },
     { label: 'Weighbridge Name', value: outwardData.weighbridgeName },
     { label: 'Weighbridge Slip No', value: outwardData.weighbridgeSlipNo },
+    { label: 'Gross Weight (MT)', value: outwardData.grossWeight },
+    { label: 'Tare Weight (MT)', value: outwardData.tareWeight },
+    { label: 'Net Weight (MT)', value: outwardData.netWeight },
+    { label: 'Total Bags Outward', value: outwardData.totalBagsOutward },
     { label: 'Balance Bags', value: outwardData.balanceBags },
     { label: 'Balance Quantity (MT)', value: outwardData.balanceQuantity },
   ];
