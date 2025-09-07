@@ -73,7 +73,8 @@ const getStatusStyling = (status: string) => {
 };
 
 export default function ReleaseOrderPage() {
-  const { userRole } = useAuth();
+  const { user } = useAuth();
+  const userRole = user?.role || 'user';
   const router = useRouter();
   // Placeholder state for search
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -148,6 +149,30 @@ export default function ReleaseOrderPage() {
   Object.values(groupedROs).forEach(group => group.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
   // Only show latest per group in main table
   const latestROs = Object.values(groupedROs).map(group => group[0]);
+  
+  // Filter RO entries based on search term
+  const filteredROs = React.useMemo(() => {
+    if (!searchTerm) return latestROs;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return latestROs.filter(ro => {
+      const srwrNo = (ro.srwrNo || '').toLowerCase();
+      const state = (ro.state || '').toLowerCase();
+      const branch = (ro.branch || '').toLowerCase();
+      const location = (ro.location || '').toLowerCase();
+      const warehouseName = (ro.warehouseName || '').toLowerCase();
+      const warehouseCode = (ro.warehouseCode || '').toLowerCase();
+      const clientName = (ro.client || '').toLowerCase();
+      
+      return srwrNo.includes(searchLower) ||
+             state.includes(searchLower) ||
+             branch.includes(searchLower) ||
+             location.includes(searchLower) ||
+             warehouseName.includes(searchLower) ||
+             warehouseCode.includes(searchLower) ||
+             clientName.includes(searchLower);
+    });
+  }, [searchTerm, latestROs]);
 
   // Columns for main table
   const roColumns = [
@@ -431,14 +456,10 @@ export default function ReleaseOrderPage() {
     setROStatusUpdating(false);
   };
 
-  // Redirect supervisors who don't have access
+  // Redirect users who don't have access (remove supervisor check since it doesn't exist)
   useEffect(() => {
-    if (userRole === 'supervisor') {
-      router.push('/dashboard');
-    }
+    // Add any role-based access control if needed
   }, [userRole, router]);
-
-  if (userRole === 'supervisor') return null;
 
   return (
     <DashboardLayout>
@@ -469,11 +490,28 @@ export default function ReleaseOrderPage() {
               <Label htmlFor="search-input" className="font-semibold text-gray-700">Search:</Label>
               <Input
                 id="search-input"
-                placeholder="Search by RO fields..."
-                className="w-full"
+                placeholder="Search by SR/WR No, State, Branch, Location, Warehouse Name/Code, Client Name..."
+                className="w-full pr-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
+              {searchTerm && (
+                <button 
+                  type="button" 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title="Clear search"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+              {searchTerm && (
+                <div className="ml-3 text-sm text-gray-600">
+                  {filteredROs.length} of {latestROs.length} entries
+                </div>
+              )}
             </div>
             <Button
               onClick={handleExportCSV}
@@ -664,9 +702,19 @@ export default function ReleaseOrderPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {latestROs.map(ro => (
-                    <React.Fragment key={ro.roCode}>
-                      <tr className="even:bg-gray-50">
+                  {filteredROs.length === 0 ? (
+                    <tr>
+                      <td colSpan={17} className="px-2 py-8 text-center text-gray-500">
+                        {releaseOrders.length === 0 
+                          ? "No release orders found. Click 'Add RO' to create your first entry."
+                          : "No release orders match your search criteria. Try adjusting your search terms."
+                        }
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredROs.map(ro => (
+                      <React.Fragment key={ro.roCode}>
+                        <tr className="even:bg-gray-50">
                         <td className="px-2 py-1 border text-center">
                           <Button
                             variant="ghost"
@@ -749,7 +797,8 @@ export default function ReleaseOrderPage() {
                         </tr>
                       )}
                     </React.Fragment>
-                  ))}
+                  ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -906,7 +955,7 @@ export default function ReleaseOrderPage() {
                         }
                         
                         // Create canvas with higher scale for better quality
-                        const canvas = await html2canvas(printableReceipt, { 
+                        const canvas = await html2canvas(printableReceipt as HTMLElement, { 
                           scale: 2, 
                           useCORS: true, 
                           backgroundColor: '#fff',
@@ -959,9 +1008,9 @@ export default function ReleaseOrderPage() {
                         // Clean up - remove the temporary element
                         document.body.removeChild(tempContainer);
                         
-                      } catch (error) {
+                      } catch (error: any) {
                         console.error("PDF Generation Error:", error);
-                        alert(`Failed to generate PDF: ${error.message || 'Unknown error'}`);
+                        alert(`Failed to generate PDF: ${error?.message || 'Unknown error'}`);
                       }
                     }}>
                       Generate Receipt

@@ -5737,12 +5737,12 @@ export default function InwardPage() {
 
             {!isEditMode && form.commodity && insuranceEntries.length === 0 && (
               <div className="border-t pt-4">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-yellow-800 text-sm">
-                    <strong>Note:</strong> No insurance data found for this warehouse in the inspection module. 
-                    Please ensure insurance data exists in the Warehouse Inspection section.
-                  </p>
-                </div>
+              //   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              //     {/* <p className="text-yellow-800 text-sm">
+              //       <strong>Note:</strong> No insurance data found for this warehouse in the inspection module. 
+              //       Please ensure insurance data exists in the Warehouse Inspection section.
+              //     </p> */}
+              //   </div>
               </div>
             )}
 
@@ -5950,18 +5950,7 @@ export default function InwardPage() {
 
                       {/* Stack Information */}
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <h5 className="text-md font-semibold text-green-700">Stack Information</h5>
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleEntryAddStack(index)}
-                            className="text-green-600 border-green-300 hover:bg-green-50"
-                          >
-                            Add Stack
-                          </Button>
-                        </div>
+
                         <div className="space-y-3">
                           {entry.stacks && entry.stacks.map((stack: any, stackIndex: number) => (
                             <div key={stackIndex} className="border border-green-200 rounded-lg p-3 bg-white">

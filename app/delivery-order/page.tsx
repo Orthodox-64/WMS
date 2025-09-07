@@ -159,6 +159,30 @@ export default function DeliveryOrderPage() {
   Object.values(groupedDOs).forEach(group => group.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
   // Only show latest per group in main table
   const latestDOs = Object.values(groupedDOs).map(group => group[0]);
+  
+  // Filter DO entries based on search term
+  const filteredDOs = React.useMemo(() => {
+    if (!searchTerm) return latestDOs;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return latestDOs.filter(deliveryOrder => {
+      const srwrNo = (deliveryOrder.srwrNo || '').toLowerCase();
+      const state = (deliveryOrder.state || '').toLowerCase();
+      const branch = (deliveryOrder.branch || '').toLowerCase();
+      const location = (deliveryOrder.location || '').toLowerCase();
+      const warehouseName = (deliveryOrder.warehouseName || '').toLowerCase();
+      const warehouseCode = (deliveryOrder.warehouseCode || '').toLowerCase();
+      const clientName = (deliveryOrder.client || '').toLowerCase();
+      
+      return srwrNo.includes(searchLower) ||
+             state.includes(searchLower) ||
+             branch.includes(searchLower) ||
+             location.includes(searchLower) ||
+             warehouseName.includes(searchLower) ||
+             warehouseCode.includes(searchLower) ||
+             clientName.includes(searchLower);
+    });
+  }, [searchTerm, latestDOs]);
 
   // Columns for main table
   const doColumns = [
@@ -919,12 +943,29 @@ export default function DeliveryOrderPage() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   type="search"
-                  placeholder="Search by DO fields..."
-                  className="pl-8 w-[400px]"
+                  placeholder="Search by SR/WR No, State, Branch, Location, Warehouse Name/Code, Client Name..."
+                  className="pl-8 pr-8 w-[400px]"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
+                {searchTerm && (
+                  <button 
+                    type="button" 
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600"
+                    title="Clear search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
+              {searchTerm && (
+                <div className="ml-3 text-sm text-gray-600">
+                  {filteredDOs.length} of {latestDOs.length} entries
+                </div>
+              )}
             </div>
             <Button onClick={handleExportCSV} className="bg-blue-500 hover:bg-blue-600 text-white">
               <Download className="h-4 w-4 mr-2" /> Export CSV
@@ -975,7 +1016,17 @@ export default function DeliveryOrderPage() {
                 </tr>
               </thead>
               <tbody>
-                {latestDOs.map(do_item => (
+                {filteredDOs.length === 0 ? (
+                  <tr>
+                    <td colSpan={19} className="px-2 py-8 text-center text-gray-500">
+                      {deliveryOrders.length === 0 
+                        ? "No delivery orders found. Click 'Add DO' to create your first entry."
+                        : "No delivery orders match your search criteria. Try adjusting your search terms."
+                      }
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDOs.map(do_item => (
                   <React.Fragment key={do_item.doCode}>
                     <tr className="even:bg-gray-50">
                       <td className="px-2 py-1 border">
@@ -1085,7 +1136,8 @@ export default function DeliveryOrderPage() {
                       </tr>
                     )}
                   </React.Fragment>
-                ))}
+                ))
+                )}
               </tbody>
             </table>
           </div>

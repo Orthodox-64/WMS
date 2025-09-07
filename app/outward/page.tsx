@@ -298,6 +298,30 @@ export default function OutwardPage() {
   // Only show latest per group in main table
   const latestOutwards = Object.values(groupedOutwards).map(group => group[0]);
   
+  // Filter outward entries based on search term
+  const filteredOutwards = React.useMemo(() => {
+    if (!searchTerm) return latestOutwards;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return latestOutwards.filter(outward => {
+      const srwrNo = (outward.srwrNo || '').toLowerCase();
+      const state = (outward.state || '').toLowerCase();
+      const branch = (outward.branch || '').toLowerCase();
+      const location = (outward.location || '').toLowerCase();
+      const warehouseName = (outward.warehouseName || '').toLowerCase();
+      const warehouseCode = (outward.warehouseCode || '').toLowerCase();
+      const clientName = (outward.client || '').toLowerCase();
+      
+      return srwrNo.includes(searchLower) ||
+             state.includes(searchLower) ||
+             branch.includes(searchLower) ||
+             location.includes(searchLower) ||
+             warehouseName.includes(searchLower) ||
+             warehouseCode.includes(searchLower) ||
+             clientName.includes(searchLower);
+    });
+  }, [searchTerm, latestOutwards]);
+  
   // Filter DO options based on search input
   const filteredDOOptions = React.useMemo(() => {
     if (!doSearch) return doOptions;
@@ -339,12 +363,29 @@ export default function OutwardPage() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   type="search"
-                  placeholder="Search by outward fields..."
-                  className="pl-8 w-[400px]"
+                  placeholder="Search by SR/WR No, State, Branch, Location, Warehouse Name/Code, Client Name..."
+                  className="pl-8 pr-8 w-[400px]"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
+                {searchTerm && (
+                  <button 
+                    type="button" 
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600"
+                    title="Clear search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
+              {searchTerm && (
+                <div className="ml-3 text-sm text-gray-600">
+                  {filteredOutwards.length} of {latestOutwards.length} entries
+                </div>
+              )}
             </div>
             <Button onClick={() => alert('Export functionality will be added soon')} className="bg-blue-500 hover:bg-blue-600 text-white">
               <Download className="h-4 w-4 mr-2" /> Export CSV
@@ -361,6 +402,10 @@ export default function OutwardPage() {
             {outwardEntries.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 No outward entries found. Click "Add Outward" to create your first entry.
+              </div>
+            ) : filteredOutwards.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No outward entries match your search criteria. Try adjusting your search terms.
               </div>
             ) : (
               <table className="min-w-full border text-sm">
@@ -386,7 +431,7 @@ export default function OutwardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {latestOutwards.map((outward) => (
+                  {filteredOutwards.map((outward) => (
                     <React.Fragment key={outward.outwardCode}>
                       <tr className="hover:bg-gray-50">
                         <td className="px-3 py-2 border">
@@ -851,25 +896,71 @@ export default function OutwardPage() {
                               }
                             }
                             
-                            // Method 3: If still not found, try to find by SR/WR pattern
+                            // Method 3: If still not found, try to find by SR/WR pattern reconstruction
                             if (!inwardData) {
-                              console.log('Trying SR/WR pattern search');
+                              console.log('Trying robust SR/WR pattern search');
                               const allInwardSnap = await getDocs(inwardCol);
                               
                               const matchingInward = allInwardSnap.docs.find(doc => {
                                 const data = doc.data();
-                                const dataSrwr = `${data.receiptType || 'SR'}-${data.inwardId || ''}-${data.dateOfInward || ''}`;
-                                console.log('Comparing:', dataSrwr, 'with', srwrNo);
-                                return dataSrwr === srwrNo;
+                                
+                                // Generate the expected SR/WR format for this inward entry
+                                if (data.inwardId && data.dateOfInward) {
+                                  // Convert date from YYYY-MM-DD to YYYYMMDD format for comparison
+                                  const formattedDate = data.dateOfInward.replace(/-/g, '');
+                                  
+                                  // Try both SR and WR formats since receipt type might vary
+                                  const expectedSR = `SR-${data.inwardId}-${formattedDate}`;
+                                  const expectedWR = `WR-${data.inwardId}-${formattedDate}`;
+                                  
+                                  console.log('Comparing SR/WR:', srwrNo, 'with generated:', expectedSR, 'and', expectedWR);
+                                  
+                                  return srwrNo === expectedSR || srwrNo === expectedWR;
+                                }
+                                return false;
                               });
                               
                               if (matchingInward) {
                                 inwardData = matchingInward.data();
-                                console.log('Found inward data via SR/WR pattern search');
+                                console.log('Found inward data via robust SR/WR pattern search');
                               }
                             }
                             
-                            // Method 4: Last resort - search by partial match
+                            // Method 4: Warehouse-based search with date correlation
+                            if (!inwardData) {
+                              console.log('Trying warehouse-based search with date correlation');
+                              const allInwardSnap = await getDocs(inwardCol);
+                              
+                              // Try to extract date component from SR/WR number  
+                              let searchDate = '';
+                              const datePart = srwrNo.split('-').find((part: string) => /^\d{8}$/.test(part));
+                              if (datePart) {
+                                // Convert YYYYMMDD to YYYY-MM-DD for comparison
+                                searchDate = datePart.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
+                                console.log('Extracted date from SR/WR:', datePart, 'formatted as:', searchDate);
+                              }
+                              
+                              const matchingInwards = allInwardSnap.docs.filter(doc => {
+                                const data = doc.data();
+                                const warehouseMatch = data.warehouseName === selected.warehouseName;
+                                const dateMatch = searchDate && data.dateOfInward === searchDate;
+                                
+                                console.log('Checking inward:', data.inwardId, 'warehouse match:', warehouseMatch, 'date match:', dateMatch);
+                                return warehouseMatch && dateMatch;
+                              });
+                              
+                              if (matchingInwards.length === 1) {
+                                inwardData = matchingInwards[0].data();
+                                console.log('Found inward data via warehouse+date correlation');
+                              } else if (matchingInwards.length > 1) {
+                                // Multiple matches, try to pick the best one
+                                console.log('Multiple warehouse+date matches found:', matchingInwards.length);
+                                inwardData = matchingInwards[0].data(); // Take the first one
+                                console.log('Using first match from warehouse+date correlation');
+                              }
+                            }
+                            
+                            // Method 5: Last resort - search by partial match
                             if (!inwardData) {
                               console.log('Trying partial match search');
                               const allInwardSnap = await getDocs(inwardCol);
@@ -898,56 +989,113 @@ export default function OutwardPage() {
                               // Store inward entry data for reference
                               setSelectedInwardEntry(inwardData);
                               
-                              // Auto-populate vehicle number
-                              const vehicleNumber = inwardData.vehicleNumber || '';
+                              // Auto-populate vehicle number from the first available entry
+                              let vehicleNumber = '';
+                              if (inwardData.inwardEntries && Array.isArray(inwardData.inwardEntries) && inwardData.inwardEntries.length > 0) {
+                                // New structure with inwardEntries array
+                                vehicleNumber = inwardData.inwardEntries[0]?.vehicleNumber || '';
+                                console.log('Vehicle number from inwardEntries[0]:', vehicleNumber);
+                              } else {
+                                // Legacy structure 
+                                vehicleNumber = inwardData.vehicleNumber || '';
+                                console.log('Vehicle number from legacy structure:', vehicleNumber);
+                              }
+                              
                               if (vehicleNumber) {
                                 setVehicleNumber(vehicleNumber);
-                                console.log('Auto-populated vehicle number:', vehicleNumber);
+                                console.log('✅ Auto-populated vehicle number:', vehicleNumber);
                               } else {
-                                console.log('No vehicle number found');
+                                console.log('⚠️ No vehicle number found in inward data');
                                 console.log('Vehicle-related fields:', Object.keys(inwardData).filter(key => key.toLowerCase().includes('vehicle')));
                               }
                               
-                              // Auto-populate gate pass
-                              const gatePass = inwardData.getpassNumber || '';
+                              // Auto-populate gate pass from the first available entry
+                              let gatePass = '';
+                              if (inwardData.inwardEntries && Array.isArray(inwardData.inwardEntries) && inwardData.inwardEntries.length > 0) {
+                                // New structure with inwardEntries array
+                                gatePass = inwardData.inwardEntries[0]?.getpassNumber || '';
+                                console.log('Gate pass from inwardEntries[0]:', gatePass);
+                              } else {
+                                // Legacy structure
+                                gatePass = inwardData.getpassNumber || '';
+                                console.log('Gate pass from legacy structure:', gatePass);
+                              }
+                              
                               if (gatePass) {
                                 setGatepass(gatePass);
-                                console.log('Auto-populated gate pass:', gatePass);
+                                console.log('✅ Auto-populated gate pass:', gatePass);
                               } else {
-                                console.log('No gate pass found');
+                                console.log('⚠️ No gate pass found in inward data');
                                 console.log('Gate pass-related fields:', Object.keys(inwardData).filter(key => key.toLowerCase().includes('gate') || key.toLowerCase().includes('pass')));
                               }
                               
-                              // Extract stack information
-                              const stacks = inwardData.stacks || [];
-                              console.log('Stacks found:', stacks);
-                              console.log('Stacks type:', typeof stacks);
-                              console.log('Stacks is array:', Array.isArray(stacks));
+                              // Extract stack information with enhanced compatibility
+                              let stacks: any[] = [];
                               
-                              if (stacks && Array.isArray(stacks) && stacks.length > 0) {
-                                console.log('Processing stacks:', stacks.length, 'stacks');
+                              // Try new structure first (inwardEntries array)
+                              if (inwardData.inwardEntries && Array.isArray(inwardData.inwardEntries)) {
+                                console.log('Processing NEW inward structure with', inwardData.inwardEntries.length, 'entries');
                                 
+                                // Combine stacks from all entries
+                                inwardData.inwardEntries.forEach((entry: any, entryIndex: number) => {
+                                  if (entry.stacks && Array.isArray(entry.stacks)) {
+                                    entry.stacks.forEach((stack: any, stackIndex: number) => {
+                                      stacks.push({
+                                        ...stack,
+                                        stackNo: stack.stackNumber || stack.stackNo || `Stack-${entryIndex + 1}-${stackIndex + 1}`,
+                                        inwardBags: parseInt(stack.numberOfBags) || parseInt(stack.bags) || parseInt(stack.bagCount) || 0,
+                                        commodityName: inwardData.commodity || stack.commodityName || stack.commodity || '',
+                                        varietyName: inwardData.varietyName || stack.varietyName || stack.variety || ''
+                                      });
+                                    });
+                                  }
+                                });
+                                
+                                console.log('Combined stacks from all entries:', stacks.length, 'stacks total');
+                              } 
+                              // Fallback to legacy structure
+                              else if (inwardData.stacks && Array.isArray(inwardData.stacks)) {
+                                console.log('Processing LEGACY inward structure with', inwardData.stacks.length, 'stacks');
+                                stacks = inwardData.stacks.map((stack: any, index: number) => ({
+                                  stackNo: stack.stackNumber || stack.stackNo || `Stack-${index + 1}`,
+                                  inwardBags: parseInt(stack.numberOfBags) || parseInt(stack.bags) || parseInt(stack.bagCount) || 0,
+                                  commodityName: inwardData.commodity || stack.commodityName || stack.commodity || '',
+                                  varietyName: inwardData.varietyName || stack.varietyName || stack.variety || ''
+                                }));
+                              }
+                              
+                              // Process and set stack entries
+                              if (stacks.length > 0) {
                                 const stackData = stacks.map((stack: any, index: number) => {
-                                  console.log(`Processing stack ${index}:`, stack);
+                                  console.log(`Processing stack ${index + 1}:`, {
+                                    stackNo: stack.stackNo,
+                                    inwardBags: stack.inwardBags,
+                                    commodityName: stack.commodityName
+                                  });
+                                  
                                   return {
-                                    stackNo: stack.stackNumber || `Stack-${index + 1}`,
+                                    stackNo: stack.stackNo,
                                     bags: '', // User will input this
-                                quantity: '', // User will input this
-                                    inwardBags: parseInt(stack.numberOfBags) || 0
+                                    quantity: '', // User will input this
+                                    inwardBags: stack.inwardBags,
+                                    commodityName: stack.commodityName,
+                                    varietyName: stack.varietyName
                                   };
                                 });
-                              
-                              setStackEntries(stackData);
-                                console.log('Set stack entries:', stackData);
-                            } else {
-                                console.log('No valid stacks found, using default');
-                              setStackEntries([{
-                                stackNo: 'Stack-1',
-                                bags: '',
-                                quantity: '',
-                                inwardBags: 0
-                              }]);
-                            }
+                                
+                                setStackEntries(stackData);
+                                console.log('✅ Set', stackData.length, 'stack entries with comprehensive data');
+                              } else {
+                                console.log('⚠️ No stacks found in inward data, creating default stack');
+                                setStackEntries([{
+                                  stackNo: 'Stack-1',
+                                  bags: '',
+                                  quantity: '',
+                                  inwardBags: parseInt(inwardData.totalBags) || 0,
+                                  commodityName: inwardData.commodity || '',
+                                  varietyName: inwardData.varietyName || ''
+                                }]);
+                              }
                             } else {
                               console.log('=== NO INWARD DATA FOUND ===');
                               console.log('Could not find inward entry for SR/WR:', srwrNo);
@@ -1238,7 +1386,9 @@ export default function OutwardPage() {
                     <div className="mb-4">
                       {/* Stack-wise entry */}
                       <div className="border p-4 rounded-md bg-gray-50 mb-4">
-                        <h3 className="text-md font-semibold mb-3">Stack-wise Entry</h3>
+                        <h3 className="text-md font-semibold mb-3">
+                          Stack-wise Entry{gatepass && ` (${gatepass})`}
+                        </h3>
                         
                         {stackEntries.length === 0 ? (
                           <p className="text-sm text-gray-500">Select a Delivery Order first to load stack information</p>
@@ -1341,30 +1491,7 @@ export default function OutwardPage() {
                                       </svg>
                                     </Button>
                                   )}
-                                  {index === stackEntries.length - 1 && (
-                                    <Button 
-                                      type="button" 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => {
-                                        setStackEntries([
-                                          ...stackEntries, 
-                                          {
-                                            stackNo: `Stack-${stackEntries.length + 1}`,
-                                            bags: '',
-                                            quantity: '',
-                                            inwardBags: 0
-                                          }
-                                        ]);
-                                      }}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-1">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <line x1="12" y1="8" x2="12" y2="16"></line>
-                                        <line x1="8" y1="12" x2="16" y2="12"></line>
-                                      </svg> Add Stack
-                                    </Button>
-                                  )}
+                                  {/*  */}
                                 </div>
                               </div>
                             ))}
