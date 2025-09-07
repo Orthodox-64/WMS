@@ -17,7 +17,6 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 interface OutwardReportData {
   id: string;
   date: string;
-  srNumber: string; // Serial number
   outwardId: string;
   inwardId: string;
   doNumber: string;
@@ -49,14 +48,13 @@ export default function OutwardReportsPage() {
   const [outwardData, setOutwardData] = useState<OutwardReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'date', 'srNumber', 'outwardId', 'inwardId', 'doNumber', 'roNumber', 'warehouseName', 'warehouseType',
+    'date', 'outwardId', 'inwardId', 'doNumber', 'roNumber', 'warehouseName', 'warehouseType',
     'client', 'commodity', 'varietyName', 'outwardBags', 'outwardQty', 'totalValue', 'vehicleNumber', 'gatepass', 'status'
   ]);
 
   // Column definitions
   const allColumns = [
     { key: 'date', label: 'Date', width: 'w-24' },
-    { key: 'srNumber', label: 'SR Number', width: 'w-20' },
     { key: 'outwardId', label: 'Outward ID', width: 'w-24' },
     { key: 'inwardId', label: 'Inward ID', width: 'w-24' },
     { key: 'doNumber', label: 'DO Number', width: 'w-24' },
@@ -354,40 +352,37 @@ export default function OutwardReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button 
-              onClick={() => router.back()}
+              onClick={() => router.push('/dashboard')}
               className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Reports
+              Dashboard
             </button>
           </div>
           
           <div className="text-center flex flex-col items-center">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
-              <Image 
+              {/* <Image 
                 src="/AGlogo.webp" 
                 alt="AgroGreen Logo" 
                 fill
                 className="object-contain"
                 priority
-              />
+              /> */}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600">
+            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
               Outward Reports
             </h1>
             <p className="text-muted-foreground">Generate and view outward transaction reports</p>
           </div>
           
           <div className="flex space-x-2">
-            <Button onClick={fetchOutwardData} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </Button>
             <Button onClick={exportToCSV} disabled={filteredData.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
@@ -623,25 +618,25 @@ export default function OutwardReportsPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-orange-100">
                   <tr>
-                    {visibleColumns.includes('date') && <th className="border border-gray-200 px-4 py-2 text-left">Date</th>}
-                    {visibleColumns.includes('srNumber') && <th className="border border-gray-200 px-4 py-2 text-left">SR Number</th>}
-                    {visibleColumns.includes('outwardId') && <th className="border border-gray-200 px-4 py-2 text-left">Outward ID</th>}
-                    {visibleColumns.includes('inwardId') && <th className="border border-gray-200 px-4 py-2 text-left">Inward ID</th>}
-                    {visibleColumns.includes('doNumber') && <th className="border border-gray-200 px-4 py-2 text-left">DO Number</th>}
-                    {visibleColumns.includes('roNumber') && <th className="border border-gray-200 px-4 py-2 text-left">RO Number</th>}
-                    {visibleColumns.includes('warehouseName') && <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Name</th>}
-                    {visibleColumns.includes('warehouseType') && <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Type</th>}
-                    {visibleColumns.includes('client') && <th className="border border-gray-200 px-4 py-2 text-left">Client</th>}
-                    {visibleColumns.includes('commodity') && <th className="border border-gray-200 px-4 py-2 text-left">Commodity</th>}
-                    {visibleColumns.includes('varietyName') && <th className="border border-gray-200 px-4 py-2 text-left">Variety</th>}
-                    {visibleColumns.includes('outwardBags') && <th className="border border-gray-200 px-4 py-2 text-left">Outward Bags</th>}
-                    {visibleColumns.includes('outwardQty') && <th className="border border-gray-200 px-4 py-2 text-left">Outward Qty (MT)</th>}
-                    {visibleColumns.includes('totalValue') && <th className="border border-gray-200 px-4 py-2 text-left">Total Value</th>}
-                    {visibleColumns.includes('vehicleNumber') && <th className="border border-gray-200 px-4 py-2 text-left">Vehicle Number</th>}
-                    {visibleColumns.includes('gatepass') && <th className="border border-gray-200 px-4 py-2 text-left">Gatepass</th>}
-                    {visibleColumns.includes('status') && <th className="border border-gray-200 px-4 py-2 text-left">Status</th>}
+                    {visibleColumns.includes('date') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Date</th>}
+                    {visibleColumns.includes('srNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">SR Number</th>}
+                    {visibleColumns.includes('outwardId') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Outward ID</th>}
+                    {visibleColumns.includes('inwardId') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward ID</th>}
+                    {visibleColumns.includes('doNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Number</th>}
+                    {visibleColumns.includes('roNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">RO Number</th>}
+                    {visibleColumns.includes('warehouseName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>}
+                    {visibleColumns.includes('warehouseType') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Type</th>}
+                    {visibleColumns.includes('client') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client</th>}
+                    {visibleColumns.includes('commodity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Commodity</th>}
+                    {visibleColumns.includes('varietyName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Variety</th>}
+                    {visibleColumns.includes('outwardBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Outward Bags</th>}
+                    {visibleColumns.includes('outwardQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Outward Qty (MT)</th>}
+                    {visibleColumns.includes('totalValue') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Total Value</th>}
+                    {visibleColumns.includes('vehicleNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Vehicle Number</th>}
+                    {visibleColumns.includes('gatepass') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Gatepass</th>}
+                    {visibleColumns.includes('status') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Status</th>}
                   </tr>
                 </thead>
                 <tbody>

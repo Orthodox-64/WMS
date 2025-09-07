@@ -17,7 +17,6 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 interface DeliveryOrderReportData {
   id: string;
   date: string;
-  srNumber: string; // Serial number
   doNumber: string;
   inwardId: string;
   state: string;
@@ -53,17 +52,16 @@ export default function DeliveryOrderReportsPage() {
   const [doData, setDoData] = useState<DeliveryOrderReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'date', 'srNumber', 'doNumber', 'inwardId', 'state', 'branch', 'warehouseName', 'warehouseCode',
+    'date', 'doNumber', 'inwardId', 'state', 'branch', 'warehouseName', 'warehouseCode',
     'warehouseAddress', 'client', 'clientAddress', 'totalBags', 'totalQuantity', 'releaseBags', 
     'releaseQuantity', 'doBags', 'doQuantity', 'balanceBags', 'balanceQuantity', 'status'
   ]);
 
-  // Column definitions for 18 columns matching dashboard data
+  // Column definitions for 17 columns matching dashboard data
   const allColumns = [
     { key: 'date', label: 'Date', width: 'w-24' },
-    { key: 'srNumber', label: 'SR Number', width: 'w-20' },
     { key: 'doNumber', label: 'DO Code', width: 'w-24' },
-    { key: 'inwardId', label: 'SR/WR No.', width: 'w-28' },
+    { key: 'inwardId', label: 'SR/WR No.', width: 'w-24' },
     { key: 'state', label: 'State', width: 'w-20' },
     { key: 'branch', label: 'Branch', width: 'w-20' },
     { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
@@ -362,16 +360,16 @@ export default function DeliveryOrderReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button 
-              onClick={() => router.back()}
+              onClick={() => router.push('/dashboard')}
               className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Reports
+              Dashboard
             </button>
             <Button 
               onClick={fetchDOData}
@@ -386,24 +384,21 @@ export default function DeliveryOrderReportsPage() {
           <div className="text-center flex flex-col items-center">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
-              <Image 
+              {/* <Image 
                 src="/AGlogo.webp" 
                 alt="AgroGreen Logo" 
                 fill
                 className="object-contain"
                 priority
-              />
+              /> */}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600">
+            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
               Delivery Order Reports
             </h1>
             <p className="text-muted-foreground">Generate and view delivery order transaction reports</p>
           </div>
           
           <div className="flex space-x-2">
-            <Button onClick={fetchDOData} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </Button>
             <Button onClick={exportToCSV} disabled={filteredData.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
@@ -640,28 +635,27 @@ export default function DeliveryOrderReportsPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-orange-100">
                   <tr>
-                    {visibleColumns.includes('date') && <th className="border border-gray-200 px-4 py-2 text-left">Date</th>}
-                    {visibleColumns.includes('srNumber') && <th className="border border-gray-200 px-4 py-2 text-left">SR Number</th>}
-                    {visibleColumns.includes('doNumber') && <th className="border border-gray-200 px-4 py-2 text-left">DO Code</th>}
-                    {visibleColumns.includes('inwardId') && <th className="border border-gray-200 px-4 py-2 text-left">SR/WR No.</th>}
-                    {visibleColumns.includes('state') && <th className="border border-gray-200 px-4 py-2 text-left">State</th>}
-                    {visibleColumns.includes('branch') && <th className="border border-gray-200 px-4 py-2 text-left">Branch</th>}
-                    {visibleColumns.includes('warehouseName') && <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Name</th>}
-                    {visibleColumns.includes('warehouseCode') && <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Code</th>}
-                    {visibleColumns.includes('warehouseAddress') && <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Address</th>}
-                    {visibleColumns.includes('client') && <th className="border border-gray-200 px-4 py-2 text-left">Client Code</th>}
-                    {visibleColumns.includes('clientAddress') && <th className="border border-gray-200 px-4 py-2 text-left">Client Address</th>}
-                    {visibleColumns.includes('totalBags') && <th className="border border-gray-200 px-4 py-2 text-left">Inward Bags</th>}
-                    {visibleColumns.includes('totalQuantity') && <th className="border border-gray-200 px-4 py-2 text-left">Inward Qty (MT)</th>}
-                    {visibleColumns.includes('releaseBags') && <th className="border border-gray-200 px-4 py-2 text-left">Release RO Bags</th>}
-                    {visibleColumns.includes('releaseQuantity') && <th className="border border-gray-200 px-4 py-2 text-left">Release RO Qty (MT)</th>}
-                    {visibleColumns.includes('doBags') && <th className="border border-gray-200 px-4 py-2 text-left">DO Bags</th>}
-                    {visibleColumns.includes('doQuantity') && <th className="border border-gray-200 px-4 py-2 text-left">DO Qty (MT)</th>}
-                    {visibleColumns.includes('balanceBags') && <th className="border border-gray-200 px-4 py-2 text-left">Balance Bags</th>}
-                    {visibleColumns.includes('balanceQuantity') && <th className="border border-gray-200 px-4 py-2 text-left">Balance Qty (MT)</th>}
-                    {visibleColumns.includes('status') && <th className="border border-gray-200 px-4 py-2 text-left">DO Status</th>}
+                    {visibleColumns.includes('date') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Date</th>}
+                    {visibleColumns.includes('doNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Code</th>}
+                    {visibleColumns.includes('inwardId') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">SR/WR No.</th>}
+                    {visibleColumns.includes('state') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">State</th>}
+                    {visibleColumns.includes('branch') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Branch</th>}
+                    {visibleColumns.includes('warehouseName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>}
+                    {visibleColumns.includes('warehouseCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Code</th>}
+                    {visibleColumns.includes('warehouseAddress') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Address</th>}
+                    {visibleColumns.includes('client') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Code</th>}
+                    {visibleColumns.includes('clientAddress') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Address</th>}
+                    {visibleColumns.includes('totalBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Bags</th>}
+                    {visibleColumns.includes('totalQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Qty (MT)</th>}
+                    {visibleColumns.includes('releaseBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Release RO Bags</th>}
+                    {visibleColumns.includes('releaseQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Release RO Qty (MT)</th>}
+                    {visibleColumns.includes('doBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Bags</th>}
+                    {visibleColumns.includes('doQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Qty (MT)</th>}
+                    {visibleColumns.includes('balanceBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Bags</th>}
+                    {visibleColumns.includes('balanceQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Qty (MT)</th>}
+                    {visibleColumns.includes('status') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Status</th>}
                   </tr>
                 </thead>
                 <tbody>

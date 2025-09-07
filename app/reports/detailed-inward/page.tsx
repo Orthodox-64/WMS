@@ -16,18 +16,28 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 
 interface DetailedInwardReportData {
   id: string;
-  inwardId: string;
   dateOfInward: string;
-  warehouseName: string;
-  client: string;
-  commodity: string;
-  varietyName: string;
-  totalBags: string;
-  totalQuantity: string;
-  totalValue: string;
-  status: string;
   state: string;
   branch: string;
+  location: string;
+  warehouseType: string;
+  warehouseCode: string;
+  warehouseName: string;
+  warehouseAddress: string;
+  clientCode: string;
+  clientName: string;
+  commodity: string;
+  varietyName: string;
+  vehicleNumber: string;
+  cadNumber: string;
+  getpassNumber: string;
+  weightBridge: string;
+  weightBridgeSlipNumber: string;
+  stackNumber: string;
+  grossWeight: string;
+  tareWeight: string;
+  netWeight: string;
+  totalBags: string;
   [key: string]: any;
 }
 
@@ -46,27 +56,43 @@ export default function DetailedInwardReportsPage() {
   const [inwardData, setInwardData] = useState<DetailedInwardReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   
-  // 12 columns as per the image structure - matching dashboard inward section exactly
+  // 22 columns (removed Type of Business) - matching dashboard inward section exactly
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'inwardId', 'dateOfInward', 'warehouseName', 'client', 'commodity', 'varietyName', 
-    'totalBags', 'totalQuantity', 'totalValue', 'status', 'state', 'branch'
+    'dateOfInward', 'state', 'branch', 'location', 'warehouseType', 
+    'warehouseCode', 'warehouseName', 'warehouseAddress', 'clientCode', 'clientName', 
+    'commodity', 'varietyName', 'vehicleNumber', 'cadNumber', 'getpassNumber', 
+    'weightBridge', 'weightBridgeSlipNumber', 'stackNumber', 'grossWeight', 
+    'tareWeight', 'netWeight', 'totalBags'
   ]);
 
-  // Column definitions for 12 columns - matching dashboard inward section exactly
+  // Column definitions for 22 columns (removed Type of Business) - matching dashboard inward section exactly
   const allColumns = [
-    { key: 'inwardId', label: 'Inward ID', width: 'w-24' },
-    { key: 'dateOfInward', label: 'Date of Inward', width: 'w-28' },
+    { key: 'dateOfInward', label: 'Date of Inw', width: 'w-28' },
+    { key: 'state', label: 'State', width: 'w-24' },
+    { key: 'branch', label: 'Branch', width: 'w-24' },
+    { key: 'location', label: 'Location', width: 'w-24' },
+    { key: 'warehouseType', label: 'Warehouse Type', width: 'w-28' },
+    { key: 'warehouseCode', label: 'Warehouse Code', width: 'w-28' },
     { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
-    { key: 'client', label: 'Client', width: 'w-28' },
+    { key: 'warehouseAddress', label: 'Warehouse Address', width: 'w-36' },
+    { key: 'clientCode', label: 'Client Code', width: 'w-24' },
+    { key: 'clientName', label: 'Client Name', width: 'w-28' },
     { key: 'commodity', label: 'Commodity', width: 'w-24' },
     { key: 'varietyName', label: 'Variety', width: 'w-24' },
-    { key: 'totalBags', label: 'Total Bags', width: 'w-24' },
-    { key: 'totalQuantity', label: 'Total Qty (MT)', width: 'w-28' },
-    { key: 'totalValue', label: 'Total Value', width: 'w-24' },
-    { key: 'status', label: 'Status', width: 'w-20' },
-    { key: 'state', label: 'State', width: 'w-20' },
-    { key: 'branch', label: 'Branch', width: 'w-20' }
+    { key: 'vehicleNumber', label: 'Vehicle Number', width: 'w-28' },
+    { key: 'cadNumber', label: 'CAD Number', width: 'w-24' },
+    { key: 'getpassNumber', label: 'Gatepass Number', width: 'w-28' },
+    { key: 'weightBridge', label: 'Weighbridge Name', width: 'w-28' },
+    { key: 'weightBridgeSlipNumber', label: 'Weighbridge Number', width: 'w-32' },
+    { key: 'stackNumber', label: 'Stack Number', width: 'w-24' },
+    { key: 'grossWeight', label: 'Gross Weight (MT)', width: 'w-32' },
+    { key: 'tareWeight', label: 'Tare Weight (MT)', width: 'w-28' },
+    { key: 'netWeight', label: 'Net Weight (MT)', width: 'w-28' },
+    { key: 'totalBags', label: 'Bags', width: 'w-20' }
   ];
+
+  // Get all column keys for visibility toggle
+  const allColumnKeys = allColumns.map(col => col.key);
 
   // Fetch inward data
   useEffect(() => {
@@ -126,18 +152,28 @@ export default function DetailedInwardReportsPage() {
                 
                 return {
                   id: doc.id,
-                  inwardId: docData.inwardId || docData.inwardCode || doc.id,
                   dateOfInward: docData.dateOfInward || '',
+                  state: docData.state || '',
+                  branch: docData.branch || '',
+                  location: docData.location || '',
+                                     warehouseType: docData.businessType || '',
+                  warehouseCode: docData.warehouseCode || '',
                   warehouseName: docData.warehouseName || '',
-                  client: docData.client || '',
+                  warehouseAddress: docData.warehouseAddress || '',
+                  clientCode: docData.clientCode || '',
+                  clientName: docData.clientName || '',
                   commodity: docData.commodity || '',
                   varietyName: docData.varietyName || '',
-                  totalBags: docData.totalBags || '0',
-                  totalQuantity: docData.totalQuantity || '0',
-                  totalValue: docData.totalValue || '0',
-                  status: docData.status || 'Active',
-                  state: docData.state || '',
-                  branch: docData.branch || ''
+                  vehicleNumber: docData.vehicleNumber || '',
+                  cadNumber: docData.cadNumber || '',
+                  getpassNumber: docData.getpassNumber || '',
+                  weightBridge: docData.weightBridge || '',
+                  weightBridgeSlipNumber: docData.weightBridgeSlipNumber || '',
+                  stackNumber: docData.stackNumber || '',
+                  grossWeight: docData.grossWeight || '0',
+                  tareWeight: docData.tareWeight || '0',
+                  netWeight: docData.netWeight || '0',
+                  totalBags: docData.totalBags || '0'
                 };
               })
             );
@@ -159,7 +195,7 @@ export default function DetailedInwardReportsPage() {
 
   // Get unique filter options
   const uniqueClients = useMemo(() => {
-    return Array.from(new Set(inwardData.map(item => item.client).filter(Boolean)));
+    return Array.from(new Set(inwardData.map(item => item.clientName).filter(Boolean)));
   }, [inwardData]);
 
   const uniqueCommodities = useMemo(() => {
@@ -210,7 +246,7 @@ export default function DetailedInwardReportsPage() {
 
     // Apply client filter
     if (clientFilter && clientFilter !== 'all') {
-      filtered = filtered.filter(item => item.client === clientFilter);
+      filtered = filtered.filter(item => item.clientName === clientFilter);
       console.log('After client filter:', filtered.length, 'records');
     }
 
@@ -240,26 +276,36 @@ export default function DetailedInwardReportsPage() {
   const exportToCSV = () => {
     if (filteredData.length === 0) return;
     
-    const headers = [
-      'Inward ID', 'Date of Inward', 'Warehouse Name', 'Client', 'Commodity', 'Variety',
-      'Total Bags', 'Total Qty (MT)', 'Total Value', 'Status', 'State', 'Branch'
-    ];
+          const headers = [
+        'Date of Inward', 'State', 'Branch', 'Location', 'Business Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address', 'Client Code', 'Client Name',
+        'Commodity', 'Variety', 'Vehicle Number', 'CAD Number', 'Gatepass Number', 'Weighbridge Name', 'Weighbridge Number', 'Stack Number', 'Gross Weight (MT)', 'Tare Weight (MT)', 'Net Weight (MT)', 'Bags'
+      ];
     
     const csvContent = [
       headers.join(','),
       ...filteredData.map((row, index) => [
-        row.inwardId || '',
         row.dateOfInward || '',
+        row.state || '',
+        row.branch || '',
+        row.location || '',
+        row.warehouseType || '',
+        row.warehouseCode || '',
         row.warehouseName || '',
-        row.client || '',
+        row.warehouseAddress || '',
+        row.clientCode || '',
+        row.clientName || '',
         row.commodity || '',
         row.varietyName || '',
-        row.totalBags || '',
-        row.totalQuantity || '',
-        row.totalValue || '',
-        row.status || '',
-        row.state || '',
-        row.branch || ''
+        row.vehicleNumber || '',
+        row.cadNumber || '',
+        row.getpassNumber || '',
+        row.weightBridge || '',
+        row.weightBridgeSlipNumber || '',
+        row.stackNumber || '',
+        row.grossWeight || '',
+        row.tareWeight || '',
+        row.netWeight || '',
+        row.totalBags || ''
       ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(','))
     ].join('\n');
     
@@ -267,7 +313,7 @@ export default function DetailedInwardReportsPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = 'detailed_inward_report.csv'; // Changed filename
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -362,40 +408,37 @@ export default function DetailedInwardReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button 
-              onClick={() => router.back()}
+              onClick={() => router.push('/dashboard')}
               className="inline-flex items-center text-lg font-semibold tracking-tight bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Reports
+              Dashboard
             </button>
           </div>
           
           <div className="text-center flex flex-col items-center">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
-              <Image 
+              {/* <Image 
                 src="/AGlogo.webp" 
                 alt="AgroGreen Logo" 
                 fill
                 className="object-contain"
                 priority
-              />
+              /> */}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600">
+            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
               Detailed Inward Report
             </h1>
             <p className="text-muted-foreground">Generate and view inward transaction reports</p>
           </div>
           
           <div className="flex space-x-2">
-            <Button onClick={fetchInwardData} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </Button>
             <Button onClick={exportToCSV} disabled={filteredData.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
@@ -655,10 +698,10 @@ export default function DetailedInwardReportsPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-orange-100">
                   <tr>
                     {allColumns.map(column => (
-                      <th key={column.key} className={`border border-gray-200 px-4 py-2 text-left ${column.width}`}>
+                      <th key={column.key} className={`border border-orange-300 px-4 py-2 text-left ${column.width} text-orange-800 font-semibold`}>
                         {column.label}
                       </th>
                     ))}
@@ -667,14 +710,32 @@ export default function DetailedInwardReportsPage() {
                 <tbody>
                   {filteredData.length === 0 ? (
                     <tr className="hover:bg-gray-50">
-                      <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                        TEST-001
-                      </td>
                       <td className="border border-gray-200 px-4 py-2">
                         {formatDate(new Date().toISOString())}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
+                        Maharashtra
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        Mumbai
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        Test Location
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        Private
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        WH001
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
                         Test Warehouse
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        Test Address
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        CL001
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         Test Client
@@ -685,41 +746,69 @@ export default function DetailedInwardReportsPage() {
                       <td className="border border-gray-200 px-4 py-2">
                         Durum
                       </td>
-                      <td className="border border-gray-200 px-4 py-2 text-right">
-                        100
+                      <td className="border border-gray-200 px-4 py-2">
+                        MH01AB1234
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        CAD001
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        GP001
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        Test Bridge
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        WB001
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        ST001
                       </td>
                       <td className="border border-gray-200 px-4 py-2 text-right">
                         50.5
                       </td>
                       <td className="border border-gray-200 px-4 py-2 text-right">
-                        50000
+                        2.5
                       </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Active
-                        </span>
+                      <td className="border border-gray-200 px-4 py-2 text-right">
+                        48.0
                       </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Maharashtra
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Mumbai
+                      <td className="border border-gray-200 px-4 py-2 text-right">
+                        100
                       </td>
                     </tr>
                   ) : (
                     filteredData.map((item, index) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                        {item.inwardId || 'N/A'}
+                        {item.dateOfInward || 'N/A'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {formatDate(item.dateOfInward)}
+                        {item.state || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.branch || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.location || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.warehouseType || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.warehouseCode || 'N/A'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         {item.warehouseName || 'N/A'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.client || 'N/A'}
+                        {item.warehouseAddress || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.clientCode || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.clientName || 'N/A'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         {item.commodity || 'N/A'}
@@ -727,25 +816,35 @@ export default function DetailedInwardReportsPage() {
                       <td className="border border-gray-200 px-4 py-2">
                         {item.varietyName || 'N/A'}
                       </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.vehicleNumber || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.cadNumber || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.getpassNumber || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.weightBridge || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.weightBridgeSlipNumber || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.stackNumber || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2 text-right">
+                        {item.grossWeight || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2 text-right">
+                        {item.tareWeight || 'N/A'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2 text-right">
+                        {item.netWeight || 'N/A'}
+                      </td>
                       <td className="border border-gray-200 px-4 py-2 text-right">
                         {item.totalBags || 'N/A'}
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2 text-right">
-                        {item.totalQuantity || 'N/A'}
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2 text-right">
-                        {item.totalValue || 'N/A'}
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                          {item.status || 'Active'}
-                        </span>
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        {item.state || 'N/A'}
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        {item.branch || 'N/A'}
                       </td>
                     </tr>
                   ))

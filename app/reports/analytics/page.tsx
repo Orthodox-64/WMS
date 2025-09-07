@@ -342,31 +342,31 @@ export default function AnalyticsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button 
-              onClick={() => router.back()}
+              onClick={() => router.push('/dashboard')}
               className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Reports
+              Dashboard
             </button>
           </div>
           
           <div className="text-center flex flex-col items-center">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
-              <Image 
+              {/* <Image 
                 src="/AGlogo.webp" 
                 alt="AgroGreen Logo" 
                 fill
                 className="object-contain"
                 priority
-              />
+              /> */}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600">
+            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-2 bg-orange-100 rounded-lg">
               Analytics & Summary
             </h1>
             <p className="text-muted-foreground">Comprehensive business intelligence and insights</p>

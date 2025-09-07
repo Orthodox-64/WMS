@@ -23,7 +23,7 @@ const reportModules = [
     color: "text-yellow-500",
     bgColor: "bg-yellow-50",
     borderColor: "border-yellow-200",
-    description: "Generate reports for inward transactions, stock receipts, and storage data",
+    description: "Generate reports for inward transactions",
     count: "View Reports"
   },
   {
@@ -105,13 +105,13 @@ export default function ReportsPage() {
           <div className="flex-1 text-center flex flex-col items-center">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
-              <Image 
+              {/* <Image 
                 src="/AGlogo.webp" 
                 alt="AgroGreen Logo" 
                 fill
                 className="object-contain"
                 priority
-              />
+              /> */}
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
               Reports & Analytics
@@ -125,7 +125,7 @@ export default function ReportsPage() {
         </div>
         
         {/* Report Module Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {reportModules.map((module) => {
             const Icon = module.icon;
             return (

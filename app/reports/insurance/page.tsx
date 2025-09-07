@@ -17,7 +17,6 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 interface InsuranceReportData {
   id: string;
   date: string;
-  srNumber: string; // Serial number
   warehouseName: string;
   warehouseCode: string;
   state: string;
@@ -59,7 +58,7 @@ export default function InsuranceReportsPage() {
   const [insuranceData, setInsuranceData] = useState<InsuranceReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'date', 'srNumber', 'warehouseName', 'warehouseCode', 'state', 'branch', 'location',
+    'date', 'warehouseName', 'warehouseCode', 'state', 'branch', 'location',
     'insuranceTakenBy', 'insuranceCommodity', 'clientName', 'clientAddress', 'selectedBankName',
     'firePolicyCompanyName', 'firePolicyNumber', 'firePolicyAmount', 'firePolicyStartDate', 'firePolicyEndDate',
     'burglaryPolicyCompanyName', 'burglaryPolicyNumber', 'burglaryPolicyAmount', 'burglaryPolicyStartDate', 'burglaryPolicyEndDate',
@@ -429,40 +428,37 @@ export default function InsuranceReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button 
-              onClick={() => router.back()}
+              onClick={() => router.push('/dashboard')}
               className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Reports
+              Dashboard
             </button>
           </div>
           
           <div className="text-center flex flex-col items-center">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
-              <Image 
+              {/* <Image 
                 src="/AGlogo.webp" 
                 alt="AgroGreen Logo" 
                 fill
                 className="object-contain"
                 priority
-              />
+              /> */}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600">
+            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
               Insurance Reports
             </h1>
             <p className="text-muted-foreground">Generate and view insurance policy reports</p>
           </div>
           
           <div className="flex space-x-2">
-            <Button onClick={fetchInsuranceData} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </Button>
             <Button onClick={exportToCSV} disabled={filteredData.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
@@ -729,33 +725,32 @@ export default function InsuranceReportsPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-orange-100">
                   <tr>
-                    {visibleColumns.includes('date') && <th className="border border-gray-200 px-4 py-2 text-left">Date</th>}
-                    {visibleColumns.includes('srNumber') && <th className="border border-gray-200 px-4 py-2 text-left">SR Number</th>}
-                    {visibleColumns.includes('warehouseName') && <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Name</th>}
-                    {visibleColumns.includes('warehouseCode') && <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Code</th>}
-                    {visibleColumns.includes('state') && <th className="border border-gray-200 px-4 py-2 text-left">State</th>}
-                    {visibleColumns.includes('branch') && <th className="border border-gray-200 px-4 py-2 text-left">Branch</th>}
-                    {visibleColumns.includes('location') && <th className="border border-gray-200 px-4 py-2 text-left">Location</th>}
-                    {visibleColumns.includes('insuranceTakenBy') && <th className="border border-gray-200 px-4 py-2 text-left">Insurance Taken By</th>}
-                    {visibleColumns.includes('insuranceCommodity') && <th className="border border-gray-200 px-4 py-2 text-left">Commodity</th>}
-                    {visibleColumns.includes('clientName') && <th className="border border-gray-200 px-4 py-2 text-left">Client Name</th>}
-                    {visibleColumns.includes('clientAddress') && <th className="border border-gray-200 px-4 py-2 text-left">Client Address</th>}
-                    {visibleColumns.includes('selectedBankName') && <th className="border border-gray-200 px-4 py-2 text-left">Bank Name</th>}
-                    {visibleColumns.includes('firePolicyCompanyName') && <th className="border border-gray-200 px-4 py-2 text-left">Fire Policy Company</th>}
-                    {visibleColumns.includes('firePolicyNumber') && <th className="border border-gray-200 px-4 py-2 text-left">Fire Policy Number</th>}
-                    {visibleColumns.includes('firePolicyAmount') && <th className="border border-gray-200 px-4 py-2 text-left">Fire Policy Amount</th>}
-                    {visibleColumns.includes('firePolicyStartDate') && <th className="border border-gray-200 px-4 py-2 text-left">Fire Policy Start</th>}
-                    {visibleColumns.includes('firePolicyEndDate') && <th className="border border-gray-200 px-4 py-2 text-left">Fire Policy End</th>}
-                    {visibleColumns.includes('burglaryPolicyCompanyName') && <th className="border border-gray-200 px-4 py-2 text-left">Burglary Policy Company</th>}
-                    {visibleColumns.includes('burglaryPolicyNumber') && <th className="border border-gray-200 px-4 py-2 text-left">Burglary Policy Number</th>}
-                    {visibleColumns.includes('burglaryPolicyAmount') && <th className="border border-gray-200 px-4 py-2 text-left">Burglary Policy Amount</th>}
-                    {visibleColumns.includes('burglaryPolicyStartDate') && <th className="border border-gray-200 px-4 py-2 text-left">Burglary Policy Start</th>}
-                    {visibleColumns.includes('burglaryPolicyEndDate') && <th className="border border-gray-200 px-4 py-2 text-left">Burglary Policy End</th>}
-                    {visibleColumns.includes('remainingFirePolicyAmount') && <th className="border border-gray-200 px-4 py-2 text-left">Remaining Fire Amount</th>}
-                    {visibleColumns.includes('remainingBurglaryPolicyAmount') && <th className="border border-gray-200 px-4 py-2 text-left">Remaining Burglary Amount</th>}
-                    {visibleColumns.includes('status') && <th className="border border-gray-200 px-4 py-2 text-left">Status</th>}
+                    {visibleColumns.includes('date') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Date</th>}
+                    {visibleColumns.includes('warehouseName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>}
+                    {visibleColumns.includes('warehouseCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Code</th>}
+                    {visibleColumns.includes('state') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">State</th>}
+                    {visibleColumns.includes('branch') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Branch</th>}
+                    {visibleColumns.includes('location') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Location</th>}
+                    {visibleColumns.includes('insuranceTakenBy') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Insurance Taken By</th>}
+                    {visibleColumns.includes('insuranceCommodity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Commodity</th>}
+                    {visibleColumns.includes('clientName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Name</th>}
+                    {visibleColumns.includes('clientAddress') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Address</th>}
+                    {visibleColumns.includes('selectedBankName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Bank Name</th>}
+                    {visibleColumns.includes('firePolicyCompanyName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Fire Policy Company</th>}
+                    {visibleColumns.includes('firePolicyNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Fire Policy Number</th>}
+                    {visibleColumns.includes('firePolicyAmount') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Fire Policy Amount</th>}
+                    {visibleColumns.includes('firePolicyStartDate') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Fire Policy Start</th>}
+                    {visibleColumns.includes('firePolicyEndDate') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Fire Policy End</th>}
+                    {visibleColumns.includes('burglaryPolicyCompanyName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Burglary Policy Company</th>}
+                    {visibleColumns.includes('burglaryPolicyNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Burglary Policy Number</th>}
+                    {visibleColumns.includes('burglaryPolicyAmount') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Burglary Policy Amount</th>}
+                    {visibleColumns.includes('burglaryPolicyStartDate') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Burglary Policy Start</th>}
+                    {visibleColumns.includes('burglaryPolicyEndDate') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Burglary Policy End</th>}
+                    {visibleColumns.includes('remainingFirePolicyAmount') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Remaining Fire Amount</th>}
+                    {visibleColumns.includes('remainingBurglaryPolicyAmount') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Remaining Burglary Amount</th>}
+                    {visibleColumns.includes('status') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Status</th>}
                   </tr>
                 </thead>
                 <tbody>

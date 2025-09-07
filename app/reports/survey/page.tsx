@@ -252,16 +252,16 @@ export default function SurveyReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button 
-              onClick={() => router.back()}
+              onClick={() => router.push('/dashboard')}
               className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Reports
+              Dashboard
             </button>
           </div>
           
@@ -276,16 +276,13 @@ export default function SurveyReportsPage() {
                 priority
               />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-green-600">
+            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
               Survey Reports
             </h1>
             <p className="text-muted-foreground">Generate and view warehouse survey and inspection reports</p>
           </div>
           
           <div className="flex space-x-2">
-            <Button onClick={fetchSurveyData} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </Button>
             <Button onClick={exportToCSV} disabled={filteredData.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
@@ -469,16 +466,16 @@ export default function SurveyReportsPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-orange-100">
                   <tr>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Date</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Name</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Warehouse Type</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Client</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Commodity</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Status</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Inspector</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Inspection Date</th>
+                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Date</th>
+                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>
+                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Type</th>
+                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client</th>
+                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Commodity</th>
+                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Status</th>
+                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inspector</th>
+                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inspection Date</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -527,3 +524,4 @@ export default function SurveyReportsPage() {
     </DashboardLayout>
   );
 }
+
