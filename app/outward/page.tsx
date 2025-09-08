@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, Download, Plus, AlertTriangle, Trash2, PlusCircle, Eye } from 'lucide-react';
+import { Search, Download, Plus, AlertTriangle, PlusCircle, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -273,17 +273,15 @@ export default function OutwardPage() {
     return '';
   };
   
-  // Helper function to calculate total bags and quantity from stack entries
-  const calculateTotalBagsAndQuantity = (entries: any[]) => {
-    // Calculate totals from stack entries
+  // Helper function to calculate total bags from stack entries
+  const calculateTotalBags = (entries: any[]) => {
+    // Calculate total bags from stack entries
     const totalBags = entries.reduce((sum, stack) => sum + (Number(stack.bags) || 0), 0);
-    const totalQty = entries.reduce((sum, stack) => sum + (Number(stack.quantity) || 0), 0);
     
-    // Update the outward totals
+    // Update the outward bags total
     setOutwardBags(totalBags.toString());
-    setOutwardQty(totalQty.toFixed(3));
     
-    console.log(`Updated totals: ${totalBags} bags, ${totalQty.toFixed(3)} MT`);
+    console.log(`Updated total bags: ${totalBags}`);
   };
 
   // Group outward entries by srwrNo, show only latest per group
@@ -299,6 +297,115 @@ export default function OutwardPage() {
   const latestOutwards = Object.values(groupedOutwards).map(group => group[0]);
   
   // Filter outward entries based on search term
+  // CSV Export function
+  const exportToCSV = () => {
+    // Determine which data to export based on search state
+    const dataToExport = searchTerm.trim() ? filteredOutwards : latestOutwards;
+    
+    if (dataToExport.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Define CSV headers (matching the table columns)
+    const headers = [
+      'Outward Code',
+      'SR/WR No.',
+      'DO Code',
+      'CAD Number',
+      'State',
+      'Branch',
+      'Location',
+      'Warehouse Name',
+      'Warehouse Code',
+      'Client Name',
+      'Client Code',
+      'Client Address',
+      'Vehicle Number',
+      'DO Bags',
+      'DO Qty (MT)',
+      'Outward Bags',
+      'Outward Qty (MT)',
+      'Balance Bags',
+      'Balance Qty (MT)',
+      'Status',
+      'Created Date',
+      'Created By',
+      'Gatepass',
+      'Weighbridge Name',
+      'Weighbridge Slip No',
+      'Gross Weight (MT)',
+      'Tare Weight (MT)',
+      'Net Weight (MT)',
+      'Total Bags Outward',
+      'Remark'
+    ];
+
+    // Convert data to CSV format
+    const csvData = dataToExport.map(outward => [
+      outward.outwardCode || '',
+      outward.srwrNo || '',
+      outward.doCode || '',
+      outward.cadNumber || '',
+      outward.state || '',
+      outward.branch || '',
+      outward.location || '',
+      outward.warehouseName || '',
+      outward.warehouseCode || '',
+      outward.client || '',
+      outward.clientCode || '',
+      outward.clientAddress || '',
+      outward.vehicleNumber || '',
+      outward.doBags || '',
+      outward.doQuantity || '',
+      outward.outwardBags || '',
+      outward.outwardQuantity || '',
+      getBalanceBags(outward),
+      getBalanceQty(outward),
+      normalizeStatusText(outward.outwardStatus || 'pending'),
+      outward.createdAt ? new Date(outward.createdAt).toLocaleDateString('en-GB') : '',
+      outward.createdBy || '',
+      outward.gatepass || '',
+      outward.weighbridgeName || '',
+      outward.weighbridgeSlipNo || '',
+      outward.grossWeight || '',
+      outward.tareWeight || '',
+      outward.netWeight || '',
+      outward.totalBagsOutward || '',
+      outward.remark || ''
+    ]);
+
+    // Combine headers and data
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => {
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const stringField = String(field);
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+          return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+      }).join(','))
+      .join('\n');
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Generate filename with search indicator
+    const searchSuffix = searchTerm.trim() ? '-filtered' : '';
+    const filename = `outward-entries${searchSuffix}-${new Date().toISOString().split('T')[0]}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const filteredOutwards = React.useMemo(() => {
     if (!searchTerm) return latestOutwards;
     
@@ -387,7 +494,7 @@ export default function OutwardPage() {
                 </div>
               )}
             </div>
-            <Button onClick={() => alert('Export functionality will be added soon')} className="bg-blue-500 hover:bg-blue-600 text-white">
+            <Button onClick={exportToCSV} className="bg-blue-500 hover:bg-blue-600 text-white">
               <Download className="h-4 w-4 mr-2" /> Export CSV
             </Button>
           </div>
@@ -415,12 +522,22 @@ export default function OutwardPage() {
                     <th className="px-3 py-2 border">Outward Code</th>
                     <th className="px-3 py-2 border">SR/WR No.</th>
                     <th className="px-3 py-2 border">DO Code</th>
+                    <th className="px-3 py-2 border">CAD Number</th>
                     <th className="px-3 py-2 border">State</th>
                     <th className="px-3 py-2 border">Branch</th>
+                    <th className="px-3 py-2 border">Location</th>
                     <th className="px-3 py-2 border">Warehouse Name</th>
                     <th className="px-3 py-2 border">Warehouse Code</th>
                     <th className="px-3 py-2 border">Client Name</th>
+                    <th className="px-3 py-2 border">Client Address</th>
+                    <th className="px-3 py-2 border">Client Code</th>
                     <th className="px-3 py-2 border">Vehicle Number</th>
+                    <th className="px-3 py-2 border">GATE PASS</th>
+                    <th className="px-3 py-2 border">WEIGHBRIDGE NAME</th>
+                    <th className="px-3 py-2 border">WEIGHBRIDGE SLIP NO</th>
+                    <th className="px-3 py-2 border">GROSS WEIGHT (MT)</th>
+                    <th className="px-3 py-2 border">TARE WEIGHT (MT)</th>
+                    <th className="px-3 py-2 border">NET WEIGHT (MT)</th> 
                     <th className="px-3 py-2 border">DO Bags</th>
                     <th className="px-3 py-2 border">DO Qty (MT)</th>
                     <th className="px-3 py-2 border">Outward Bags</th>
@@ -449,12 +566,22 @@ export default function OutwardPage() {
                         <td className="px-3 py-2 border">{outward.outwardCode}</td>
                         <td className="px-3 py-2 border">{outward.srwrNo}</td>
                         <td className="px-3 py-2 border">{outward.doCode}</td>
+                        <td className="px-3 py-2 border">{outward.cadNumber}</td>
                         <td className="px-3 py-2 border">{outward.state}</td>
                         <td className="px-3 py-2 border">{outward.branch}</td>
+                        <td className="px-3 py-2 border">{outward.location}</td>
                         <td className="px-3 py-2 border">{outward.warehouseName}</td>
                         <td className="px-3 py-2 border">{outward.warehouseCode}</td>
                         <td className="px-3 py-2 border">{outward.client}</td>
+                        <td className="px-3 py-2 border">{outward.clientAddress}</td>
+                        <td className="px-3 py-2 border">{outward.clientCode}</td>
                         <td className="px-3 py-2 border">{outward.vehicleNumber}</td>
+                        <td className="px-3 py-2 border">{outward.gatepass}</td>
+                        <td className="px-3 py-2 border">{outward.weighbridgeName}</td>
+                        <td className="px-3 py-2 border">{outward.weighbridgeSlipNo}</td>
+                        <td className="px-3 py-2 border">{outward.grossWeight}</td>
+                        <td className="px-3 py-2 border">{outward.tareWeight}</td>
+                        <td className="px-3 py-2 border">{outward.netWeight}</td>
                         <td className="px-3 py-2 border">{outward.doBags}</td>
                         <td className="px-3 py-2 border">{outward.doQuantity}</td>
                         <td className="px-3 py-2 border">{outward.outwardBags}</td>
@@ -485,7 +612,7 @@ export default function OutwardPage() {
                       {/* Expanded row for previous entries */}
                       {expandedRows[outward.srwrNo] && groupedOutwards[outward.srwrNo] && groupedOutwards[outward.srwrNo].length > 1 && (
                         <tr>
-                          <td colSpan={17} className="p-0">
+                          <td colSpan={27} className="p-0">
                             <div className="bg-gray-50 p-4">
                               <div className="text-sm font-medium mb-2">Previous Outward Entries for this SR/WR</div>
                               <div className="overflow-x-auto">
@@ -712,7 +839,7 @@ export default function OutwardPage() {
                 stackEntries: stackEntries.map(stack => ({
                   stackNo: stack.stackNo,
                   bags: Number(stack.bags),
-                  quantity: Number(stack.quantity)
+                  balanceBags: Number(stack.balanceBags || 0)
                 })),
                 
                 // Balance and other data
@@ -837,8 +964,8 @@ export default function OutwardPage() {
                               setStackEntries([{
                                 stackNo: 'Stack-1',
                                 bags: '',
-                                quantity: '',
-                                inwardBags: 0
+                                inwardBags: 0,
+                                balanceBags: 0
                               }]);
                               return;
                             }
@@ -1076,8 +1203,8 @@ export default function OutwardPage() {
                                   return {
                                     stackNo: stack.stackNo,
                                     bags: '', // User will input this
-                                    quantity: '', // User will input this
                                     inwardBags: stack.inwardBags,
+                                    balanceBags: stack.inwardBags, // Initially same as inward bags
                                     commodityName: stack.commodityName,
                                     varietyName: stack.varietyName
                                   };
@@ -1087,11 +1214,12 @@ export default function OutwardPage() {
                                 console.log('✅ Set', stackData.length, 'stack entries with comprehensive data');
                               } else {
                                 console.log('⚠️ No stacks found in inward data, creating default stack');
+                                const totalBags = parseInt(inwardData.totalBags) || 0;
                                 setStackEntries([{
                                   stackNo: 'Stack-1',
                                   bags: '',
-                                  quantity: '',
-                                  inwardBags: parseInt(inwardData.totalBags) || 0,
+                                  inwardBags: totalBags,
+                                  balanceBags: totalBags, // Initially same as inward bags
                                   commodityName: inwardData.commodity || '',
                                   varietyName: inwardData.varietyName || ''
                                 }]);
@@ -1103,8 +1231,8 @@ export default function OutwardPage() {
                               setStackEntries([{
                                 stackNo: 'Stack-1',
                                 bags: '',
-                                quantity: '',
-                                inwardBags: 0
+                                inwardBags: 0,
+                                balanceBags: 0
                               }]);
                             }
                             
@@ -1114,8 +1242,8 @@ export default function OutwardPage() {
                             setStackEntries([{
                               stackNo: 'Stack-1',
                               bags: '',
-                              quantity: '',
-                              inwardBags: 0
+                              inwardBags: 0,
+                              balanceBags: 0
                             }]);
                           }
                         };
@@ -1288,22 +1416,22 @@ export default function OutwardPage() {
                         <Label htmlFor="vehicleNumber" className="text-green-600 font-medium">VEHICLE NUMBER</Label>
                         <Input
                           id="vehicleNumber"
-                          value={vehicleNumber}
+                          // value={vehicleNumber}
                           onChange={(e) => setVehicleNumber(e.target.value)}
                           required
                           className="bg-white border-blue-200"
-                          placeholder="e.g. MH12AB1234"
+                          // placeholder="e.g. MH12AB1234"
                         />
                       </div>
                       <div>
                         <Label htmlFor="gatepass" className="text-green-600 font-medium">GATE PASS</Label>
                         <Input
                           id="gatepass"
-                          value={gatepass}
+                          // value={gatepass}
                           onChange={(e) => setGatepass(e.target.value)}
                           required
                           className="bg-white border-blue-200"
-                          placeholder="e.g. GP12345"
+                          // placeholder="e.g. GP12345"
                         />
                       </div>
                       <div>
@@ -1314,7 +1442,7 @@ export default function OutwardPage() {
                           onChange={(e) => setWeighbridgeName(e.target.value)}
                           required
                           className="bg-white border-blue-200"
-                          placeholder="e.g. City Weighbridge"
+                          // placeholder="e.g. City Weighbridge"
                         />
                       </div>
                       <div>
@@ -1325,7 +1453,7 @@ export default function OutwardPage() {
                           onChange={(e) => setWeighbridgeSlipNo(e.target.value)}
                           required
                           className="bg-white border-blue-200"
-                          placeholder="e.g. WB98765"
+                          // placeholder="e.g. WB98765"
                         />
                       </div>
                       <div>
@@ -1336,7 +1464,7 @@ export default function OutwardPage() {
                           onChange={(e) => handleGrossWeightChange(e.target.value)}
                           required
                           className="bg-white border-blue-200"
-                          placeholder="e.g. 25.500"
+                          // placeholder="e.g. 25.500"
                           type="text"
                         />
                       </div>
@@ -1348,7 +1476,7 @@ export default function OutwardPage() {
                           onChange={(e) => handleTareWeightChange(e.target.value)}
                           required
                           className="bg-white border-blue-200"
-                          placeholder="e.g. 2.500"
+                          // placeholder="e.g. 2.500"
                           type="text"
                         />
                       </div>
@@ -1371,7 +1499,7 @@ export default function OutwardPage() {
                           onChange={(e) => handleTotalBagsOutwardChange(e.target.value)}
                           required
                           className="bg-white border-blue-200"
-                          placeholder="e.g. 500"
+                          // placeholder="e.g. 500"
                           type="text"
                         />
                       </div>
@@ -1395,17 +1523,16 @@ export default function OutwardPage() {
                         ) : (
                           <div className="space-y-4">
                             {/* Header */}
-                            <div className="grid grid-cols-5 gap-3 text-sm font-medium text-gray-600 mb-1">
+                            <div className="grid grid-cols-4 gap-3 text-sm font-medium text-gray-600 mb-1">
                               <div>Stack No.</div>
                               <div>Inward Bags</div>
                               <div>Outward Bags</div>
-                              <div>Quantity (MT)</div>
-                              <div>Actions</div>
+                              <div>Balance Bags</div>
                             </div>
                             
                             {/* Stack entries */}
                             {stackEntries.map((entry, index) => (
-                              <div key={index} className="grid grid-cols-5 gap-3">
+                              <div key={index} className="grid grid-cols-4 gap-3">
                                 <div>
                                   <Input 
                                     value={entry.stackNo} 
@@ -1440,10 +1567,15 @@ export default function OutwardPage() {
                                       }
                                       
                                       newEntries[index].bags = newBags;
+                                      
+                                      // Calculate balance bags for this entry
+                                      const outwardBags = parseInt(newBags) || 0;
+                                      newEntries[index].balanceBags = inwardBags - outwardBags;
+                                      
                                       setStackEntries(newEntries);
                                       
                                       // Update total bags
-                                      calculateTotalBagsAndQuantity(newEntries);
+                                      calculateTotalBags(newEntries);
                                     }}
                                     className="bg-white"
                                     placeholder={`Max: ${entry.inwardBags || 0}`}
@@ -1453,56 +1585,27 @@ export default function OutwardPage() {
                                 <div>
                                   <Input 
                                     type="number"
-                                    step="0.001"
-                                    value={entry.quantity} 
-                                    onChange={(e) => {
-                                      const newEntries = [...stackEntries];
-                                      const newQty = e.target.value;
-                                      newEntries[index].quantity = newQty;
-                                      setStackEntries(newEntries);
-                                      
-                                      // Update total quantity
-                                      calculateTotalBagsAndQuantity(newEntries);
-                                    }}
-                                    className="bg-white"
+                                    value={entry.balanceBags !== undefined ? entry.balanceBags : (entry.inwardBags || 0)} 
+                                    readOnly
+                                    className="bg-blue-50 border-blue-200 text-green-800"
+                                    title="Automatically calculated: Inward Bags - Outward Bags"
                                   />
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  {stackEntries.length > 1 && (
-                                    <Button 
-                                      type="button" 
-                                      variant="destructive" 
-                                      size="sm"
-                                      onClick={() => {
-                                        const newEntries = [...stackEntries];
-                                        newEntries.splice(index, 1);
-                                        setStackEntries(newEntries);
-                                        
-                                        // Recalculate totals
-                                        calculateTotalBagsAndQuantity(newEntries);
-                                      }}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                                        <path d="M3 6h18"></path>
-                                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                                      </svg>
-                                    </Button>
-                                  )}
-                                  {/*  */}
                                 </div>
                               </div>
                             ))}
                             
                             {/* Totals */}
-                            <div className="grid grid-cols-5 gap-3 pt-3 border-t border-gray-200 mt-4">
+                            <div className="grid grid-cols-4 gap-3 pt-3 border-t border-gray-200 mt-4">
                               <div className="font-medium">Totals</div>
                               <div className="font-medium">{stackEntries.reduce((sum, entry) => sum + (entry.inwardBags || 0), 0)}</div>
                               <div className="font-medium">{outwardBags || '0'}</div>
-                              <div className="font-medium">{outwardQty || '0'}</div>
-                              <div></div>
+                              <div className="font-medium text-green-800">
+                                {stackEntries.reduce((sum, entry) => {
+                                  const inwardBags = entry.inwardBags || 0;
+                                  const outwardBags = parseInt(entry.bags) || 0;
+                                  return sum + (inwardBags - outwardBags);
+                                }, 0)}
+                              </div>
                             </div>
                             
                             {/* Balance information */}
@@ -1702,7 +1805,7 @@ export default function OutwardPage() {
                   <div style={{ background: '#f6fef9', borderRadius: 8, padding: '12px', border: '1px solid #e0f2e9' }}>
                     {selectedOutward.stackEntries.map((stack: any, idx: number) => (
                       <div key={idx} style={{ marginBottom: 8 }}>
-                        <strong>Stack {stack.stackNo}:</strong> {stack.bags} bags, {stack.quantity} MT
+                        <strong>Stack {stack.stackNo}:</strong> {stack.bags} bags, Balance: {stack.balanceBags || 0} bags
                       </div>
                     ))}
                   </div>
@@ -1915,7 +2018,7 @@ export default function OutwardPage() {
                                     <tr style="background-color: #f6fef9;">
                                       <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Stack No.</th>
                                       <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Bags</th>
-                                      <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Quantity (MT)</th>
+                                      <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Balance Bags</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1923,7 +2026,7 @@ export default function OutwardPage() {
                                       <tr style="background-color: ${index % 2 === 0 ? '#fff' : '#f9f9f9'};">
                                         <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.stackNo}</td>
                                         <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.bags}</td>
-                                        <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.quantity}</td>
+                                        <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.balanceBags || 0}</td>
                                       </tr>
                                     `).join('')}
                                   </tbody>

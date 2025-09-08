@@ -228,8 +228,121 @@ export default function ReleaseOrderPage() {
 
   // Placeholder handler for export
   const handleExportCSV = () => {
-    // TODO: Implement export logic
-    alert('Export CSV functionality coming soon!');
+    // Determine what data to export based on current view
+    let dataToExport;
+    
+    if (searchTerm) {
+      // If search is active, export only what's shown in the filtered table (latest per group that match search)
+      dataToExport = filteredROs;
+    } else {
+      // If no search, export ALL release orders (including all historical entries)
+      dataToExport = releaseOrders;
+    }
+
+    if (dataToExport.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Helper function to calculate balance bags
+    const getBalanceBagsForExport = (ro: any) => {
+      if (ro.balanceBags !== undefined && ro.balanceBags !== null) {
+        return ro.balanceBags;
+      }
+      // Calculate: inward bags - total released bags
+      const inwardBags = Number(ro.totalBags || 0);
+      const releasedBags = Number(ro.releaseBags || 0);
+      return Math.max(0, inwardBags - releasedBags);
+    };
+
+    // Helper function to calculate balance quantity
+    const getBalanceQtyForExport = (ro: any) => {
+      if (ro.balanceQuantity !== undefined && ro.balanceQuantity !== null) {
+        return Number(ro.balanceQuantity).toFixed(3);
+      }
+      // Calculate: inward quantity - total released quantity
+      const inwardQty = Number(ro.totalQuantity || 0);
+      const releasedQty = Number(ro.releaseQuantity || 0);
+      return Math.max(0, inwardQty - releasedQty).toFixed(3);
+    };
+
+    // Define CSV headers (matching the table columns)
+    const headers = [
+      'RO Code',
+      'SR/WR No.',
+      'State',
+      'Branch',
+      'Location',
+      'Warehouse Name',
+      'Warehouse Code', 
+      'Warehouse Address',
+      'Client Name',
+      'Client Code',
+      'Client Address',
+      'Inward Bags',
+      'Inward Quantity (MT)',
+      'Release Bags',
+      'Release Quantity (MT)',
+      'Balance Bags',
+      'Balance Quantity (MT)',
+      'RO Status',
+      'Created Date',
+      'Created By',
+      'Remark'
+    ];
+
+    // Convert data to CSV format
+    const csvData = dataToExport.map(ro => [
+      ro.roCode || '',
+      ro.srwrNo || '',
+      ro.state || '',
+      ro.branch || '',
+      ro.location || '',
+      ro.warehouseName || '',
+      ro.warehouseCode || '',
+      ro.warehouseAddress || '',
+      ro.client || '',
+      ro.clientCode || '',
+      ro.clientAddress || '',
+      ro.totalBags || '',
+      ro.totalQuantity || '',
+      ro.releaseBags || '',
+      ro.releaseQuantity || '',
+      getBalanceBagsForExport(ro),
+      getBalanceQtyForExport(ro),
+      normalizeStatusText(ro.roStatus || 'pending'),
+      ro.createdAt ? new Date(ro.createdAt).toLocaleDateString('en-GB') : '',
+      ro.createdBy || '',
+      ro.remark || ''
+    ]);
+
+    // Combine headers and data
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => {
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const stringField = String(field);
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+          return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+      }).join(','))
+      .join('\n');
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Include search info in filename if search is active
+    const searchSuffix = searchTerm ? `-filtered-${searchTerm.replace(/[^a-zA-Z0-9]/g, '')}` : '';
+    link.setAttribute('href', url);
+    link.setAttribute('download', `release-orders${searchSuffix}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Fetch approved inward entries for SR/WR dropdown
@@ -687,9 +800,11 @@ export default function ReleaseOrderPage() {
                     <th className="px-2 py-1 border">SR/WR No.</th>
                     <th className="px-2 py-1 border">State</th>
                     <th className="px-2 py-1 border">Branch</th>
+                    <th className="px-2 py-1 border">Location</th>
                     <th className="px-2 py-1 border">Warehouse Name</th>
                     <th className="px-2 py-1 border">Warehouse Code</th>
                     <th className="px-2 py-1 border">Warehouse Address</th>
+                    <th className="px-2 py-1 border">Client Name</th>
                     <th className="px-2 py-1 border">Client Code</th>
                     <th className="px-2 py-1 border">Client Address</th>
                     <th className="px-2 py-1 border">Inward Bags</th>
@@ -704,7 +819,7 @@ export default function ReleaseOrderPage() {
                 <tbody>
                   {filteredROs.length === 0 ? (
                     <tr>
-                      <td colSpan={17} className="px-2 py-8 text-center text-gray-500">
+                      <td colSpan={19} className="px-2 py-8 text-center text-gray-500">
                         {releaseOrders.length === 0 
                           ? "No release orders found. Click 'Add RO' to create your first entry."
                           : "No release orders match your search criteria. Try adjusting your search terms."
@@ -728,9 +843,11 @@ export default function ReleaseOrderPage() {
                         <td className="px-2 py-1 border text-center">{ro.srwrNo}</td>
                         <td className="px-2 py-1 border text-center">{ro.state}</td>
                         <td className="px-2 py-1 border text-center">{ro.branch}</td>
+                        <td className="px-2 py-1 border text-center">{ro.location}</td>
                         <td className="px-2 py-1 border text-center">{ro.warehouseName}</td>
                         <td className="px-2 py-1 border text-center">{ro.warehouseCode}</td>
                         <td className="px-2 py-1 border text-center">{ro.warehouseAddress}</td>
+                        <td className="px-2 py-1 border text-center">{ro.client}</td>
                         <td className="px-2 py-1 border text-center">{ro.clientCode}</td>
                         <td className="px-2 py-1 border text-center">{ro.clientAddress}</td>
                         <td className="px-2 py-1 border text-center">{ro.totalBags}</td>
@@ -750,7 +867,7 @@ export default function ReleaseOrderPage() {
                       </tr>
                       {expandedRows[ro.srwrNo] && (
                         <tr>
-                          <td colSpan={15} className="p-0">
+                          <td colSpan={19} className="p-0">
                             <div className="bg-green-50 border-t">
                               <div className="font-semibold mb-2 text-orange-700 px-4 pt-2">All Release Orders for SR/WR No. - {ro.srwrNo}</div>
                               <div className="overflow-x-auto px-4 pb-2">

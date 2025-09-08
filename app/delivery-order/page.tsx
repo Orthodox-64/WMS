@@ -252,8 +252,105 @@ export default function DeliveryOrderPage() {
 
   // Placeholder handler for export
   const handleExportCSV = () => {
-    // TODO: Implement export logic
-    alert('Export CSV functionality coming soon!');
+    // Determine what data to export based on current view
+    let dataToExport;
+    
+    if (searchTerm) {
+      // If search is active, export only what's shown in the filtered table (latest per group that match search)
+      dataToExport = filteredDOs;
+    } else {
+      // If no search, export ALL delivery orders (including all historical entries)
+      dataToExport = deliveryOrders;
+    }
+
+    if (dataToExport.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Define CSV headers (matching the table columns)
+    const headers = [
+      'DO Code',
+      'SR/WR No.',
+      'State',
+      'Branch',
+      'Location',
+      'Warehouse Name',
+      'Warehouse Code',
+      'Warehouse Address',
+      'Client Name',
+      'Client Code',
+      'Client Address',
+      'Inward Bags',
+      'Inward Quantity (MT)',
+      'Release RO Bags',
+      'Release RO Quantity (MT)',
+      'DO Bags',
+      'DO Quantity (MT)',
+      'Balance Bags',
+      'Balance Quantity (MT)',
+      'DO Status',
+      'Is Direct DO',
+      'Created Date',
+      'Created By',
+      'Remark'
+    ];
+
+    // Convert data to CSV format
+    const csvData = dataToExport.map(do_item => [
+      do_item.doCode || '',
+      do_item.srwrNo || '',
+      do_item.state || '',
+      do_item.branch || '',
+      do_item.location || '',
+      do_item.warehouseName || '',
+      do_item.warehouseCode || '',
+      do_item.warehouseAddress || '',
+      do_item.client || '',
+      do_item.clientCode || '',
+      do_item.clientAddress || '',
+      do_item.totalBags || '',
+      do_item.totalQuantity || '',
+      do_item.releaseBags || '',
+      do_item.releaseQuantity || '',
+      do_item.doBags || '',
+      do_item.doQuantity || '',
+      getBalanceBags(do_item),
+      getBalanceQty(do_item),
+      normalizeStatusText(do_item.doStatus || 'pending'),
+      do_item.isDirectDO ? 'Yes' : 'No',
+      do_item.createdAt ? new Date(do_item.createdAt).toLocaleDateString('en-GB') : '',
+      do_item.createdBy || '',
+      do_item.remark || ''
+    ]);
+
+    // Combine headers and data
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => {
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const stringField = String(field);
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+          return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+      }).join(','))
+      .join('\n');
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Include search info in filename if search is active
+    const searchSuffix = searchTerm ? `-filtered-${searchTerm.replace(/[^a-zA-Z0-9]/g, '')}` : '';
+    link.setAttribute('href', url);
+    link.setAttribute('download', `delivery-orders${searchSuffix}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Fetch both approved ROs and inward entries without bank details for dropdown
@@ -999,9 +1096,11 @@ export default function DeliveryOrderPage() {
                   <th className="px-2 py-1 border">SR/WR No.</th>
                   <th className="px-2 py-1 border">State</th>
                   <th className="px-2 py-1 border">Branch</th>
+                  <th className="px-2 py-1 border">Location</th>
                   <th className="px-2 py-1 border">Warehouse Name</th>
                   <th className="px-2 py-1 border">Warehouse Code</th>
                   <th className="px-2 py-1 border">Warehouse Address</th>
+                  <th className="px-2 py-1 border">Client Name</th>
                   <th className="px-2 py-1 border">Client Code</th>
                   <th className="px-2 py-1 border">Client Address</th>
                   <th className="px-2 py-1 border">Inward Bags</th>
@@ -1018,7 +1117,7 @@ export default function DeliveryOrderPage() {
               <tbody>
                 {filteredDOs.length === 0 ? (
                   <tr>
-                    <td colSpan={19} className="px-2 py-8 text-center text-gray-500">
+                    <td colSpan={21} className="px-2 py-8 text-center text-gray-500">
                       {deliveryOrders.length === 0 
                         ? "No delivery orders found. Click 'Add DO' to create your first entry."
                         : "No delivery orders match your search criteria. Try adjusting your search terms."
@@ -1057,9 +1156,11 @@ export default function DeliveryOrderPage() {
                       </td>
                       <td className="px-2 py-1 border">{do_item.state}</td>
                       <td className="px-2 py-1 border">{do_item.branch}</td>
+                      <td className="px-2 py-1 border">{do_item.location}</td>
                       <td className="px-2 py-1 border">{do_item.warehouseName}</td>
                       <td className="px-2 py-1 border">{do_item.warehouseCode}</td>
                       <td className="px-2 py-1 border">{do_item.warehouseAddress}</td>
+                      <td className="px-2 py-1 border">{do_item.client}</td>
                       <td className="px-2 py-1 border">{do_item.clientCode}</td>
                       <td className="px-2 py-1 border">{do_item.clientAddress}</td>
                       <td className="px-2 py-1 border">{do_item.totalBags}</td>
@@ -1086,7 +1187,7 @@ export default function DeliveryOrderPage() {
                     </tr>
                     {expandedRows[do_item.srwrNo] && groupedDOs[do_item.srwrNo] && groupedDOs[do_item.srwrNo].length > 0 && (
                       <tr>
-                        <td colSpan={19} className="p-0">
+                        <td colSpan={21} className="p-0">
                           <div className="bg-gray-50 p-4">
                             <div className="text-sm font-medium mb-2">Previous Delivery Orders for this SR/WR</div>
                             <div className="overflow-x-auto">
