@@ -16,31 +16,35 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 
 interface InsuranceReportData {
   id: string;
-  date: string;
-  warehouseName: string;
-  warehouseCode: string;
   state: string;
   branch: string;
   location: string;
-  insuranceTakenBy: string;
-  insuranceCommodity: string;
+  typeOfBusiness: string;
+  warehouseType: string;
+  warehouseCode: string;
+  warehouseName: string;
+  warehouseAddress: string;
+  clientCode: string;
   clientName: string;
-  clientAddress: string;
-  selectedBankName: string;
-  firePolicyCompanyName: string;
+  commodity: string;
+  variety: string;
+  bankName: string;
+  bankBranchName: string;
+  bankState: string;
+  ifscCode: string;
+  balanceBags: string;
+  balanceQty: string;
+  insuranceManagedBy: string;
+  rate: string;
+  aum: string;
   firePolicyNumber: string;
-  firePolicyAmount: string;
+  firePolicySumInsured: string;
   firePolicyStartDate: string;
   firePolicyEndDate: string;
-  burglaryPolicyCompanyName: string;
   burglaryPolicyNumber: string;
-  burglaryPolicyAmount: string;
+  burglaryPolicySumInsured: string;
   burglaryPolicyStartDate: string;
   burglaryPolicyEndDate: string;
-  remainingFirePolicyAmount: string;
-  remainingBurglaryPolicyAmount: string;
-  status: string;
-  isPolicyExpired: boolean;
   [key: string]: any;
 }
 
@@ -58,40 +62,43 @@ export default function InsuranceReportsPage() {
   const [insuranceData, setInsuranceData] = useState<InsuranceReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'date', 'warehouseName', 'warehouseCode', 'state', 'branch', 'location',
-    'insuranceTakenBy', 'insuranceCommodity', 'clientName', 'clientAddress', 'selectedBankName',
-    'firePolicyCompanyName', 'firePolicyNumber', 'firePolicyAmount', 'firePolicyStartDate', 'firePolicyEndDate',
-    'burglaryPolicyCompanyName', 'burglaryPolicyNumber', 'burglaryPolicyAmount', 'burglaryPolicyStartDate', 'burglaryPolicyEndDate',
-    'remainingFirePolicyAmount', 'remainingBurglaryPolicyAmount', 'status'
+    'state', 'branch', 'location', 'typeOfBusiness', 'warehouseType', 'warehouseCode', 'warehouseName', 'warehouseAddress',
+    'clientCode', 'clientName', 'commodity', 'variety', 'bankName', 'bankBranchName', 'bankState', 'ifscCode',
+    'balanceBags', 'balanceQty', 'insuranceManagedBy', 'rate', 'aum', 'firePolicyNumber', 'firePolicySumInsured',
+    'firePolicyStartDate', 'firePolicyEndDate', 'burglaryPolicyNumber', 'burglaryPolicySumInsured', 'burglaryPolicyStartDate', 'burglaryPolicyEndDate'
   ]);
 
-  // Column definitions for table
+  // Column definitions for table - 28 columns matching the image
   const allColumns = [
-    { key: 'date', label: 'Date', width: 'w-24' },
-    { key: 'srNumber', label: 'SR Number', width: 'w-20' },
-    { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
-    { key: 'warehouseCode', label: 'Warehouse Code', width: 'w-28' },
     { key: 'state', label: 'State', width: 'w-24' },
     { key: 'branch', label: 'Branch', width: 'w-24' },
     { key: 'location', label: 'Location', width: 'w-24' },
-    { key: 'insuranceTakenBy', label: 'Insurance Taken By', width: 'w-28' },
-    { key: 'insuranceCommodity', label: 'Commodity', width: 'w-24' },
+    { key: 'typeOfBusiness', label: 'Type of Business', width: 'w-32' },
+    { key: 'warehouseType', label: 'Warehouse Type', width: 'w-28' },
+    { key: 'warehouseCode', label: 'Warehouse Code', width: 'w-28' },
+    { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
+    { key: 'warehouseAddress', label: 'Warehouse Address', width: 'w-36' },
+    { key: 'clientCode', label: 'Client Code', width: 'w-24' },
     { key: 'clientName', label: 'Client Name', width: 'w-28' },
-    { key: 'clientAddress', label: 'Client Address', width: 'w-32' },
-    { key: 'selectedBankName', label: 'Bank Name', width: 'w-24' },
-    { key: 'firePolicyCompanyName', label: 'Fire Policy Company', width: 'w-28' },
+    { key: 'commodity', label: 'Commodity', width: 'w-24' },
+    { key: 'variety', label: 'Variety', width: 'w-24' },
+    { key: 'bankName', label: 'Bank Name', width: 'w-28' },
+    { key: 'bankBranchName', label: 'Bank Branch Name', width: 'w-32' },
+    { key: 'bankState', label: 'Bank State', width: 'w-24' },
+    { key: 'ifscCode', label: 'IFSC Code', width: 'w-24' },
+    { key: 'balanceBags', label: 'Balance Bags', width: 'w-24' },
+    { key: 'balanceQty', label: 'Balance Qty', width: 'w-24' },
+    { key: 'insuranceManagedBy', label: 'Insurance Managed By', width: 'w-32' },
+    { key: 'rate', label: 'Rate', width: 'w-20' },
+    { key: 'aum', label: 'AUM', width: 'w-20' },
     { key: 'firePolicyNumber', label: 'Fire Policy Number', width: 'w-28' },
-    { key: 'firePolicyAmount', label: 'Fire Policy Amount', width: 'w-24' },
-    { key: 'firePolicyStartDate', label: 'Fire Policy Start', width: 'w-24' },
-    { key: 'firePolicyEndDate', label: 'Fire Policy End', width: 'w-24' },
-    { key: 'burglaryPolicyCompanyName', label: 'Burglary Policy Company', width: 'w-28' },
-    { key: 'burglaryPolicyNumber', label: 'Burglary Policy Number', width: 'w-28' },
-    { key: 'burglaryPolicyAmount', label: 'Burglary Policy Amount', width: 'w-24' },
-    { key: 'burglaryPolicyStartDate', label: 'Burglary Policy Start', width: 'w-24' },
-    { key: 'burglaryPolicyEndDate', label: 'Burglary Policy End', width: 'w-24' },
-    { key: 'remainingFirePolicyAmount', label: 'Remaining Fire Amount', width: 'w-24' },
-    { key: 'remainingBurglaryPolicyAmount', label: 'Remaining Burglary Amount', width: 'w-24' },
-    { key: 'status', label: 'Status', width: 'w-20' }
+    { key: 'firePolicySumInsured', label: 'Fire Policy Sum Insured', width: 'w-32' },
+    { key: 'firePolicyStartDate', label: 'Fire Policy Start Date', width: 'w-28' },
+    { key: 'firePolicyEndDate', label: 'Fire Policy End Date', width: 'w-28' },
+    { key: 'burglaryPolicyNumber', label: 'Burglary Policy Number', width: 'w-32' },
+    { key: 'burglaryPolicySumInsured', label: 'Burglary Policy Sum Insured', width: 'w-36' },
+    { key: 'burglaryPolicyStartDate', label: 'Burglary Policy Start Date', width: 'w-32' },
+    { key: 'burglaryPolicyEndDate', label: 'Burglary Policy End Date', width: 'w-32' }
   ];
 
   // Set default date range (6 months ago to today)
@@ -112,109 +119,85 @@ export default function InsuranceReportsPage() {
   const fetchInsuranceData = async () => {
     setLoading(true);
     try {
-      // Fetch from inspections collection which contains insurance data
-      const inspectionsCollection = collection(db, 'inspections');
-      
-      // Create date range query if dates are set
-      let q = query(inspectionsCollection, orderBy('createdAt', 'desc'), limit(1000));
-      
-      if (startDate && endDate) {
-        const startTimestamp = Timestamp.fromDate(new Date(startDate));
-        const endTimestamp = Timestamp.fromDate(new Date(endDate));
-        q = query(inspectionsCollection, 
-          where('createdAt', '>=', startTimestamp),
-          where('createdAt', '<=', endTimestamp),
-          orderBy('createdAt', 'desc'), 
-          limit(1000)
-        );
-      }
-      
-      const querySnapshot = await getDocs(q);
-      console.log('Inspections collection query result:', querySnapshot.size, 'documents');
-      
       const data: InsuranceReportData[] = [];
       
-      querySnapshot.docs.forEach((doc, index) => {
+      // Fetch from inspections collection (same as insurance master module)
+      console.log('Fetching from inspections collection...');
+      const snap = await getDocs(collection(db, 'inspections'));
+      console.log('Inspections collection query result:', snap.size, 'documents');
+      
+      snap.docs.forEach(doc => {
         const docData = doc.data();
         
-        // Check if this inspection has insurance data
-        if (docData.insuranceEntries && Array.isArray(docData.insuranceEntries)) {
-          docData.insuranceEntries.forEach((insurance: any) => {
-            const endDate = insurance.firePolicyEndDate || insurance.burglaryPolicyEndDate;
-            const isExpired = endDate ? new Date(endDate) < new Date() : false;
-            
-            data.push({
-              id: `${doc.id}_${insurance.insuranceId || Date.now()}`,
-              srNumber: (index + 1).toString(),
-              date: docData.createdAt || docData.dateOfInspection || '',
-              warehouseName: docData.warehouseName || '',
-              warehouseCode: docData.warehouseCode || '',
-              state: docData.state || '',
-              branch: docData.branch || '',
-              location: docData.location || '',
-              insuranceTakenBy: insurance.insuranceTakenBy || '',
-              insuranceCommodity: insurance.insuranceCommodity || '',
-              clientName: insurance.clientName || '',
-              clientAddress: insurance.clientAddress || '',
-              selectedBankName: insurance.selectedBankName || '',
-              firePolicyCompanyName: insurance.firePolicyCompanyName || '',
-              firePolicyNumber: insurance.firePolicyNumber || '',
-              firePolicyAmount: insurance.firePolicyAmount || '',
-              firePolicyStartDate: insurance.firePolicyStartDate || '',
-              firePolicyEndDate: insurance.firePolicyEndDate || '',
-              burglaryPolicyCompanyName: insurance.burglaryPolicyCompanyName || '',
-              burglaryPolicyNumber: insurance.burglaryPolicyNumber || '',
-              burglaryPolicyAmount: insurance.burglaryPolicyAmount || '',
-              burglaryPolicyStartDate: insurance.burglaryPolicyStartDate || '',
-              burglaryPolicyEndDate: insurance.burglaryPolicyEndDate || '',
-              remainingFirePolicyAmount: insurance.remainingFirePolicyAmount || '',
-              remainingBurglaryPolicyAmount: insurance.remainingBurglaryPolicyAmount || '',
-              status: insurance.status || 'Active',
-              isPolicyExpired: isExpired,
-              ...insurance
-            });
-          });
-        }
-        
-        // Also check for direct insurance fields
-        if (docData.firePolicyNumber || docData.burglaryPolicyNumber) {
-          const endDate = docData.firePolicyEndDate || docData.burglaryPolicyEndDate;
-          const isExpired = endDate ? new Date(endDate) < new Date() : false;
+        // Only process activated warehouses (same logic as insurance master)
+        if (docData.status === 'activated' || docData.status === 'reactivate') {
+          // Helper to get state/branch/location robustly (same as insurance master)
+          const getField = (field: string) =>
+            docData[field] || (docData.warehouseInspectionData && docData.warehouseInspectionData[field]) || '';
           
-          data.push({
-            id: `${doc.id}_direct`,
-            srNumber: (index + 1).toString(),
-            date: docData.createdAt || docData.dateOfInspection || '',
-            warehouseName: docData.warehouseName || '',
-            warehouseCode: docData.warehouseCode || '',
-            state: docData.state || '',
-            branch: docData.branch || '',
-            location: docData.location || '',
-            insuranceTakenBy: docData.insuranceTakenBy || '',
-            insuranceCommodity: docData.insuranceCommodity || '',
-            clientName: docData.clientName || '',
-            clientAddress: docData.clientAddress || '',
-            selectedBankName: docData.selectedBankName || '',
-            firePolicyCompanyName: docData.firePolicyCompanyName || '',
-            firePolicyNumber: docData.firePolicyNumber || '',
-            firePolicyAmount: docData.firePolicyAmount || '',
-            firePolicyStartDate: docData.firePolicyStartDate || '',
-            firePolicyEndDate: docData.firePolicyEndDate || '',
-            burglaryPolicyCompanyName: docData.burglaryPolicyCompanyName || '',
-            burglaryPolicyNumber: docData.burglaryPolicyNumber || '',
-            burglaryPolicyAmount: docData.burglaryPolicyAmount || '',
-            burglaryPolicyStartDate: docData.burglaryPolicyStartDate || '',
-            burglaryPolicyEndDate: docData.burglaryPolicyEndDate || '',
-            remainingFirePolicyAmount: docData.remainingFirePolicyAmount || '',
-            remainingBurglaryPolicyAmount: docData.remainingBurglaryPolicyAmount || '',
-            status: docData.status || 'Active',
-            isPolicyExpired: isExpired,
-            ...docData
-          });
+          // Process insurance entries from inspections (same as insurance master expand button)
+          if (Array.isArray(docData.insuranceEntries) && docData.insuranceEntries.length > 0) {
+            console.log(`Processing ${docData.insuranceEntries.length} insurance entries for warehouse: ${docData.warehouseName}`);
+            docData.insuranceEntries.forEach((entry: any, idx: number) => {
+              console.log(`Insurance entry ${idx}:`, {
+                firePolicyNumber: entry.firePolicyNumber,
+                firePolicyStartDate: entry.firePolicyStartDate,
+                firePolicyEndDate: entry.firePolicyEndDate,
+                burglaryPolicyNumber: entry.burglaryPolicyNumber,
+                burglaryPolicyStartDate: entry.burglaryPolicyStartDate,
+                burglaryPolicyEndDate: entry.burglaryPolicyEndDate
+              });
+              data.push({
+                id: entry.id || `${doc.id}_${idx}`,
+                state: getField('state'),
+                branch: getField('branch'),
+                location: getField('location'),
+                typeOfBusiness: docData.businessType || '',
+                warehouseType: docData.typeOfWarehouse || docData.warehouseType || '',
+                warehouseCode: docData.warehouseCode || '',
+                warehouseName: docData.warehouseName || '',
+                warehouseAddress: docData.warehouseAddress || '',
+                clientCode: entry.clientCode || '',
+                clientName: entry.clientName || '',
+                commodity: entry.insuranceCommodity || '',
+                variety: entry.variety || '',
+                bankName: entry.selectedBankName || '',
+                bankBranchName: entry.bankBranchName || '',
+                bankState: entry.bankState || '',
+                ifscCode: entry.ifscCode || '',
+                balanceBags: entry.balanceBags || '',
+                balanceQty: entry.balanceQty || '',
+                insuranceManagedBy: entry.insuranceTakenBy || '',
+                rate: entry.rate || '',
+                aum: entry.aum || '',
+                // Policy details from insurance master expand button
+                firePolicyNumber: entry.firePolicyNumber || '',
+                firePolicySumInsured: entry.firePolicyAmount || '',
+                firePolicyStartDate: entry.firePolicyStartDate ? 
+                  (entry.firePolicyStartDate.toDate ? entry.firePolicyStartDate.toDate().toISOString().split('T')[0] : 
+                   typeof entry.firePolicyStartDate === 'string' ? entry.firePolicyStartDate.split('T')[0] : 
+                   entry.firePolicyStartDate) : '',
+                firePolicyEndDate: entry.firePolicyEndDate ? 
+                  (entry.firePolicyEndDate.toDate ? entry.firePolicyEndDate.toDate().toISOString().split('T')[0] : 
+                   typeof entry.firePolicyEndDate === 'string' ? entry.firePolicyEndDate.split('T')[0] : 
+                   entry.firePolicyEndDate) : '',
+                burglaryPolicyNumber: entry.burglaryPolicyNumber || '',
+                burglaryPolicySumInsured: entry.burglaryPolicyAmount || '',
+                burglaryPolicyStartDate: entry.burglaryPolicyStartDate ? 
+                  (entry.burglaryPolicyStartDate.toDate ? entry.burglaryPolicyStartDate.toDate().toISOString().split('T')[0] : 
+                   typeof entry.burglaryPolicyStartDate === 'string' ? entry.burglaryPolicyStartDate.split('T')[0] : 
+                   entry.burglaryPolicyStartDate) : '',
+                burglaryPolicyEndDate: entry.burglaryPolicyEndDate ? 
+                  (entry.burglaryPolicyEndDate.toDate ? entry.burglaryPolicyEndDate.toDate().toISOString().split('T')[0] : 
+                   typeof entry.burglaryPolicyEndDate === 'string' ? entry.burglaryPolicyEndDate.split('T')[0] : 
+                   entry.burglaryPolicyEndDate) : ''
+              });
+            });
+          }
         }
       });
       
-      console.log('Processed insurance data:', data.length, 'records');
+      console.log('Total insurance data:', data.length, 'records');
       setInsuranceData(data);
     } catch (error) {
       console.error('Error fetching insurance data:', error);
@@ -295,41 +278,44 @@ export default function InsuranceReportsPage() {
     if (filteredData.length === 0) return;
     
     const headers = [
-      'Date', 'SR Number', 'Warehouse Name', 'Warehouse Code', 'State', 'Branch', 'Location',
-      'Insurance Taken By', 'Commodity', 'Client Name', 'Client Address', 'Bank Name',
-      'Fire Policy Company', 'Fire Policy Number', 'Fire Policy Amount', 'Fire Policy Start Date', 'Fire Policy End Date',
-      'Burglary Policy Company', 'Burglary Policy Number', 'Burglary Policy Amount', 'Burglary Policy Start Date', 'Burglary Policy End Date',
-      'Remaining Fire Amount', 'Remaining Burglary Amount', 'Status'
+      'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address',
+      'Client Code', 'Client Name', 'Commodity', 'Variety', 'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code',
+      'Balance Bags', 'Balance Qty', 'Insurance Managed By', 'Rate', 'AUM', 'Fire Policy Number', 'Fire Policy Sum Insured',
+      'Fire Policy Start Date', 'Fire Policy End Date', 'Burglary Policy Number', 'Burglary Policy Sum Insured', 'Burglary Policy Start Date', 'Burglary Policy End Date'
     ];
     
     const csvContent = [
       headers.join(','),
       ...filteredData.map(row => [
-        row.date || '',
-        row.srNumber || '',
-        row.warehouseName || '',
-        row.warehouseCode || '',
         row.state || '',
         row.branch || '',
         row.location || '',
-        row.insuranceTakenBy || '',
-        row.insuranceCommodity || '',
+        row.typeOfBusiness || '',
+        row.warehouseType || '',
+        row.warehouseCode || '',
+        row.warehouseName || '',
+        row.warehouseAddress || '',
+        row.clientCode || '',
         row.clientName || '',
-        row.clientAddress || '',
-        row.selectedBankName || '',
-        row.firePolicyCompanyName || '',
+        row.commodity || '',
+        row.variety || '',
+        row.bankName || '',
+        row.bankBranchName || '',
+        row.bankState || '',
+        row.ifscCode || '',
+        row.balanceBags || '',
+        row.balanceQty || '',
+        row.insuranceManagedBy || '',
+        row.rate || '',
+        row.aum || '',
         row.firePolicyNumber || '',
-        row.firePolicyAmount || '',
+        row.firePolicySumInsured || '',
         row.firePolicyStartDate || '',
         row.firePolicyEndDate || '',
-        row.burglaryPolicyCompanyName || '',
         row.burglaryPolicyNumber || '',
-        row.burglaryPolicyAmount || '',
+        row.burglaryPolicySumInsured || '',
         row.burglaryPolicyStartDate || '',
-        row.burglaryPolicyEndDate || '',
-        row.remainingFirePolicyAmount || '',
-        row.remainingBurglaryPolicyAmount || '',
-        row.status || ''
+        row.burglaryPolicyEndDate || ''
       ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(','))
     ].join('\n');
     
@@ -388,7 +374,7 @@ export default function InsuranceReportsPage() {
 
   // Format date for display
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return '-';
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString('en-IN', {
@@ -763,72 +749,72 @@ export default function InsuranceReportsPage() {
                       )}
                       {visibleColumns.includes('srNumber') && (
                         <td className="border border-gray-200 px-4 py-2 text-center font-mono text-sm">
-                          {item.srNumber || 'N/A'}
+                          {item.srNumber || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('warehouseName') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.warehouseName || 'N/A'}
+                          {item.warehouseName || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('warehouseCode') && (
                         <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.warehouseCode || 'N/A'}
+                          {item.warehouseCode || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('state') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.state || 'N/A'}
+                          {item.state || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('branch') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.branch || 'N/A'}
+                          {item.branch || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('location') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.location || 'N/A'}
+                          {item.location || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('insuranceTakenBy') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.insuranceTakenBy || 'N/A'}
+                          {item.insuranceTakenBy || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('insuranceCommodity') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.insuranceCommodity || 'N/A'}
+                          {item.insuranceCommodity || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('clientName') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.clientName || 'N/A'}
+                          {item.clientName || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('clientAddress') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.clientAddress || 'N/A'}
+                          {item.clientAddress || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('selectedBankName') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.selectedBankName || 'N/A'}
+                          {item.selectedBankName || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('firePolicyCompanyName') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.firePolicyCompanyName || 'N/A'}
+                          {item.firePolicyCompanyName || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('firePolicyNumber') && (
                         <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.firePolicyNumber || 'N/A'}
+                          {item.firePolicyNumber || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('firePolicyAmount') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.firePolicyAmount || 'N/A'}
+                          {item.firePolicyAmount || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('firePolicyStartDate') && (
@@ -845,17 +831,17 @@ export default function InsuranceReportsPage() {
                       )}
                       {visibleColumns.includes('burglaryPolicyCompanyName') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.burglaryPolicyCompanyName || 'N/A'}
+                          {item.burglaryPolicyCompanyName || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('burglaryPolicyNumber') && (
                         <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.burglaryPolicyNumber || 'N/A'}
+                          {item.burglaryPolicyNumber || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('burglaryPolicyAmount') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.burglaryPolicyAmount || 'N/A'}
+                          {item.burglaryPolicyAmount || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('burglaryPolicyStartDate') && (
@@ -872,12 +858,12 @@ export default function InsuranceReportsPage() {
                       )}
                       {visibleColumns.includes('remainingFirePolicyAmount') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.remainingFirePolicyAmount || 'N/A'}
+                          {item.remainingFirePolicyAmount || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('remainingBurglaryPolicyAmount') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.remainingBurglaryPolicyAmount || 'N/A'}
+                          {item.remainingBurglaryPolicyAmount || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('status') && (

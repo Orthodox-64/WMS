@@ -16,26 +16,27 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 
 interface DeliveryOrderReportData {
   id: string;
-  date: string;
-  doNumber: string;
-  inwardId: string;
   state: string;
   branch: string;
-  warehouseName: string;
+  location: string;
+  typeOfBusiness: string;
+  warehouseType: string;
   warehouseCode: string;
+  warehouseName: string;
   warehouseAddress: string;
-  client: string;
-  clientAddress: string;
-  totalBags: string;
-  totalQuantity: string;
-  releaseBags: string;
-  releaseQuantity: string;
+  clientCode: string;
+  clientName: string;
+  commodityName: string;
+  varietyName: string;
+  inwardBag: string;
+  inwardQty: string;
+  doNumber: string;
+  doDate: string;
   doBags: string;
-  doQuantity: string;
-  balanceBags: string;
-  balanceQuantity: string;
-  status: string;
-  isDirectDO: boolean;
+  doQty: string;
+  doCode: string;
+  balanceBag: string;
+  balanceQty: string;
   [key: string]: any;
 }
 
@@ -52,32 +53,34 @@ export default function DeliveryOrderReportsPage() {
   const [doData, setDoData] = useState<DeliveryOrderReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'date', 'doNumber', 'inwardId', 'state', 'branch', 'warehouseName', 'warehouseCode',
-    'warehouseAddress', 'client', 'clientAddress', 'totalBags', 'totalQuantity', 'releaseBags', 
-    'releaseQuantity', 'doBags', 'doQuantity', 'balanceBags', 'balanceQuantity', 'status'
+    'state', 'branch', 'location', 'typeOfBusiness', 'warehouseType', 'warehouseCode', 'warehouseName',
+    'warehouseAddress', 'clientCode', 'clientName', 'commodity', 'variety', 'inwardBag', 'inwardQty',
+    'doNumber', 'doDate', 'doBags', 'doQty', 'doCode', 'balanceBag', 'balanceQty'
   ]);
 
-  // Column definitions for 17 columns matching dashboard data
+  // Column definitions for 21 columns matching the image parameters
   const allColumns = [
-    { key: 'date', label: 'Date', width: 'w-24' },
-    { key: 'doNumber', label: 'DO Code', width: 'w-24' },
-    { key: 'inwardId', label: 'SR/WR No.', width: 'w-24' },
     { key: 'state', label: 'State', width: 'w-20' },
     { key: 'branch', label: 'Branch', width: 'w-20' },
-    { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
+    { key: 'location', label: 'Location', width: 'w-24' },
+    { key: 'typeOfBusiness', label: 'Type of Business', width: 'w-28' },
+    { key: 'warehouseType', label: 'Warehouse Type', width: 'w-28' },
     { key: 'warehouseCode', label: 'Warehouse Code', width: 'w-24' },
+    { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
     { key: 'warehouseAddress', label: 'Warehouse Address', width: 'w-32' },
-    { key: 'client', label: 'Client Code', width: 'w-24' },
-    { key: 'clientAddress', label: 'Client Address', width: 'w-32' },
-    { key: 'totalBags', label: 'Inward Bags', width: 'w-24' },
-    { key: 'totalQuantity', label: 'Inward Qty (MT)', width: 'w-28' },
-    { key: 'releaseBags', label: 'Release RO Bags', width: 'w-28' },
-    { key: 'releaseQuantity', label: 'Release RO Qty (MT)', width: 'w-32' },
-    { key: 'doBags', label: 'DO Bags', width: 'w-24' },
-    { key: 'doQuantity', label: 'DO Qty (MT)', width: 'w-24' },
-    { key: 'balanceBags', label: 'Balance Bags', width: 'w-24' },
-    { key: 'balanceQuantity', label: 'Balance Qty (MT)', width: 'w-28' },
-    { key: 'status', label: 'DO Status', width: 'w-20' }
+    { key: 'clientCode', label: 'Client Code', width: 'w-24' },
+    { key: 'clientName', label: 'Client Name', width: 'w-28' },
+    { key: 'commodity', label: 'Commodity', width: 'w-24' },
+    { key: 'variety', label: 'Variety', width: 'w-24' },
+    { key: 'inwardBag', label: 'Inward Bag', width: 'w-20' },
+    { key: 'inwardQty', label: 'Inward Qty', width: 'w-20' },
+    { key: 'doNumber', label: 'DO Number', width: 'w-24' },
+    { key: 'doDate', label: 'DO Date', width: 'w-24' },
+    { key: 'doBags', label: 'DO Bags', width: 'w-20' },
+    { key: 'doQty', label: 'DO Qty (MT)', width: 'w-24' },
+    { key: 'doCode', label: 'DO Code', width: 'w-20' },
+    { key: 'balanceBag', label: 'Balance Bag', width: 'w-20' },
+    { key: 'balanceQty', label: 'Balance QT', width: 'w-20' }
   ];
 
   // Fetch delivery order data
@@ -121,34 +124,236 @@ export default function DeliveryOrderReportsPage() {
       
       console.log('DO collection query result:', querySnapshot.size, 'documents');
       
-      const data = querySnapshot.docs.map((doc, index) => {
+      const data = await Promise.all(querySnapshot.docs.map(async (doc, index) => {
         const docData = doc.data();
+        
+        // Debug: Log available fields in DO data
+        console.log('=== DO DOCUMENT DEBUG ===');
+        console.log('DO document fields for warehouse:', docData.warehouseName, Object.keys(docData));
+        console.log('DO document data:', docData);
+        console.log('DO commodity fields:', {
+          commodityId: docData.commodityId,
+          varietyId: docData.varietyId,
+          commodityName: docData.commodityName,
+          varietyName: docData.varietyName,
+          commodity: docData.commodity,
+          variety: docData.variety
+        });
+        console.log('All DO fields with values:', Object.entries(docData).filter(([key, value]) => value !== undefined && value !== null && value !== ''));
+        console.log('=== END DO DOCUMENT DEBUG ===');
+        
+        // Fetch warehouse type from inspections collection (same logic as release order report)
+        let warehouseType = '';
+        let warehouseCode = '';
+        let warehouseAddress = '';
+        let businessType = '';
+        
+        if (docData.warehouseName) {
+          console.log('Looking for warehouse type for warehouse name:', docData.warehouseName);
+          try {
+            // Fetch warehouse type from inspections collection where typeOfWarehouse field is present
+            try {
+              console.log(`Fetching warehouse type from inspections collection for warehouse: ${docData.warehouseName}`);
+              
+              // Query inspections collection with database location filter if available
+              let inspectionsQuery;
+              if (docData.databaseLocation) {
+                inspectionsQuery = query(
+                  collection(db, 'inspections'),
+                  where('warehouseName', '==', docData.warehouseName),
+                  where('databaseLocation', '==', docData.databaseLocation)
+                );
+              } else {
+                inspectionsQuery = query(
+                  collection(db, 'inspections'),
+                  where('warehouseName', '==', docData.warehouseName)
+                );
+              }
+              
+              const inspectionsSnapshot = await getDocs(inspectionsQuery);
+              console.log('Inspections query result:', inspectionsSnapshot.size, 'documents');
+              
+              if (!inspectionsSnapshot.empty) {
+                const inspectionData = inspectionsSnapshot.docs[0].data();
+                console.log('Inspections data found:', inspectionData);
+                console.log('Available fields in inspections:', Object.keys(inspectionData));
+                
+                // Get warehouse type from typeOfWarehouse field (correct field name)
+                warehouseType = inspectionData.typeOfWarehouse || 
+                              inspectionData.typeofwarehouse || 
+                              inspectionData.warehouseType || 
+                              inspectionData.warehouseInspectionData?.typeOfWarehouse ||
+                              inspectionData.warehouseInspectionData?.warehouseType || '';
+                
+                // Get other warehouse details from inspections
+                warehouseCode = inspectionData.warehouseCode || 
+                              inspectionData.warehouseInspectionData?.warehouseCode || '';
+                warehouseAddress = inspectionData.warehouseAddress || 
+                                inspectionData.warehouseInspectionData?.warehouseAddress || '';
+                businessType = inspectionData.businessType || 
+                             inspectionData.warehouseInspectionData?.businessType || '';
+                
+                console.log('Extracted warehouse type from inspections:', warehouseType);
+                console.log('Warehouse code from inspections:', warehouseCode);
+              } else {
+                console.log('No inspections data found for warehouse:', docData.warehouseName);
+              }
+            } catch (error) {
+              console.log('Error fetching from inspections collection:', error);
+            }
+            
+            console.log('Final extracted warehouse type:', warehouseType);
+            console.log('Warehouse type will be displayed as:', warehouseType || '-');
+          } catch (error) {
+            console.log('Error fetching warehouse type from warehouse creation:', error);
+          }
+        }
+        
+        // Fetch commodity and variety - prioritize direct fields, then fetch from commodities collection
+        let commodity = '';
+        let variety = '';
+        
+        console.log('=== COMMODITY/VARIETY FETCHING DEBUG (COMMODITIES COLLECTION ONLY) ===');
+        console.log('DO data commodity fields:', {
+          commodityId: docData.commodityId,
+          varietyId: docData.varietyId,
+          commodityName: docData.commodityName,
+          varietyName: docData.varietyName,
+          commodity: docData.commodity,
+          variety: docData.variety
+        });
+        
+        // Step 1: Check if commodityName and varietyName are directly available in DO data
+        if (docData.commodityName) {
+          commodity = docData.commodityName;
+          console.log('✅ Using commodityName directly from DO data:', commodity);
+        }
+        if (docData.varietyName) {
+          variety = docData.varietyName;
+          console.log('✅ Using varietyName directly from DO data:', variety);
+        }
+        
+        // Step 2: If we have commodityId but no commodityName, fetch from commodities collection
+        if (!commodity && docData.commodityId) {
+          try {
+            console.log('🔍 Fetching commodity from commodities collection for commodityId:', docData.commodityId);
+            const commoditiesCollection = collection(db, 'commodities');
+            const commodityQuery = query(
+              commoditiesCollection,
+              where('commodityId', '==', docData.commodityId)
+            );
+            const commoditySnapshot = await getDocs(commodityQuery);
+            
+            if (!commoditySnapshot.empty) {
+              const commodityData = commoditySnapshot.docs[0].data();
+              commodity = commodityData.commodityName || '';
+              console.log('✅ Commodity fetched from commodities collection:', commodity);
+            } else {
+              console.log('❌ No commodity found for commodityId:', docData.commodityId);
+            }
+          } catch (error) {
+            console.log('❌ Error fetching commodity from commodities collection:', error);
+          }
+        }
+        
+        // Step 3: If we have varietyId but no varietyName, fetch from commodities collection
+        if (!variety && docData.varietyId) {
+          try {
+            console.log('🔍 Fetching variety from commodities collection for varietyId:', docData.varietyId);
+            const commoditiesCollection = collection(db, 'commodities');
+            
+            // First try to find variety in the same commodity if we have commodityId
+            if (docData.commodityId) {
+              const commodityQuery = query(
+                commoditiesCollection,
+                where('commodityId', '==', docData.commodityId)
+              );
+              const commoditySnapshot = await getDocs(commodityQuery);
+              
+              if (!commoditySnapshot.empty) {
+                const commodityData = commoditySnapshot.docs[0].data();
+                if (commodityData.varieties) {
+                  const varietyData = commodityData.varieties.find((v: any) => v.varietyId === docData.varietyId);
+                  if (varietyData) {
+                    variety = varietyData.varietyName || '';
+                    console.log('✅ Variety found in same commodity:', variety);
+                  }
+                }
+              }
+            }
+            
+            // If still no variety, search across all commodities
+            if (!variety) {
+              console.log('🔍 Searching for variety across all commodities...');
+              const allCommoditiesSnapshot = await getDocs(commoditiesCollection);
+              
+              for (const commodityDoc of allCommoditiesSnapshot.docs) {
+                const commodityData = commodityDoc.data();
+                if (commodityData.varieties) {
+                  const varietyData = commodityData.varieties.find((v: any) => v.varietyId === docData.varietyId);
+                  if (varietyData) {
+                    variety = varietyData.varietyName || '';
+                    console.log('✅ Variety found in commodity:', commodityData.commodityName, 'variety:', variety);
+                    break;
+                  }
+                }
+              }
+            }
+            
+            if (!variety) {
+              console.log('❌ No variety found for varietyId:', docData.varietyId);
+            }
+          } catch (error) {
+            console.log('❌ Error fetching variety from commodities collection:', error);
+          }
+        }
+        
+        // Note: Only fetching from commodities collection, no inward collection fallback
+        
+        console.log('=== FINAL COMMODITY/VARIETY RESULT (COMMODITIES COLLECTION ONLY) ===');
+        console.log('🎯 Final commodity for report:', commodity || 'NOT FOUND (only using commodities collection)');
+        console.log('🎯 Final variety for report:', variety || 'NOT FOUND (only using commodities collection)');
+        console.log('=== END COMMODITY/VARIETY FETCHING DEBUG ===');
+        
+        // Calculate balance values if not present
+        const calculatedBalanceBags = docData.balanceBags || (docData.totalBags && docData.doBags ? (docData.totalBags - docData.doBags).toString() : '');
+        const calculatedBalanceQty = docData.balanceQuantity || (docData.totalQuantity && docData.doQuantity ? (docData.totalQuantity - docData.doQuantity).toString() : '');
+        
+        console.log('Balance calculation for warehouse:', docData.warehouseName, {
+          totalBags: docData.totalBags,
+          doBags: docData.doBags,
+          calculatedBalanceBags,
+          totalQuantity: docData.totalQuantity,
+          doQuantity: docData.doQuantity,
+          calculatedBalanceQty
+        });
+        
         return {
           id: doc.id,
-          date: docData.createdAt || docData.dateOfDelivery || '',
-          srNumber: (index + 1).toString(), // Serial number
-          doNumber: docData.doCode || docData.doNumber || doc.id,
-          inwardId: docData.srwrNo || docData.inwardId || '',
           state: docData.state || '',
           branch: docData.branch || '',
+          location: docData.location || '',
+          typeOfBusiness: businessType || docData.businessType || docData.typeOfBusiness || '',
+          warehouseType: warehouseType,
+          warehouseCode: warehouseCode || docData.warehouseCode || '',
           warehouseName: docData.warehouseName || '',
-          warehouseCode: docData.warehouseCode || '',
-          warehouseAddress: docData.warehouseAddress || '',
-          client: docData.clientCode || docData.client || '',
-          clientAddress: docData.clientAddress || '',
-          totalBags: docData.totalBags || '',
-          totalQuantity: docData.totalQuantity || '',
-          releaseBags: docData.releaseBags || '',
-          releaseQuantity: docData.releaseQuantity || '',
+          warehouseAddress: warehouseAddress || docData.warehouseAddress || '',
+          clientCode: docData.clientCode || '',
+          clientName: docData.client || '',
+          commodityName: commodity,
+          varietyName: variety,
+          inwardBag: docData.totalBags || '',
+          inwardQty: docData.totalQuantity || '',
+          doNumber: docData.doCode || docData.doNumber || '',
+          doDate: docData.createdAt || docData.dateOfDelivery || '',
           doBags: docData.doBags || docData.bags || '',
-          doQuantity: docData.doQuantity || docData.quantity || '',
-          balanceBags: docData.balanceBags || '',
-          balanceQuantity: docData.balanceQuantity || '',
-          status: docData.doStatus || docData.status || 'Active',
-          isDirectDO: docData.isDirectDO || false,
+          doQty: docData.doQuantity || docData.quantity || '',
+          doCode: docData.doCode || docData.doNumber || '',
+          balanceBag: calculatedBalanceBags,
+          balanceQty: calculatedBalanceQty,
           ...docData
         };
-      });
+      }));
       
       console.log('Processed DO data:', data.length, 'records');
       setDoData(data);
@@ -173,7 +378,7 @@ export default function DeliveryOrderReportsPage() {
   }, [doData]);
 
   const uniqueClients = useMemo(() => {
-    return Array.from(new Set(doData.map(item => item.client).filter(Boolean)));
+    return Array.from(new Set(doData.map(item => item.clientName).filter(Boolean)));
   }, [doData]);
 
   const uniqueStatuses = useMemo(() => {
@@ -218,7 +423,7 @@ export default function DeliveryOrderReportsPage() {
 
     // Apply client filter
     if (clientFilter && clientFilter !== 'all') {
-      filtered = filtered.filter(item => item.client === clientFilter);
+      filtered = filtered.filter(item => item.clientName === clientFilter);
     }
     
     return filtered;
@@ -229,34 +434,35 @@ export default function DeliveryOrderReportsPage() {
     if (filteredData.length === 0) return;
     
     const headers = [
-      'Date', 'SR Number', 'DO Code', 'SR/WR No.', 'State', 'Branch', 'Warehouse Name', 'Warehouse Code',
-      'Warehouse Address', 'Client Code', 'Client Address', 'Inward Bags', 'Inward Qty (MT)', 'Release RO Bags',
-      'Release RO Qty (MT)', 'DO Bags', 'DO Qty (MT)', 'Balance Bags', 'Balance Qty (MT)', 'DO Status'
+      'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name',
+      'Warehouse Address', 'Client Code', 'Client Name', 'Commodity', 'Variety', 'Inward Bag', 'Inward Qty',
+      'DO Number', 'DO Date', 'DO Bags', 'DO Qty (MT)', 'DO Code', 'Balance Bag', 'Balance QT'
     ];
     
     const csvContent = [
       headers.join(','),
       ...filteredData.map(row => [
-        row.date || '',
-        row.srNumber || '',
-        row.doNumber || '',
-        row.inwardId || '',
         row.state || '',
         row.branch || '',
-        row.warehouseName || '',
+        row.location || '',
+        row.typeOfBusiness || '',
+        row.warehouseType || '',
         row.warehouseCode || '',
+        row.warehouseName || '',
         row.warehouseAddress || '',
-        row.client || '',
-        row.clientAddress || '',
-        row.totalBags || '',
-        row.totalQuantity || '',
-        row.releaseBags || '',
-        row.releaseQuantity || '',
+        row.clientCode || '',
+        row.clientName || '',
+        row.commodityName || '',
+        row.varietyName || '',
+        row.inwardBag || '',
+        row.inwardQty || '',
+        row.doNumber || '',
+        row.doDate || '',
         row.doBags || '',
-        row.doQuantity || '',
-        row.balanceBags || '',
-        row.balanceQuantity || '',
-        row.status || ''
+        row.doQty || '',
+        row.doCode || '',
+        row.balanceBag || '',
+        row.balanceQty || ''
       ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(','))
     ].join('\n');
     
@@ -637,130 +843,135 @@ export default function DeliveryOrderReportsPage() {
               <table className="w-full border-collapse border border-gray-200">
                 <thead className="bg-orange-100">
                   <tr>
-                    {visibleColumns.includes('date') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Date</th>}
-                    {visibleColumns.includes('doNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Code</th>}
-                    {visibleColumns.includes('inwardId') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">SR/WR No.</th>}
                     {visibleColumns.includes('state') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">State</th>}
                     {visibleColumns.includes('branch') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Branch</th>}
-                    {visibleColumns.includes('warehouseName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>}
+                    {visibleColumns.includes('location') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Location</th>}
+                    {visibleColumns.includes('typeOfBusiness') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Type of Business</th>}
+                    {visibleColumns.includes('warehouseType') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Type</th>}
                     {visibleColumns.includes('warehouseCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Code</th>}
+                    {visibleColumns.includes('warehouseName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>}
                     {visibleColumns.includes('warehouseAddress') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Address</th>}
-                    {visibleColumns.includes('client') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Code</th>}
-                    {visibleColumns.includes('clientAddress') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Address</th>}
-                    {visibleColumns.includes('totalBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Bags</th>}
-                    {visibleColumns.includes('totalQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Qty (MT)</th>}
-                    {visibleColumns.includes('releaseBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Release RO Bags</th>}
-                    {visibleColumns.includes('releaseQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Release RO Qty (MT)</th>}
+                    {visibleColumns.includes('clientCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Code</th>}
+                    {visibleColumns.includes('clientName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Name</th>}
+                    {visibleColumns.includes('commodity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Commodity</th>}
+                    {visibleColumns.includes('variety') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Variety</th>}
+                    {visibleColumns.includes('inwardBag') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Bag</th>}
+                    {visibleColumns.includes('inwardQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Qty</th>}
+                    {visibleColumns.includes('doNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Number</th>}
+                    {visibleColumns.includes('doDate') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Date</th>}
                     {visibleColumns.includes('doBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Bags</th>}
-                    {visibleColumns.includes('doQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Qty (MT)</th>}
-                    {visibleColumns.includes('balanceBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Bags</th>}
-                    {visibleColumns.includes('balanceQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Qty (MT)</th>}
-                    {visibleColumns.includes('status') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Status</th>}
+                    {visibleColumns.includes('doQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Qty (MT)</th>}
+                    {visibleColumns.includes('doCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Code</th>}
+                    {visibleColumns.includes('balanceBag') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Bag</th>}
+                    {visibleColumns.includes('balanceQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance QT</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredData.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      {visibleColumns.includes('date') && (
-                        <td className="border border-gray-200 px-4 py-2">
-                          {formatDate(item.date)}
-                        </td>
-                      )}
-                      {visibleColumns.includes('srNumber') && (
-                        <td className="border border-gray-200 px-4 py-2 text-center font-mono text-sm">
-                          {item.srNumber || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('doNumber') && (
-                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.doNumber || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('inwardId') && (
-                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.inwardId || 'N/A'}
-                        </td>
-                      )}
                       {visibleColumns.includes('state') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.state || 'N/A'}
+                          {item.state || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('branch') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.branch || 'N/A'}
+                          {item.branch || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('warehouseName') && (
+                      {visibleColumns.includes('location') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.warehouseName || 'N/A'}
+                          {item.location || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('typeOfBusiness') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.typeOfBusiness || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('warehouseType') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.warehouseType || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('warehouseCode') && (
                         <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.warehouseCode || 'N/A'}
+                          {item.warehouseCode || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('warehouseName') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.warehouseName || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('warehouseAddress') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.warehouseAddress || 'N/A'}
+                          {item.warehouseAddress || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('client') && (
+                      {visibleColumns.includes('clientCode') && (
                         <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.client || 'N/A'}
+                          {item.clientCode || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('clientAddress') && (
+                      {visibleColumns.includes('clientName') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.clientAddress || 'N/A'}
+                          {item.clientName || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('totalBags') && (
-                        <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.totalBags || 'N/A'}
+                      {visibleColumns.includes('commodity') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.commodityName || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('totalQuantity') && (
-                        <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.totalQuantity || 'N/A'}
+                      {visibleColumns.includes('variety') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.varietyName || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('releaseBags') && (
+                      {visibleColumns.includes('inwardBag') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.releaseBags || 'N/A'}
+                          {item.inwardBag || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('releaseQuantity') && (
+                      {visibleColumns.includes('inwardQty') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.releaseQuantity || 'N/A'}
+                          {item.inwardQty || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('doNumber') && (
+                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
+                          {item.doNumber || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('doDate') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {formatDate(item.doDate)}
                         </td>
                       )}
                       {visibleColumns.includes('doBags') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.doBags || 'N/A'}
+                          {item.doBags || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('doQuantity') && (
+                      {visibleColumns.includes('doQty') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.doQuantity || 'N/A'}
+                          {item.doQty || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('balanceBags') && (
+                      {visibleColumns.includes('doCode') && (
+                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
+                          {item.doCode || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('balanceBag') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.balanceBags || 'N/A'}
+                          {item.balanceBag || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('balanceQuantity') && (
+                      {visibleColumns.includes('balanceQty') && (
                         <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.balanceQuantity || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('status') && (
-                        <td className="border border-gray-200 px-4 py-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                            {item.status || 'Active'}
-                          </span>
+                          {item.balanceQty || '-'}
                         </td>
                       )}
                     </tr>

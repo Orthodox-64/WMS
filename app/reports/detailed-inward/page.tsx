@@ -20,6 +20,7 @@ interface DetailedInwardReportData {
   state: string;
   branch: string;
   location: string;
+  typeOfBusiness: string;
   warehouseType: string;
   warehouseCode: string;
   warehouseName: string;
@@ -27,17 +28,17 @@ interface DetailedInwardReportData {
   clientCode: string;
   clientName: string;
   commodity: string;
-  varietyName: string;
+  variety: string;
   vehicleNumber: string;
   cadNumber: string;
-  getpassNumber: string;
-  weightBridge: string;
-  weightBridgeSlipNumber: string;
+  gatepassNumber: string;
+  weighbridgeName: string;
+  weighbridgeNumber: string;
   stackNumber: string;
   grossWeight: string;
   tareWeight: string;
   netWeight: string;
-  totalBags: string;
+  bags: string;
   [key: string]: any;
 }
 
@@ -56,21 +57,22 @@ export default function DetailedInwardReportsPage() {
   const [inwardData, setInwardData] = useState<DetailedInwardReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   
-  // 22 columns (removed Type of Business) - matching dashboard inward section exactly
+  // 23 columns - matching all parameters from the table
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'dateOfInward', 'state', 'branch', 'location', 'warehouseType', 
+    'dateOfInward', 'state', 'branch', 'location', 'typeOfBusiness', 'warehouseType', 
     'warehouseCode', 'warehouseName', 'warehouseAddress', 'clientCode', 'clientName', 
-    'commodity', 'varietyName', 'vehicleNumber', 'cadNumber', 'getpassNumber', 
-    'weightBridge', 'weightBridgeSlipNumber', 'stackNumber', 'grossWeight', 
-    'tareWeight', 'netWeight', 'totalBags'
+    'commodity', 'variety', 'vehicleNumber', 'cadNumber', 'gatepassNumber', 
+    'weighbridgeName', 'weighbridgeNumber', 'stackNumber', 'grossWeight', 
+    'tareWeight', 'netWeight', 'bags'
   ]);
 
-  // Column definitions for 22 columns (removed Type of Business) - matching dashboard inward section exactly
+  // Column definitions for 23 columns - matching all parameters from the table
   const allColumns = [
-    { key: 'dateOfInward', label: 'Date of Inw', width: 'w-28' },
+    { key: 'dateOfInward', label: 'Date of Inward', width: 'w-28' },
     { key: 'state', label: 'State', width: 'w-24' },
     { key: 'branch', label: 'Branch', width: 'w-24' },
     { key: 'location', label: 'Location', width: 'w-24' },
+    { key: 'typeOfBusiness', label: 'Type of Business', width: 'w-32' },
     { key: 'warehouseType', label: 'Warehouse Type', width: 'w-28' },
     { key: 'warehouseCode', label: 'Warehouse Code', width: 'w-28' },
     { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
@@ -78,17 +80,17 @@ export default function DetailedInwardReportsPage() {
     { key: 'clientCode', label: 'Client Code', width: 'w-24' },
     { key: 'clientName', label: 'Client Name', width: 'w-28' },
     { key: 'commodity', label: 'Commodity', width: 'w-24' },
-    { key: 'varietyName', label: 'Variety', width: 'w-24' },
+    { key: 'variety', label: 'Variety', width: 'w-24' },
     { key: 'vehicleNumber', label: 'Vehicle Number', width: 'w-28' },
     { key: 'cadNumber', label: 'CAD Number', width: 'w-24' },
-    { key: 'getpassNumber', label: 'Gatepass Number', width: 'w-28' },
-    { key: 'weightBridge', label: 'Weighbridge Name', width: 'w-28' },
-    { key: 'weightBridgeSlipNumber', label: 'Weighbridge Number', width: 'w-32' },
+    { key: 'gatepassNumber', label: 'Gatepass Number', width: 'w-28' },
+    { key: 'weighbridgeName', label: 'Weighbridge Name', width: 'w-28' },
+    { key: 'weighbridgeNumber', label: 'Weighbridge Number', width: 'w-32' },
     { key: 'stackNumber', label: 'Stack Number', width: 'w-24' },
     { key: 'grossWeight', label: 'Gross Weight (MT)', width: 'w-32' },
     { key: 'tareWeight', label: 'Tare Weight (MT)', width: 'w-28' },
     { key: 'netWeight', label: 'Net Weight (MT)', width: 'w-28' },
-    { key: 'totalBags', label: 'Bags', width: 'w-20' }
+    { key: 'bags', label: 'Bags', width: 'w-20' }
   ];
 
   // Get all column keys for visibility toggle
@@ -148,7 +150,71 @@ export default function DetailedInwardReportsPage() {
               querySnapshot.docs.map(async (doc, index) => {
                 const docData = doc.data();
                 
-
+                // Get warehouse type from warehouse creation survey section for activated warehouses
+                let warehouseType = '';
+                let warehouseCode = '';
+                let warehouseAddress = '';
+                let businessType = '';
+                
+                if (docData.warehouseName) {
+                  console.log('Looking for warehouse type for warehouse name:', docData.warehouseName);
+                  try {
+                    // Fetch warehouse type from inspections collection where typeOfWarehouse field is present
+                    try {
+                      console.log(`Fetching warehouse type from inspections collection for warehouse: ${docData.warehouseName}`);
+                      
+                      // Query inspections collection with database location filter if available
+                      let inspectionsQuery;
+                      if (docData.databaseLocation) {
+                        inspectionsQuery = query(
+                          collection(db, 'inspections'),
+                          where('warehouseName', '==', docData.warehouseName),
+                          where('databaseLocation', '==', docData.databaseLocation)
+                        );
+                      } else {
+                        inspectionsQuery = query(
+                          collection(db, 'inspections'),
+                          where('warehouseName', '==', docData.warehouseName)
+                        );
+                      }
+                      
+                      const inspectionsSnapshot = await getDocs(inspectionsQuery);
+                      
+                      if (!inspectionsSnapshot.empty) {
+                        const inspectionData = inspectionsSnapshot.docs[0].data();
+                        console.log('Inspections data found:', inspectionData);
+                        console.log('Available fields in inspections:', Object.keys(inspectionData));
+                        
+                        // Get warehouse type from typeOfWarehouse field (correct field name)
+                        warehouseType = inspectionData.typeOfWarehouse || 
+                                      inspectionData.typeofwarehouse || 
+                                      inspectionData.warehouseType || 
+                                      inspectionData.warehouseInspectionData?.typeOfWarehouse ||
+                                      inspectionData.warehouseInspectionData?.warehouseType || '';
+                        
+                        // Get other warehouse details from inspections
+                        warehouseCode = inspectionData.warehouseCode || 
+                                      inspectionData.warehouseInspectionData?.warehouseCode || '';
+                        warehouseAddress = inspectionData.warehouseAddress || 
+                                        inspectionData.warehouseInspectionData?.warehouseAddress || '';
+                        businessType = inspectionData.businessType || 
+                                     inspectionData.warehouseInspectionData?.businessType || '';
+                        
+                        console.log('Extracted warehouse type from inspections:', warehouseType);
+                        console.log('Warehouse code from inspections:', warehouseCode);
+                      } else {
+                        console.log('No inspections data found for warehouse:', docData.warehouseName);
+                      }
+                    } catch (error) {
+                      console.log('Error fetching from inspections collection:', error);
+                    }
+                    
+                    console.log('Final extracted warehouse type:', warehouseType);
+                    console.log('Warehouse type will be displayed as:', warehouseType || '-');
+                  } catch (error) {
+                    console.log('Error fetching warehouse type from warehouse creation:', error);
+                  }
+                }
                 
                 return {
                   id: doc.id,
@@ -156,24 +222,27 @@ export default function DetailedInwardReportsPage() {
                   state: docData.state || '',
                   branch: docData.branch || '',
                   location: docData.location || '',
-                                     warehouseType: docData.businessType || '',
-                  warehouseCode: docData.warehouseCode || '',
+                  typeOfBusiness: businessType || docData.businessType || '',
+                  warehouseType: warehouseType || docData.warehouseType || '',
+                  warehouseCode: warehouseCode || docData.warehouseCode || '',
                   warehouseName: docData.warehouseName || '',
-                  warehouseAddress: docData.warehouseAddress || '',
+                  warehouseAddress: warehouseAddress || docData.warehouseAddress || '',
                   clientCode: docData.clientCode || '',
-                  clientName: docData.clientName || '',
+                  clientName: docData.client || docData.clientName || '',
                   commodity: docData.commodity || '',
-                  varietyName: docData.varietyName || '',
+                  variety: docData.varietyName || '',
                   vehicleNumber: docData.vehicleNumber || '',
                   cadNumber: docData.cadNumber || '',
-                  getpassNumber: docData.getpassNumber || '',
-                  weightBridge: docData.weightBridge || '',
-                  weightBridgeSlipNumber: docData.weightBridgeSlipNumber || '',
-                  stackNumber: docData.stackNumber || '',
+                  gatepassNumber: docData.getpassNumber || '',
+                  weighbridgeName: docData.weightBridge || '',
+                  weighbridgeNumber: docData.weightBridgeSlipNumber || '',
+                  stackNumber: docData.stacks && Array.isArray(docData.stacks) 
+                    ? docData.stacks.map((s: any) => s.stackNumber).filter(Boolean).join(', ') 
+                    : docData.stackNumber || '',
                   grossWeight: docData.grossWeight || '0',
                   tareWeight: docData.tareWeight || '0',
                   netWeight: docData.netWeight || '0',
-                  totalBags: docData.totalBags || '0'
+                  bags: docData.totalBags || '0'
                 };
               })
             );
@@ -277,7 +346,7 @@ export default function DetailedInwardReportsPage() {
     if (filteredData.length === 0) return;
     
           const headers = [
-        'Date of Inward', 'State', 'Branch', 'Location', 'Business Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address', 'Client Code', 'Client Name',
+        'Date of Inward', 'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address', 'Client Code', 'Client Name',
         'Commodity', 'Variety', 'Vehicle Number', 'CAD Number', 'Gatepass Number', 'Weighbridge Name', 'Weighbridge Number', 'Stack Number', 'Gross Weight (MT)', 'Tare Weight (MT)', 'Net Weight (MT)', 'Bags'
       ];
     
@@ -288,6 +357,7 @@ export default function DetailedInwardReportsPage() {
         row.state || '',
         row.branch || '',
         row.location || '',
+        row.typeOfBusiness || '',
         row.warehouseType || '',
         row.warehouseCode || '',
         row.warehouseName || '',
@@ -295,17 +365,17 @@ export default function DetailedInwardReportsPage() {
         row.clientCode || '',
         row.clientName || '',
         row.commodity || '',
-        row.varietyName || '',
+        row.variety || '',
         row.vehicleNumber || '',
         row.cadNumber || '',
-        row.getpassNumber || '',
-        row.weightBridge || '',
-        row.weightBridgeSlipNumber || '',
+        row.gatepassNumber || '',
+        row.weighbridgeName || '',
+        row.weighbridgeNumber || '',
         row.stackNumber || '',
         row.grossWeight || '',
         row.tareWeight || '',
         row.netWeight || '',
-        row.totalBags || ''
+        row.bags || ''
       ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(','))
     ].join('\n');
     
@@ -709,142 +779,82 @@ export default function DetailedInwardReportsPage() {
                 </thead>
                 <tbody>
                   {filteredData.length === 0 ? (
-                    <tr className="hover:bg-gray-50">
-                      <td className="border border-gray-200 px-4 py-2">
-                        {formatDate(new Date().toISOString())}
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Maharashtra
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Mumbai
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Test Location
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Private
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        WH001
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Test Warehouse
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Test Address
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        CL001
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Test Client
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Wheat
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Durum
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        MH01AB1234
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        CAD001
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        GP001
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        Test Bridge
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        WB001
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2">
-                        ST001
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2 text-right">
-                        50.5
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2 text-right">
-                        2.5
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2 text-right">
-                        48.0
-                      </td>
-                      <td className="border border-gray-200 px-4 py-2 text-right">
-                        100
+                    <tr>
+                      <td colSpan={23} className="border border-gray-200 px-4 py-8 text-center text-gray-500">
+                        No data available
                       </td>
                     </tr>
                   ) : (
                     filteredData.map((item, index) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                        {item.dateOfInward || 'N/A'}
+                        {item.dateOfInward || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.state || 'N/A'}
+                        {item.state || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.branch || 'N/A'}
+                        {item.branch || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.location || 'N/A'}
+                        {item.location || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.warehouseType || 'N/A'}
+                        {item.typeOfBusiness || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.warehouseCode || 'N/A'}
+                        {item.warehouseType || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.warehouseName || 'N/A'}
+                        {item.warehouseCode || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.warehouseAddress || 'N/A'}
+                        {item.warehouseName || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.clientCode || 'N/A'}
+                        {item.warehouseAddress || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.clientName || 'N/A'}
+                        {item.clientCode || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.commodity || 'N/A'}
+                        {item.clientName || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.varietyName || 'N/A'}
+                        {item.commodity || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.vehicleNumber || 'N/A'}
+                        {item.variety || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.cadNumber || 'N/A'}
+                        {item.vehicleNumber || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.getpassNumber || 'N/A'}
+                        {item.cadNumber || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.weightBridge || 'N/A'}
+                        {item.gatepassNumber || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.weightBridgeSlipNumber || 'N/A'}
+                        {item.weighbridgeName || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        {item.stackNumber || 'N/A'}
+                        {item.weighbridgeNumber || '-'}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {item.stackNumber || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2 text-right">
-                        {item.grossWeight || 'N/A'}
+                        {item.grossWeight || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2 text-right">
-                        {item.tareWeight || 'N/A'}
+                        {item.tareWeight || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2 text-right">
-                        {item.netWeight || 'N/A'}
+                        {item.netWeight || '-'}
                       </td>
                       <td className="border border-gray-200 px-4 py-2 text-right">
-                        {item.totalBags || 'N/A'}
+                        {item.bags || '-'}
                       </td>
                     </tr>
                   ))
@@ -855,7 +865,6 @@ export default function DetailedInwardReportsPage() {
               {filteredData.length === 0 && !loading && (
                 <div className="text-center py-8 text-gray-500">
                   <p>No inward data found matching the current filters</p>
-                  <p className="text-sm text-gray-400 mt-2">Showing test data to verify table structure</p>
                 </div>
               )}
             </div>

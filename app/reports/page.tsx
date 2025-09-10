@@ -43,7 +43,7 @@ const reportModules = [
     color: "text-purple-500",
     bgColor: "bg-purple-50",
     borderColor: "border-purple-200",
-    description: "Generate reports for release orders and stock release transactions",
+    description: "25-column comprehensive release order report with all parameters from RO section",
     count: "View Reports"
   },
   {
@@ -53,7 +53,7 @@ const reportModules = [
     color: "text-pink-500",
     bgColor: "bg-pink-50",
     borderColor: "border-pink-200",
-    description: "Generate reports for delivery orders and transportation data",
+    description: "21-column comprehensive delivery order report with all parameters from DO section",
     count: "View Reports"
   },
   {
@@ -73,7 +73,7 @@ const reportModules = [
     color: "text-blue-500",
     bgColor: "bg-blue-50",
     borderColor: "border-blue-200",
-    description: "12-column detailed inward report with state, branch, and dashboard data",
+    description: "23-column comprehensive detailed inward report with all parameters from inward section",
     count: "View Reports"
   },
   

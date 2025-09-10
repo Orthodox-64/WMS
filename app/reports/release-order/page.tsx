@@ -16,32 +16,31 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 
 interface ReleaseOrderReportData {
   id: string;
-  date: string;
-  roNumber: string;
-  inwardId: string;
-  doNumber: string;
-  warehouseName: string;
-  warehouseType: string;
-  client: string;
-  commodity: string;
-  varietyName: string;
-  releaseBags: string;
-  releaseQty: string;
-  totalValue: string;
-  vehicleNumber: string;
-  gatepass: string;
-  status: string;
-  remarks: string;
-  // Additional fields from dashboard
   state: string;
   branch: string;
+  location: string;
+  typeOfBusiness: string;
+  warehouseType: string;
   warehouseCode: string;
+  warehouseName: string;
   warehouseAddress: string;
-  clientAddress: string;
-  totalBags: string;
-  totalQuantity: string;
-  balanceBags: string;
-  balanceQuantity: string;
+  clientCode: string;
+  clientName: string;
+  commodity: string;
+  variety: string;
+  bankName: string;
+  bankBranch: string;
+  bankState: string;
+  ifscCode: string;
+  inwardBag: string;
+  inwardQty: string;
+  roNumber: string;
+  roDate: string;
+  roBags: string;
+  roQty: string;
+  roCode: string;
+  balanceBag: string;
+  balanceQty: string;
   [key: string]: any;
 }
 
@@ -58,30 +57,39 @@ export default function ReleaseOrderReportsPage() {
   const [roData, setRoData] = useState<ReleaseOrderReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'date', 'roNumber', 'inwardId', 'state', 'branch', 'warehouseName', 'warehouseCode',
-    'warehouseAddress', 'client', 'clientAddress', 'totalBags', 'totalQuantity', 'releaseBags', 
-    'releaseQty', 'balanceBags', 'balanceQuantity', 'status'
+    'state', 'branch', 'location', 'typeOfBusiness', 'warehouseType', 'warehouseCode', 'warehouseName',
+    'warehouseAddress', 'clientCode', 'clientName', 'commodity', 'variety', 'bankName', 'bankBranch',
+    'bankState', 'ifscCode', 'inwardBag', 'inwardQty', 'roNumber', 'roDate', 'roBags', 'roQty',
+    'roCode', 'balanceBag', 'balanceQty'
   ]);
 
-  // Column definitions for 17 columns matching dashboard data
+  // Column definitions for 25 columns matching the image parameters
   const allColumns = [
-    { key: 'date', label: 'Date', width: 'w-24' },
-    { key: 'roNumber', label: 'RO Code', width: 'w-24' },
-    { key: 'inwardId', label: 'SR/WR No.', width: 'w-28' },
     { key: 'state', label: 'State', width: 'w-20' },
     { key: 'branch', label: 'Branch', width: 'w-20' },
-    { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
+    { key: 'location', label: 'Location', width: 'w-24' },
+    { key: 'typeOfBusiness', label: 'Type of Business', width: 'w-28' },
+    { key: 'warehouseType', label: 'Warehouse Type', width: 'w-28' },
     { key: 'warehouseCode', label: 'Warehouse Code', width: 'w-24' },
+    { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
     { key: 'warehouseAddress', label: 'Warehouse Address', width: 'w-32' },
-    { key: 'client', label: 'Client Code', width: 'w-24' },
-    { key: 'clientAddress', label: 'Client Address', width: 'w-32' },
-    { key: 'totalBags', label: 'Inward Bags', width: 'w-24' },
-    { key: 'totalQuantity', label: 'Inward Qty (MT)', width: 'w-28' },
-    { key: 'releaseBags', label: 'Release Bags', width: 'w-24' },
-    { key: 'releaseQty', label: 'Release Qty (MT)', width: 'w-28' },
-    { key: 'balanceBags', label: 'Balance Bags', width: 'w-24' },
-    { key: 'balanceQuantity', label: 'Balance Qty (MT)', width: 'w-28' },
-    { key: 'status', label: 'RO Status', width: 'w-20' }
+    { key: 'clientCode', label: 'Client Code', width: 'w-24' },
+    { key: 'clientName', label: 'Client Name', width: 'w-28' },
+    { key: 'commodity', label: 'Commodity', width: 'w-24' },
+    { key: 'variety', label: 'Variety', width: 'w-24' },
+    { key: 'bankName', label: 'Bank Name', width: 'w-24' },
+    { key: 'bankBranch', label: 'Bank Branch', width: 'w-24' },
+    { key: 'bankState', label: 'Bank State', width: 'w-20' },
+    { key: 'ifscCode', label: 'IFSC Code', width: 'w-24' },
+    { key: 'inwardBag', label: 'Inward Bag', width: 'w-20' },
+    { key: 'inwardQty', label: 'Inward Qty', width: 'w-20' },
+    { key: 'roNumber', label: 'RO Number', width: 'w-24' },
+    { key: 'roDate', label: 'RO Date', width: 'w-24' },
+    { key: 'roBags', label: 'RO bags', width: 'w-20' },
+    { key: 'roQty', label: 'RO Qty (MT)', width: 'w-24' },
+    { key: 'roCode', label: 'RO Code', width: 'w-20' },
+    { key: 'balanceBag', label: 'Balance Bag', width: 'w-20' },
+    { key: 'balanceQty', label: 'Balance QT', width: 'w-20' }
   ];
 
   // Fetch release order data
@@ -128,57 +136,210 @@ export default function ReleaseOrderReportsPage() {
       const data = await Promise.all(querySnapshot.docs.map(async (doc, index) => {
         const docData = doc.data();
         
-        // Fetch warehouse type from inspections collection
-        let warehouseType = 'N/A';
+        // Debug: Log available fields in RO data
+        console.log('RO document fields for warehouse:', docData.warehouseName, Object.keys(docData));
+        console.log('RO document data:', docData);
+        console.log('Balance data in RO:', {
+          balanceBags: docData.balanceBags,
+          balanceQuantity: docData.balanceQuantity,
+          totalBags: docData.totalBags,
+          totalQuantity: docData.totalQuantity,
+          releaseBags: docData.releaseBags,
+          releaseQuantity: docData.releaseQuantity
+        });
+        
+        // Fetch warehouse type from inspections collection (same logic as inward report)
+        let warehouseType = '';
+        let warehouseCode = '';
+        let warehouseAddress = '';
+        let businessType = '';
+        
         if (docData.warehouseName) {
+          console.log('Looking for warehouse type for warehouse name:', docData.warehouseName);
           try {
-            const inspectionsCollection = collection(db, 'inspections');
-            const warehouseQuery = query(
-              inspectionsCollection,
-              where('warehouseName', '==', docData.warehouseName),
-              where('status', '==', 'activated'),
-              limit(1)
-            );
-            const warehouseSnapshot = await getDocs(warehouseQuery);
-            
-            if (!warehouseSnapshot.empty) {
-              const warehouseData = warehouseSnapshot.docs[0].data();
-              warehouseType = warehouseData.warehouseType || warehouseData.businessType || 'N/A';
+            // Fetch warehouse type from inspections collection where typeOfWarehouse field is present
+            try {
+              console.log(`Fetching warehouse type from inspections collection for warehouse: ${docData.warehouseName}`);
+              
+              // Query inspections collection with database location filter if available
+              let inspectionsQuery;
+              if (docData.databaseLocation) {
+                inspectionsQuery = query(
+                  collection(db, 'inspections'),
+                  where('warehouseName', '==', docData.warehouseName),
+                  where('databaseLocation', '==', docData.databaseLocation)
+                );
+              } else {
+                inspectionsQuery = query(
+                  collection(db, 'inspections'),
+                  where('warehouseName', '==', docData.warehouseName)
+                );
+              }
+              
+              const inspectionsSnapshot = await getDocs(inspectionsQuery);
+              console.log('Inspections query result:', inspectionsSnapshot.size, 'documents');
+              
+              if (!inspectionsSnapshot.empty) {
+                const inspectionData = inspectionsSnapshot.docs[0].data();
+                console.log('Inspections data found:', inspectionData);
+                console.log('Available fields in inspections:', Object.keys(inspectionData));
+                
+                // Get warehouse type from typeOfWarehouse field (correct field name)
+                warehouseType = inspectionData.typeOfWarehouse || 
+                              inspectionData.typeofwarehouse || 
+                              inspectionData.warehouseType || 
+                              inspectionData.warehouseInspectionData?.typeOfWarehouse ||
+                              inspectionData.warehouseInspectionData?.warehouseType || '';
+                
+                // Get other warehouse details from inspections
+                warehouseCode = inspectionData.warehouseCode || 
+                              inspectionData.warehouseInspectionData?.warehouseCode || '';
+                warehouseAddress = inspectionData.warehouseAddress || 
+                                inspectionData.warehouseInspectionData?.warehouseAddress || '';
+                businessType = inspectionData.businessType || 
+                             inspectionData.warehouseInspectionData?.businessType || '';
+                
+                console.log('Extracted warehouse type from inspections:', warehouseType);
+                console.log('Warehouse code from inspections:', warehouseCode);
+              } else {
+                console.log('No inspections data found for warehouse:', docData.warehouseName);
+              }
+            } catch (error) {
+              console.log('Error fetching from inspections collection:', error);
             }
+            
+            console.log('Final extracted warehouse type:', warehouseType);
+            console.log('Warehouse type will be displayed as:', warehouseType || '-');
           } catch (error) {
-            console.error('Error fetching warehouse type:', error);
+            console.log('Error fetching warehouse type from warehouse creation:', error);
           }
         }
         
+        // Fetch additional data from inward collection using inwardId
+        let commodity = '';
+        let variety = '';
+        let bankFields = {
+          bankName: '',
+          bankBranch: '',
+          bankState: '',
+          ifscCode: ''
+        };
+        
+        if (docData.inwardId) {
+          try {
+            console.log('Fetching additional data from inward collection for inwardId:', docData.inwardId);
+            const inwardCollection = collection(db, 'inward');
+            const inwardQuery = query(
+              inwardCollection,
+              where('inwardId', '==', docData.inwardId)
+            );
+            const inwardSnapshot = await getDocs(inwardQuery);
+            
+            if (!inwardSnapshot.empty) {
+              const inwardData = inwardSnapshot.docs[0].data();
+              console.log('Inward data found:', inwardData);
+              
+              // Extract commodity and variety from inward data
+              commodity = inwardData.commodity || '';
+              variety = inwardData.varietyName || inwardData.variety || '';
+              
+              // Extract bank information from inward data (same logic as inward report)
+              bankFields = {
+                bankName: inwardData.bankName || inwardData.bank || inwardData.selectedBankName || '',
+                bankBranch: inwardData.bankBranchName || inwardData.bankBranch || inwardData.branchName || inwardData.selectedBankBranchName || '',
+                bankState: inwardData.bankState || inwardData.selectedBankState || '',
+                ifscCode: inwardData.ifscCode || inwardData.IFSC || inwardData.ifsc || ''
+              };
+              
+              console.log('Extracted data from inward collection:', {
+                commodity,
+                variety,
+                bankFields
+              });
+            } else {
+              console.log('No inward data found for inwardId:', docData.inwardId);
+            }
+          } catch (error) {
+            console.log('Error fetching inward data:', error);
+          }
+        }
+        
+        // If still missing bank information, try to fetch from clients collection
+        if ((!bankFields.bankName || !bankFields.bankBranch) && (docData.clientCode || docData.client)) {
+          try {
+            console.log('Bank information still missing, fetching from clients collection for client:', docData.clientCode || docData.client);
+            const clientsCollection = collection(db, 'clients');
+            const clientQuery = query(
+              clientsCollection,
+              where('clientId', '==', docData.clientCode || docData.client)
+            );
+            const clientSnapshot = await getDocs(clientQuery);
+            
+            if (!clientSnapshot.empty) {
+              const clientData = clientSnapshot.docs[0].data();
+              console.log('Client data found:', clientData);
+              
+              // Update bank fields if they're missing
+              if (!bankFields.bankName && clientData.bankName) {
+                bankFields.bankName = clientData.bankName;
+              }
+              if (!bankFields.bankBranch && clientData.bankBranch) {
+                bankFields.bankBranch = clientData.bankBranch;
+              }
+              if (!bankFields.bankState && clientData.bankState) {
+                bankFields.bankState = clientData.bankState;
+              }
+              if (!bankFields.ifscCode && clientData.ifscCode) {
+                bankFields.ifscCode = clientData.ifscCode;
+              }
+              
+              console.log('Updated bank fields from client data:', bankFields);
+            }
+          } catch (error) {
+            console.log('Error fetching client data for bank information:', error);
+          }
+        }
+        
+        // Calculate balance values if not present
+        const calculatedBalanceBags = docData.balanceBags || (docData.totalBags && docData.releaseBags ? (docData.totalBags - docData.releaseBags).toString() : '');
+        const calculatedBalanceQty = docData.balanceQuantity || (docData.totalQuantity && docData.releaseQuantity ? (docData.totalQuantity - docData.releaseQuantity).toString() : '');
+        
+        console.log('Balance calculation for warehouse:', docData.warehouseName, {
+          totalBags: docData.totalBags,
+          releaseBags: docData.releaseBags,
+          calculatedBalanceBags,
+          totalQuantity: docData.totalQuantity,
+          releaseQuantity: docData.releaseQuantity,
+          calculatedBalanceQty
+        });
+        
         return {
           id: doc.id,
-          date: docData.createdAt || docData.dateOfRelease || '',
-          srNumber: (index + 1).toString(), // Serial number
-          roNumber: docData.roCode || docData.roNumber || doc.id,
-          inwardId: docData.srwrNo || docData.inwardId || '',
-          doNumber: docData.doCode || docData.doNumber || '',
-          warehouseName: docData.warehouseName || '',
-          warehouseType: warehouseType,
-          client: docData.clientCode || docData.client || '',
-          commodity: docData.commodity || '',
-          varietyName: docData.varietyName || docData.variety || '',
-          releaseBags: docData.releaseBags || docData.bags || '',
-          releaseQty: docData.releaseQuantity || docData.quantity || '',
-          totalValue: docData.totalValue || docData.value || '',
-          vehicleNumber: docData.vehicleNumber || '',
-          gatepass: docData.gatepass || '',
-          status: docData.roStatus || docData.status || 'Active',
-          remarks: docData.remarks || docData.comments || '',
-          // Additional fields from dashboard
           state: docData.state || '',
           branch: docData.branch || '',
-          warehouseCode: docData.warehouseCode || '',
-          warehouseAddress: docData.warehouseAddress || '',
-          clientAddress: docData.clientAddress || '',
-          totalBags: docData.totalBags || '',
-          totalQuantity: docData.totalQuantity || '',
-          balanceBags: docData.balanceBags || '',
-          balanceQuantity: docData.balanceQuantity || '',
+          location: docData.location || '',
+          typeOfBusiness: businessType || docData.businessType || docData.typeOfBusiness || '',
+          warehouseType: warehouseType,
+          warehouseCode: warehouseCode || docData.warehouseCode || '',
+          warehouseName: docData.warehouseName || '',
+          warehouseAddress: warehouseAddress || docData.warehouseAddress || '',
+          clientCode: docData.clientCode || '',
+          clientName: docData.client || '',
+          commodity: commodity,
+          variety: variety,
+          bankName: bankFields.bankName,
+          bankBranch: bankFields.bankBranch,
+          bankState: bankFields.bankState,
+          ifscCode: bankFields.ifscCode,
+          inwardBag: docData.totalBags || '',
+          inwardQty: docData.totalQuantity || '',
+          roNumber: docData.roCode || '',
+          roDate: docData.createdAt || '',
+          roBags: docData.releaseBags || '',
+          roQty: docData.releaseQuantity || '',
+          roCode: docData.roCode || '',
+          balanceBag: calculatedBalanceBags,
+          balanceQty: calculatedBalanceQty,
           ...docData
         };
       }));
@@ -206,7 +367,7 @@ export default function ReleaseOrderReportsPage() {
   }, [roData]);
 
   const uniqueClients = useMemo(() => {
-    return Array.from(new Set(roData.map(item => item.client).filter(Boolean)));
+    return Array.from(new Set(roData.map(item => item.clientName).filter(Boolean)));
   }, [roData]);
 
   const uniqueStatuses = useMemo(() => {
@@ -243,7 +404,7 @@ export default function ReleaseOrderReportsPage() {
 
     // Apply client filter
     if (clientFilter && clientFilter !== 'all') {
-      filtered = filtered.filter(item => item.client === clientFilter);
+      filtered = filtered.filter(item => item.clientName === clientFilter);
     }
 
 
@@ -256,32 +417,40 @@ export default function ReleaseOrderReportsPage() {
     if (filteredData.length === 0) return;
     
     const headers = [
-      'Date', 'SR Number', 'RO Code', 'SR/WR No.', 'State', 'Branch', 'Warehouse Name', 'Warehouse Code',
-      'Warehouse Address', 'Client Code', 'Client Address', 'Inward Bags', 'Inward Qty (MT)', 'Release Bags',
-      'Release Qty (MT)', 'Balance Bags', 'Balance Qty (MT)', 'RO Status'
+      'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name',
+      'Warehouse Address', 'Client Code', 'Client Name', 'Commodity', 'Variety', 'Bank Name', 'Bank Branch',
+      'Bank State', 'IFSC Code', 'Inward Bag', 'Inward Qty', 'RO Number', 'RO Date', 'RO bags', 'RO Qty (MT)',
+      'RO Code', 'Balance Bag', 'Balance QT'
     ];
     
     const csvContent = [
       headers.join(','),
       ...filteredData.map(row => [
-        row.date || '',
-        row.srNumber || '',
-        row.roNumber || '',
-        row.inwardId || '',
         row.state || '',
         row.branch || '',
-        row.warehouseName || '',
+        row.location || '',
+        row.typeOfBusiness || '',
+        row.warehouseType || '',
         row.warehouseCode || '',
+        row.warehouseName || '',
         row.warehouseAddress || '',
-        row.client || '',
-        row.clientAddress || '',
-        row.totalBags || '',
-        row.totalQuantity || '',
-        row.releaseBags || '',
-        row.releaseQty || '',
-        row.balanceBags || '',
-        row.balanceQuantity || '',
-        row.status || ''
+        row.clientCode || '',
+        row.clientName || '',
+        row.commodity || '',
+        row.variety || '',
+        row.bankName || '',
+        row.bankBranch || '',
+        row.bankState || '',
+        row.ifscCode || '',
+        row.inwardBag || '',
+        row.inwardQty || '',
+        row.roNumber || '',
+        row.roDate || '',
+        row.roBags || '',
+        row.roQty || '',
+        row.roCode || '',
+        row.balanceBag || '',
+        row.balanceQty || ''
       ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(','))
     ].join('\n');
     
@@ -634,118 +803,159 @@ export default function ReleaseOrderReportsPage() {
               <table className="w-full border-collapse border border-gray-200">
                 <thead className="bg-orange-100">
                   <tr>
-                    {visibleColumns.includes('date') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Date</th>}
-                    {visibleColumns.includes('roNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">RO Code</th>}
-                    {visibleColumns.includes('inwardId') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">SR/WR No.</th>}
                     {visibleColumns.includes('state') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">State</th>}
                     {visibleColumns.includes('branch') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Branch</th>}
-                    {visibleColumns.includes('warehouseName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>}
+                    {visibleColumns.includes('location') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Location</th>}
+                    {visibleColumns.includes('typeOfBusiness') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Type of Business</th>}
+                    {visibleColumns.includes('warehouseType') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Type</th>}
                     {visibleColumns.includes('warehouseCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Code</th>}
+                    {visibleColumns.includes('warehouseName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>}
                     {visibleColumns.includes('warehouseAddress') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Address</th>}
-                    {visibleColumns.includes('client') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Code</th>}
-                    {visibleColumns.includes('clientAddress') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Address</th>}
-                    {visibleColumns.includes('totalBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Bags</th>}
-                    {visibleColumns.includes('totalQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Qty (MT)</th>}
-                    {visibleColumns.includes('releaseBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Release Bags</th>}
-                    {visibleColumns.includes('releaseQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Release Qty (MT)</th>}
-                    {visibleColumns.includes('balanceBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Bags</th>}
-                    {visibleColumns.includes('balanceQuantity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Qty (MT)</th>}
-                    {visibleColumns.includes('status') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">RO Status</th>}
+                    {visibleColumns.includes('clientCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Code</th>}
+                    {visibleColumns.includes('clientName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client Name</th>}
+                    {visibleColumns.includes('commodity') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Commodity</th>}
+                    {visibleColumns.includes('variety') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Variety</th>}
+                    {visibleColumns.includes('bankName') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Bank Name</th>}
+                    {visibleColumns.includes('bankBranch') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Bank Branch</th>}
+                    {visibleColumns.includes('bankState') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Bank State</th>}
+                    {visibleColumns.includes('ifscCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">IFSC Code</th>}
+                    {visibleColumns.includes('inwardBag') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Bag</th>}
+                    {visibleColumns.includes('inwardQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inward Qty</th>}
+                    {visibleColumns.includes('roNumber') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">RO Number</th>}
+                    {visibleColumns.includes('roDate') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">RO Date</th>}
+                    {visibleColumns.includes('roBags') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">RO bags</th>}
+                    {visibleColumns.includes('roQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">RO Qty (MT)</th>}
+                    {visibleColumns.includes('roCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">RO Code</th>}
+                    {visibleColumns.includes('balanceBag') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Bag</th>}
+                    {visibleColumns.includes('balanceQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance QT</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredData.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      {visibleColumns.includes('date') && (
-                        <td className="border border-gray-200 px-4 py-2">
-                          {formatDate(item.date)}
-                        </td>
-                      )}
-                      {visibleColumns.includes('srNumber') && (
-                        <td className="border border-gray-200 px-4 py-2 text-center font-mono text-sm">
-                          {item.srNumber || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('roNumber') && (
-                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.roNumber || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('inwardId') && (
-                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.inwardId || 'N/A'}
-                        </td>
-                      )}
                       {visibleColumns.includes('state') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.state || 'N/A'}
+                          {item.state || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('branch') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.branch || 'N/A'}
+                          {item.branch || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('warehouseName') && (
+                      {visibleColumns.includes('location') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.warehouseName || 'N/A'}
+                          {item.location || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('typeOfBusiness') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.typeOfBusiness || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('warehouseType') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.warehouseType || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('warehouseCode') && (
                         <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.warehouseCode || 'N/A'}
+                          {item.warehouseCode || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('warehouseName') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.warehouseName || '-'}
                         </td>
                       )}
                       {visibleColumns.includes('warehouseAddress') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.warehouseAddress || 'N/A'}
+                          {item.warehouseAddress || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('client') && (
+                      {visibleColumns.includes('clientCode') && (
                         <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
-                          {item.client || 'N/A'}
+                          {item.clientCode || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('clientAddress') && (
+                      {visibleColumns.includes('clientName') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          {item.clientAddress || 'N/A'}
+                          {item.clientName || '-'}
                         </td>
                       )}
-                      {visibleColumns.includes('totalBags') && (
-                        <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.totalBags || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('totalQuantity') && (
-                        <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.totalQuantity || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('releaseBags') && (
-                        <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.releaseBags || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('releaseQty') && (
-                        <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.releaseQty || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('balanceBags') && (
-                        <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.balanceBags || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('balanceQuantity') && (
-                        <td className="border border-gray-200 px-4 py-2 text-right">
-                          {item.balanceQuantity || 'N/A'}
-                        </td>
-                      )}
-                      {visibleColumns.includes('status') && (
+                      {visibleColumns.includes('commodity') && (
                         <td className="border border-gray-200 px-4 py-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                            {item.status || 'Active'}
-                          </span>
+                          {item.commodity || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('variety') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.variety || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('bankName') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.bankName || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('bankBranch') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.bankBranch || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('bankState') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.bankState || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('ifscCode') && (
+                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
+                          {item.ifscCode || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('inwardBag') && (
+                        <td className="border border-gray-200 px-4 py-2 text-right">
+                          {item.inwardBag || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('inwardQty') && (
+                        <td className="border border-gray-200 px-4 py-2 text-right">
+                          {item.inwardQty || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('roNumber') && (
+                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
+                          {item.roNumber || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('roDate') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {formatDate(item.roDate)}
+                        </td>
+                      )}
+                      {visibleColumns.includes('roBags') && (
+                        <td className="border border-gray-200 px-4 py-2 text-right">
+                          {item.roBags || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('roQty') && (
+                        <td className="border border-gray-200 px-4 py-2 text-right">
+                          {item.roQty || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('roCode') && (
+                        <td className="border border-gray-200 px-4 py-2 font-mono text-sm">
+                          {item.roCode || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('balanceBag') && (
+                        <td className="border border-gray-200 px-4 py-2 text-right">
+                          {item.balanceBag || '-'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('balanceQty') && (
+                        <td className="border border-gray-200 px-4 py-2 text-right">
+                          {item.balanceQty || '-'}
                         </td>
                       )}
                     </tr>
