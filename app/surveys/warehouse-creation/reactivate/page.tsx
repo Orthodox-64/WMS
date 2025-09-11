@@ -282,39 +282,39 @@ export default function ReactivateWarehousePage() {
       ...warehouseData,
       
       // Override with inspection-specific data
-      warehouseName: inspection.warehouseName || warehouseData.warehouseName || '',
-      warehouseCode: inspection.warehouseCode || warehouseData.warehouseCode || '',
+      warehouseName: inspection.warehouseName || (warehouseData as any).warehouseName || '',
+      warehouseCode: inspection.warehouseCode || (warehouseData as any).warehouseCode || '',
       status: 'reactivate', // Always reactivate for this page
       
       // Bank details from inspection (these are the specific bank for this inspection)
-      bankState: inspection.bankState || warehouseData.bankState || '',
-      bankBranch: inspection.bankBranch || warehouseData.bankBranch || '',
-      bankName: inspection.bankName || warehouseData.bankName || '',
-      ifscCode: inspection.ifscCode || warehouseData.ifscCode || '',
+      bankState: inspection.bankState || (warehouseData as any).bankState || '',
+      bankBranch: inspection.bankBranch || (warehouseData as any).bankBranch || '',
+      bankName: inspection.bankName || (warehouseData as any).bankName || '',
+      ifscCode: inspection.ifscCode || (warehouseData as any).ifscCode || '',
       
       // Location details from inspection
-      state: inspection.state || warehouseData.state || '',
-      branch: inspection.branch || warehouseData.branch || '',
-      location: inspection.location || warehouseData.location || '',
-      businessType: inspection.businessType || warehouseData.businessType || '',
-      receiptType: inspection.receiptType || warehouseData.receiptType || '',
+      state: inspection.state || (warehouseData as any).state || '',
+      branch: inspection.branch || (warehouseData as any).branch || '',
+      location: inspection.location || (warehouseData as any).location || '',
+      businessType: inspection.businessType || (warehouseData as any).businessType || '',
+      receiptType: inspection.receiptType || (warehouseData as any).receiptType || '',
       
       // Include creation info
-      createdAt: inspection.createdAt || warehouseData.createdAt || '',
+      createdAt: inspection.createdAt || (warehouseData as any).createdAt || '',
       inspectionCode: inspection.inspectionCode || inspection.id || '',
       
       // Ensure arrays and objects have defaults
-      nameOfBank: warehouseData.nameOfBank || [],
-      attachedFiles: warehouseData.attachedFiles || [],
+      nameOfBank: (warehouseData as any).nameOfBank || [],
+      attachedFiles: (warehouseData as any).attachedFiles || [],
       
       // Ensure boolean defaults
-      warehouseFitCertification: warehouseData.warehouseFitCertification || false,
+      warehouseFitCertification: (warehouseData as any).warehouseFitCertification || false,
       
       // Ensure date fields are properly handled - convert strings to Date objects
-      dateOfInspection: warehouseData.dateOfInspection ? new Date(warehouseData.dateOfInspection) : null,
-      validityOfInsurance: warehouseData.validityOfInsurance ? new Date(warehouseData.validityOfInsurance) : null,
-      expiryDate: warehouseData.expiryDate ? new Date(warehouseData.expiryDate) : null,
-      oeDate: warehouseData.oeDate ? new Date(warehouseData.oeDate) : null
+      dateOfInspection: (warehouseData as any).dateOfInspection ? new Date((warehouseData as any).dateOfInspection) : null,
+      validityOfInsurance: (warehouseData as any).validityOfInsurance ? new Date((warehouseData as any).validityOfInsurance) : null,
+      expiryDate: (warehouseData as any).expiryDate ? new Date((warehouseData as any).expiryDate) : null,
+      oeDate: (warehouseData as any).oeDate ? new Date((warehouseData as any).oeDate) : null
     };
   };
 

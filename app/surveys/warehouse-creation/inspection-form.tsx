@@ -130,7 +130,7 @@ function getInsuranceAlertStatus(insurance: any): 'none' | 'expiring' | 'expired
     }
   });
   if (!soonestEnd) return 'none';
-  const diffDays = Math.ceil((soonestEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.ceil((soonestEnd as Date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
   if (diffDays < 0) return 'expired';
   if (diffDays <= 10) return 'expiring';
   return 'none';
@@ -515,7 +515,7 @@ export default function WarehouseInspectionForm({
   // Bank state effect
   useEffect(() => {
     if (banksData.length > 0) {
-      const states = [...new Set(banksData.map(bank => bank.state))];
+      const states = Array.from(new Set(banksData.map(bank => bank.state)));
       setAvailableBankStates(states);
     }
   }, [banksData]);
@@ -523,7 +523,7 @@ export default function WarehouseInspectionForm({
   // Bank branch effect
   useEffect(() => {
     if (formData.bankState) {
-      const banksInState = banksData.filter(bank => bank.state === formData.bankState);
+      const banksInState = banksData.filter((bank: any) => bank.state === formData.bankState);
       const branches: string[] = [];
       
       banksInState.forEach(bank => {
@@ -532,7 +532,7 @@ export default function WarehouseInspectionForm({
         });
       });
       
-      setAvailableBankBranches([...new Set(branches)]);
+      setAvailableBankBranches(Array.from(new Set(branches)));
       
       // Don't clear bank data in view mode - preserve the initial data
       if (mode !== 'view') {
@@ -544,7 +544,7 @@ export default function WarehouseInspectionForm({
   // Bank name effect
   useEffect(() => {
     if (formData.bankState && formData.bankBranch) {
-      const banksInState = banksData.filter(bank => bank.state === formData.bankState);
+      const banksInState = banksData.filter((bank: any) => bank.state === formData.bankState);
       const banksInBranch: {name: string, ifsc: string}[] = [];
       
       banksInState.forEach(bank => {
@@ -765,8 +765,8 @@ export default function WarehouseInspectionForm({
       });
 
       // Remove duplicates based on bank name and IFSC
-      const uniqueBanks = associatedBanksData.filter((bank, index, self) => 
-        index === self.findIndex(b => b.bankName === bank.bankName && b.ifscCode === bank.ifscCode)
+      const uniqueBanks = associatedBanksData.filter((bank: any, index: number, self: any[]) => 
+        index === self.findIndex((b: any) => b.bankName === bank.bankName && b.ifscCode === bank.ifscCode)
       );
 
       setAssociatedBanks(uniqueBanks);
@@ -815,14 +815,14 @@ export default function WarehouseInspectionForm({
   const removeBankName = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      nameOfBank: prev.nameOfBank.filter((_, i) => i !== index)
+      nameOfBank: prev.nameOfBank.filter((_: any, i: number) => i !== index)
     }));
   };
 
   const updateBankName = (index: number, value: string) => {
     setFormData(prev => ({
       ...prev,
-      nameOfBank: prev.nameOfBank.map((name, i) => i === index ? value : name)
+      nameOfBank: prev.nameOfBank.map((name: any, i: number) => i === index ? value : name)
     }));
   };
 
@@ -845,14 +845,14 @@ export default function WarehouseInspectionForm({
   const removeChamber = (chamberId: string) => {
     setFormData(prev => ({
       ...prev,
-      chambers: prev.chambers.filter(chamber => chamber.id !== chamberId)
+      chambers: prev.chambers.filter((chamber: any) => chamber.id !== chamberId)
     }));
   };
 
   const updateChamber = (chamberId: string, field: keyof ChamberData, value: string) => {
     setFormData(prev => ({
       ...prev,
-      chambers: prev.chambers.map(chamber => {
+      chambers: prev.chambers.map((chamber: any) => {
         if (chamber.id === chamberId) {
           const updatedChamber = { ...chamber, [field]: value };
           
@@ -1041,7 +1041,7 @@ export default function WarehouseInspectionForm({
   const removeInsuranceEntry = (insuranceId: string) => {
     setFormData(prev => ({
       ...prev,
-      insuranceEntries: prev.insuranceEntries.filter(insurance => insurance.id !== insuranceId)
+      insuranceEntries: prev.insuranceEntries.filter((insurance: any) => insurance.id !== insuranceId)
     }));
 
     toast({
@@ -1710,7 +1710,7 @@ export default function WarehouseInspectionForm({
 
         // Also fix dates in insurance entries
         if (cleanFormData.insuranceEntries && Array.isArray(cleanFormData.insuranceEntries)) {
-          cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map(entry => {
+          cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map((entry: any) => {
             const cleanEntry = { ...entry };
             Object.keys(cleanEntry).forEach(key => {
               if (cleanEntry[key] instanceof Date) {
@@ -1769,7 +1769,7 @@ export default function WarehouseInspectionForm({
 
         // Also fix dates in insurance entries
         if (cleanFormData2.insuranceEntries && Array.isArray(cleanFormData2.insuranceEntries)) {
-          cleanFormData2.insuranceEntries = cleanFormData2.insuranceEntries.map(entry => {
+          cleanFormData2.insuranceEntries = cleanFormData2.insuranceEntries.map((entry: any) => {
             const cleanEntry = { ...entry };
             Object.keys(cleanEntry).forEach(key => {
               if (cleanEntry[key] instanceof Date) {
@@ -1903,7 +1903,7 @@ export default function WarehouseInspectionForm({
 
         // Also fix dates in insurance entries
         if (cleanFormData.insuranceEntries && Array.isArray(cleanFormData.insuranceEntries)) {
-          cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map(entry => {
+          cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map((entry: any) => {
             const cleanEntry = { ...entry };
             Object.keys(cleanEntry).forEach(key => {
               if (cleanEntry[key] instanceof Date) {
@@ -1962,7 +1962,7 @@ export default function WarehouseInspectionForm({
 
         // Also fix dates in insurance entries
         if (cleanFormData2.insuranceEntries && Array.isArray(cleanFormData2.insuranceEntries)) {
-          cleanFormData2.insuranceEntries = cleanFormData2.insuranceEntries.map(entry => {
+          cleanFormData2.insuranceEntries = cleanFormData2.insuranceEntries.map((entry: any) => {
             const cleanEntry = { ...entry };
             Object.keys(cleanEntry).forEach(key => {
               if (cleanEntry[key] instanceof Date) {
@@ -2116,7 +2116,7 @@ export default function WarehouseInspectionForm({
     // Update in inspection form state
     setFormData(prev => ({
       ...prev,
-      insuranceEntries: prev.insuranceEntries.map(entry =>
+      insuranceEntries: prev.insuranceEntries.map((entry: any) =>
         entry.id === insuranceToEdit.id
           ? { ...entry, ...updatedFields }
           : entry
@@ -2130,7 +2130,7 @@ export default function WarehouseInspectionForm({
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
         await updateDoc(docRef, {
-          insuranceEntries: formData.insuranceEntries.map(entry =>
+          insuranceEntries: formData.insuranceEntries.map((entry: any) =>
             entry.id === insuranceToEdit.id
               ? { ...entry, ...updatedFields }
               : entry
@@ -2303,7 +2303,6 @@ export default function WarehouseInspectionForm({
                   <Select 
                     value={formData.warehouseName} 
                     onValueChange={handleWarehouseSelect} 
-                    className="text-orange-600"
                     required
                   >
                     <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -2418,7 +2417,6 @@ export default function WarehouseInspectionForm({
                   value={formData.typeOfWarehouse} 
                   onValueChange={isFieldReadOnly('typeOfWarehouse') ? undefined : (value) => setFormData(prev => ({ ...prev, typeOfWarehouse: value }))}
                   disabled={isFieldReadOnly('typeOfWarehouse')}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: '#ea580c' }}>
@@ -2467,7 +2465,6 @@ export default function WarehouseInspectionForm({
                   value={formData.license} 
                   onValueChange={isFieldReadOnly('license') ? undefined : (value) => setFormData(prev => ({ ...prev, license: value }))}
                   disabled={isFieldReadOnly('license')}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -2608,10 +2605,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="godownOwnership">Godown Ownership <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.godownOwnership} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, godownOwnership: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -2632,10 +2627,7 @@ export default function WarehouseInspectionForm({
                   id="nameOfClient"
                   value={formData.nameOfClient}
                   onChange={(e) => setFormData(prev => ({ ...prev, nameOfClient: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
             </div>
@@ -2647,20 +2639,15 @@ export default function WarehouseInspectionForm({
                   id="godownOwnerName"
                   value={formData.godownOwnerName}
                   onChange={(e) => setFormData(prev => ({ ...prev, godownOwnerName: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="godownManagedBy">Godown Managed By <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.godownManagedBy} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, godownManagedBy: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -2683,10 +2670,7 @@ export default function WarehouseInspectionForm({
                   step="0.01"
                   value={formData.warehouseLength}
                   onChange={(e) => setFormData(prev => ({ ...prev, warehouseLength: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -2698,10 +2682,7 @@ export default function WarehouseInspectionForm({
                   step="0.01"
                   value={formData.warehouseBreadth}
                   onChange={(e) => setFormData(prev => ({ ...prev, warehouseBreadth: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -2713,10 +2694,7 @@ export default function WarehouseInspectionForm({
                   step="0.01"
                   value={formData.warehouseHeight}
                   onChange={(e) => setFormData(prev => ({ ...prev, warehouseHeight: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
             </div>
@@ -2732,9 +2710,7 @@ export default function WarehouseInspectionForm({
                   max="9"
                   value={formData.divisionFactor}
                   onChange={(e) => setFormData(prev => ({ ...prev, divisionFactor: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -2758,7 +2734,7 @@ export default function WarehouseInspectionForm({
                   value={formData.constructionYear}
                   onChange={(e) => setFormData(prev => ({ ...prev, constructionYear: e.target.value }))}
                   className="text-orange-600"
-                  className="text-orange-600"
+                  // className="text-orange-600"
                   required
                 />
               </div>
@@ -2782,8 +2758,7 @@ export default function WarehouseInspectionForm({
                   id="totalChambers"
                   value={formData.totalChambers}
                   onChange={(e) => setFormData(prev => ({ ...prev, totalChambers: e.target.value }))}
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -2795,8 +2770,7 @@ export default function WarehouseInspectionForm({
                   step="any"
                   value={formData.latitude}
                   onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -2808,8 +2782,7 @@ export default function WarehouseInspectionForm({
                   step="any"
                   value={formData.longitude}
                   onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
             </div>
@@ -2818,7 +2791,7 @@ export default function WarehouseInspectionForm({
             {formData.chambers.length > 0 && (
               <div className="space-y-4">
                 <Label className="text-lg font-semibold text-green-700">Chamber Details</Label>
-                {formData.chambers.map((chamber, index) => (
+                {formData.chambers.map((chamber: any, index: number) => (
                   <Card key={chamber.id} className="border-orange-200">
                     <CardHeader className="bg-orange-50 pb-3">
                       <div className="flex items-center justify-between">
@@ -2914,7 +2887,6 @@ export default function WarehouseInspectionForm({
                 <Select 
                   value={formData.flooring} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, flooring: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -2934,7 +2906,6 @@ export default function WarehouseInspectionForm({
                 <Select 
                   value={formData.shutterDoor} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, shutterDoor: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -2964,8 +2935,7 @@ export default function WarehouseInspectionForm({
                       setCustomShutterTypes(prev => [...prev, value]);
                     }
                   }}
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
             )}
@@ -2976,7 +2946,6 @@ export default function WarehouseInspectionForm({
                 <Select 
                   value={formData.walls} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, walls: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -2996,7 +2965,6 @@ export default function WarehouseInspectionForm({
                 <Select 
                   value={formData.roof} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, roof: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3022,8 +2990,7 @@ export default function WarehouseInspectionForm({
                   max="10"
                   value={formData.plinthHeight}
                   onChange={(e) => setFormData(prev => ({ ...prev, plinthHeight: e.target.value }))}
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -3032,7 +2999,6 @@ export default function WarehouseInspectionForm({
                 <Select 
                   value={formData.anyLeakage} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, anyLeakage: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3050,7 +3016,6 @@ export default function WarehouseInspectionForm({
                 <Select 
                   value={formData.drainageChannels} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, drainageChannels: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3070,7 +3035,6 @@ export default function WarehouseInspectionForm({
                 <Select 
                   value={formData.electricWiring} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, electricWiring: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3086,10 +3050,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="compoundWallAvailability">Compound Wall Availability <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.compoundWallAvailability} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, compoundWallAvailability: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3107,10 +3069,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="typeOfWall">Type of Wall <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.typeOfWall} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, typeOfWall: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3129,10 +3089,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="compoundGate">Compound Gate <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.compoundGate} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, compoundGate: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3155,10 +3113,7 @@ export default function WarehouseInspectionForm({
                     max="5"
                     value={formData.numberOfGates}
                     onChange={(e) => setFormData(prev => ({ ...prev, numberOfGates: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
               )}
@@ -3168,10 +3123,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="isWarehouseClean">Is Warehouse Clean <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.isWarehouseClean} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, isWarehouseClean: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3187,10 +3140,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="waterAvailability">Water Availability <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.waterAvailability} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, waterAvailability: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -3211,9 +3162,7 @@ export default function WarehouseInspectionForm({
                   id="typeOfAvailability"
                   value={formData.typeOfAvailability}
                   onChange={(e) => setFormData(prev => ({ ...prev, typeOfAvailability: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
             )}
@@ -3237,10 +3186,7 @@ export default function WarehouseInspectionForm({
                     id="typeOfColdStorage"
                     value={formData.typeOfColdStorage}
                     onChange={(e) => setFormData(prev => ({ ...prev, typeOfColdStorage: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
 
@@ -3250,10 +3196,7 @@ export default function WarehouseInspectionForm({
                     id="typeOfCoolingSystem"
                     value={formData.typeOfCoolingSystem}
                     onChange={(e) => setFormData(prev => ({ ...prev, typeOfCoolingSystem: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
               </div>
@@ -3265,10 +3208,7 @@ export default function WarehouseInspectionForm({
                     id="typeOfInsulation"
                     value={formData.typeOfInsulation}
                     onChange={(e) => setFormData(prev => ({ ...prev, typeOfInsulation: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
 
@@ -3278,10 +3218,7 @@ export default function WarehouseInspectionForm({
                     id="temperatureMaintained"
                     value={formData.temperatureMaintained}
                     onChange={(e) => setFormData(prev => ({ ...prev, temperatureMaintained: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
               </div>
@@ -3341,7 +3278,6 @@ export default function WarehouseInspectionForm({
                       }
                     }
                   }}
-                  className="text-orange-600"
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
                     <SelectValue placeholder="Select" className="text-orange-600" style={{ color: "#ea580c" }} />
@@ -3445,7 +3381,7 @@ export default function WarehouseInspectionForm({
                       </SelectTrigger>
                       <SelectContent>
                         {clientsData
-                          .filter(client => formData.clientName ? client.firmName === formData.clientName : true)
+                          .filter((client: any) => formData.clientName ? client.firmName === formData.clientName : true)
                           .map(client => (
                             <SelectItem key={client.id} value={client.companyAddress}>
                               {client.companyAddress}
@@ -3479,7 +3415,7 @@ export default function WarehouseInspectionForm({
                                         // Only add to selection state, don't auto-fill form
                                       } else {
                                         setSelectedClientInsurances(prev => 
-                                          prev.filter(selected => 
+                                          prev.filter((selected: any) => 
                                             !(selected.firePolicyNumber === insurance.firePolicyNumber && 
                                               selected.burglaryPolicyNumber === insurance.burglaryPolicyNumber)
                                           )
@@ -3564,7 +3500,7 @@ export default function WarehouseInspectionForm({
                                     // Only add to selection state, don't auto-fill form
                                   } else {
                                     setSelectedAgrogreenInsurances(prev => 
-                                      prev.filter(selected => 
+                                      prev.filter((selected: any) => 
                                         !(selected.firePolicyNumber === insurance.firePolicyNumber && 
                                           selected.burglaryPolicyNumber === insurance.burglaryPolicyNumber)
                                       )
@@ -3661,12 +3597,7 @@ export default function WarehouseInspectionForm({
                               mode="single"
                               selected={formData.firePolicyStartDate || undefined}
                               onSelect={(date) => {
-                                const updatedEntries = formData.insuranceEntries.map(entry =>
-                                  entry.id === insurance.id 
-                                    ? { ...entry, firePolicyStartDate: date || null }
-                                    : entry
-                                );
-                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                setFormData(prev => ({ ...prev, firePolicyStartDate: date || null }));
                               }}
                               initialFocus
                             />
@@ -3695,12 +3626,7 @@ export default function WarehouseInspectionForm({
                               mode="single"
                               selected={formData.firePolicyEndDate || undefined}
                               onSelect={(date) => {
-                                const updatedEntries = formData.insuranceEntries.map(entry =>
-                                  entry.id === insurance.id 
-                                    ? { ...entry, firePolicyEndDate: date || null }
-                                    : entry
-                                );
-                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                setFormData(prev => ({ ...prev, firePolicyEndDate: date || null }));
                               }}
                               initialFocus
                             />
@@ -3768,12 +3694,7 @@ export default function WarehouseInspectionForm({
                               mode="single"
                               selected={formData.burglaryPolicyStartDate || undefined}
                               onSelect={(date) => {
-                                const updatedEntries = formData.insuranceEntries.map(entry =>
-                                  entry.id === insurance.id 
-                                    ? { ...entry, burglaryPolicyStartDate: date || null }
-                                    : entry
-                                );
-                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                setFormData(prev => ({ ...prev, burglaryPolicyStartDate: date || null }));
                               }}
                               initialFocus
                             />
@@ -3802,12 +3723,7 @@ export default function WarehouseInspectionForm({
                               mode="single"
                               selected={formData.burglaryPolicyEndDate || undefined}
                               onSelect={(date) => {
-                                const updatedEntries = formData.insuranceEntries.map(entry =>
-                                  entry.id === insurance.id 
-                                    ? { ...entry, burglaryPolicyEndDate: date || null }
-                                    : entry
-                                );
-                                setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                setFormData(prev => ({ ...prev, burglaryPolicyEndDate: date || null }));
                               }}
                               initialFocus
                             />
@@ -3835,7 +3751,7 @@ export default function WarehouseInspectionForm({
             )}
 
             {/* Insurance Sections - Show existing insurance for all statuses, allow editing only for activated */}
-            {formData.insuranceEntries && formData.insuranceEntries.length > 0 && formData.insuranceEntries.map((insurance, index) => (
+            {formData.insuranceEntries && formData.insuranceEntries.length > 0 && formData.insuranceEntries.map((insurance: any, index: number) => (
               <div key={insurance.id} className="border-t pt-4 mt-4">
                 <div className="flex justify-between items-center mb-4">
                   <h4 className="text-lg font-medium text-green-700">Additional Insurance #{index + 1}</h4>
@@ -3921,7 +3837,7 @@ export default function WarehouseInspectionForm({
                     <Select 
                       value={insurance.insuranceTakenBy} 
                       onValueChange={(value) => {
-                        const updatedEntries = formData.insuranceEntries.map(entry =>
+                        const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                           entry.id === insurance.id 
                             ? { ...entry, insuranceTakenBy: value, clientName: '', clientAddress: '', selectedBankName: '' }
                             : entry
@@ -3946,7 +3862,7 @@ export default function WarehouseInspectionForm({
                     <Input
                       value={insurance.insuranceCommodity}
                       onChange={(e) => {
-                        const updatedEntries = formData.insuranceEntries.map(entry =>
+                        const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                           entry.id === insurance.id 
                             ? { ...entry, insuranceCommodity: e.target.value }
                             : entry
@@ -3969,7 +3885,7 @@ export default function WarehouseInspectionForm({
                           value={insurance.clientName} 
                           onValueChange={async (value) => {
                             const selectedClient = clientsData.find(client => client.firmName === value);
-                            const updatedEntries = formData.insuranceEntries.map(entry =>
+                            const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                               entry.id === insurance.id 
                                 ? { 
                                     ...entry, 
@@ -4001,7 +3917,7 @@ export default function WarehouseInspectionForm({
                                   // If there's insurance data, populate the first insurance entry
                                   if (insurances.length > 0) {
                                     const firstInsurance = insurances[0];
-                                    const updatedEntriesWithInsurance = formData.insuranceEntries.map(entry =>
+                                    const updatedEntriesWithInsurance = formData.insuranceEntries.map((entry: any) =>
                                       entry.id === insurance.id 
                                         ? { 
                                             ...entry, 
@@ -4053,7 +3969,7 @@ export default function WarehouseInspectionForm({
                         <Select 
                           value={insurance.clientAddress} 
                           onValueChange={(value) => {
-                            const updatedEntries = formData.insuranceEntries.map(entry =>
+                            const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                               entry.id === insurance.id 
                                 ? { ...entry, clientAddress: value }
                                 : entry
@@ -4066,7 +3982,7 @@ export default function WarehouseInspectionForm({
                           </SelectTrigger>
                           <SelectContent>
                             {clientsData
-                              .filter(client => insurance.clientName ? client.firmName === insurance.clientName : true)
+                              .filter((client: any) => insurance.clientName ? client.firmName === insurance.clientName : true)
                               .map(client => (
                                 <SelectItem key={client.id} value={client.companyAddress}>
                                   {client.companyAddress}
@@ -4087,7 +4003,7 @@ export default function WarehouseInspectionForm({
                       <Select 
                         value={insurance.selectedBankName} 
                         onValueChange={(value) => {
-                          const updatedEntries = formData.insuranceEntries.map(entry =>
+                          const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                             entry.id === insurance.id 
                               ? { ...entry, selectedBankName: value }
                               : entry
@@ -4121,7 +4037,7 @@ export default function WarehouseInspectionForm({
                           <Input
                             value={insurance.firePolicyCompanyName}
                             onChange={(e) => {
-                              const updatedEntries = formData.insuranceEntries.map(entry =>
+                              const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                 entry.id === insurance.id 
                                   ? { ...entry, firePolicyCompanyName: e.target.value }
                                   : entry
@@ -4137,7 +4053,7 @@ export default function WarehouseInspectionForm({
                           <Input
                             value={insurance.firePolicyNumber}
                             onChange={(e) => {
-                              const updatedEntries = formData.insuranceEntries.map(entry =>
+                              const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                 entry.id === insurance.id 
                                   ? { ...entry, firePolicyNumber: e.target.value }
                                   : entry
@@ -4157,7 +4073,7 @@ export default function WarehouseInspectionForm({
                               className="pl-10 text-orange-600"
                               value={insurance.firePolicyAmount}
                               onChange={(e) => {
-                                const updatedEntries = formData.insuranceEntries.map(entry =>
+                                const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                   entry.id === insurance.id 
                                     ? { ...entry, firePolicyAmount: e.target.value }
                                     : entry
@@ -4188,7 +4104,7 @@ export default function WarehouseInspectionForm({
                                   mode="single"
                                   selected={insurance.firePolicyStartDate || undefined}
                                   onSelect={(date) => {
-                                    const updatedEntries = formData.insuranceEntries.map(entry =>
+                                    const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                       entry.id === insurance.id 
                                         ? { ...entry, firePolicyStartDate: date || null }
                                         : entry
@@ -4222,7 +4138,7 @@ export default function WarehouseInspectionForm({
                                   mode="single"
                                   selected={insurance.firePolicyEndDate || undefined}
                                   onSelect={(date) => {
-                                    const updatedEntries = formData.insuranceEntries.map(entry =>
+                                    const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                       entry.id === insurance.id 
                                         ? { ...entry, firePolicyEndDate: date || null }
                                         : entry
@@ -4246,7 +4162,7 @@ export default function WarehouseInspectionForm({
                           <Input
                             value={insurance.burglaryPolicyCompanyName}
                             onChange={(e) => {
-                              const updatedEntries = formData.insuranceEntries.map(entry =>
+                              const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                 entry.id === insurance.id 
                                   ? { ...entry, burglaryPolicyCompanyName: e.target.value }
                                   : entry
@@ -4262,7 +4178,7 @@ export default function WarehouseInspectionForm({
                           <Input
                             value={insurance.burglaryPolicyNumber}
                             onChange={(e) => {
-                              const updatedEntries = formData.insuranceEntries.map(entry =>
+                              const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                 entry.id === insurance.id 
                                   ? { ...entry, burglaryPolicyNumber: e.target.value }
                                   : entry
@@ -4282,7 +4198,7 @@ export default function WarehouseInspectionForm({
                               className="pl-10 text-orange-600"
                               value={insurance.burglaryPolicyAmount}
                               onChange={(e) => {
-                                const updatedEntries = formData.insuranceEntries.map(entry =>
+                                const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                   entry.id === insurance.id 
                                     ? { ...entry, burglaryPolicyAmount: e.target.value }
                                     : entry
@@ -4313,7 +4229,7 @@ export default function WarehouseInspectionForm({
                                   mode="single"
                                   selected={insurance.burglaryPolicyStartDate || undefined}
                                   onSelect={(date) => {
-                                    const updatedEntries = formData.insuranceEntries.map(entry =>
+                                    const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                       entry.id === insurance.id 
                                         ? { ...entry, burglaryPolicyStartDate: date || null }
                                         : entry
@@ -4347,7 +4263,7 @@ export default function WarehouseInspectionForm({
                                   mode="single"
                                   selected={insurance.burglaryPolicyEndDate || undefined}
                                   onSelect={(date) => {
-                                    const updatedEntries = formData.insuranceEntries.map(entry =>
+                                    const updatedEntries = formData.insuranceEntries.map((entry: any) =>
                                       entry.id === insurance.id 
                                         ? { ...entry, burglaryPolicyEndDate: date || null }
                                         : entry
@@ -4380,10 +4296,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="securityAvailable">Security Available <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.securityAvailable} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, securityAvailable: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4400,10 +4314,8 @@ export default function WarehouseInspectionForm({
                 <div className="space-y-2">
                   <Label htmlFor="typeOfSecurity">Type of Security <span className="text-red-500">*</span></Label>
                   <Select 
-  className="select-orange"
                     value={formData.typeOfSecurity} 
                     onValueChange={(value) => setFormData(prev => ({ ...prev, typeOfSecurity: value }))}
-                    className="text-orange-600"
                   required
                   >
                     <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4422,10 +4334,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="securityGuard">Security Guard <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.securityGuard} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, securityGuard: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4452,10 +4362,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="stackingDone">Any Stacking Already Done <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.stackingDone} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, stackingDone: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4475,10 +4383,7 @@ export default function WarehouseInspectionForm({
                     id="commodityStored"
                     value={formData.commodityStored}
                     onChange={(e) => setFormData(prev => ({ ...prev, commodityStored: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
               )}
@@ -4488,10 +4393,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="dunnageUsed">If Dunnage is Used <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.dunnageUsed} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, dunnageUsed: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4513,9 +4416,7 @@ export default function WarehouseInspectionForm({
                       type="number"
                       value={formData.numberOfBags}
                       onChange={(e) => setFormData(prev => ({ ...prev, numberOfBags: e.target.value }))}
-                  className="text-orange-600"
-                      className="text-orange-600"
-                  required
+                    required
                     />
                   </div>
 
@@ -4527,9 +4428,7 @@ export default function WarehouseInspectionForm({
                       step="0.01"
                       value={formData.weightInMT}
                       onChange={(e) => setFormData(prev => ({ ...prev, weightInMT: e.target.value }))}
-                  className="text-orange-600"
-                      className="text-orange-600"
-                  required
+                    required
                     />
                   </div>
                 </>
@@ -4540,10 +4439,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="stockCountable">Whether the Stock is Countable <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.stockCountable} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, stockCountable: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4559,10 +4456,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="otherBanksCargo">Any Other Banks Cargo Stored in Same Warehouse <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.otherBanksCargo} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, otherBanksCargo: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4585,7 +4480,7 @@ export default function WarehouseInspectionForm({
                     Add Bank
                   </Button>
                 </div>
-                {formData.nameOfBank.map((bank, index) => (
+                {formData.nameOfBank.map((bank: any, index: number) => (
                   <div key={index} className="flex gap-2">
                     <Input
                       value={bank}
@@ -4611,10 +4506,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="otherCollateralManager">Any Other Collateral Manager Working in Same Warehouse <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.otherCollateralManager} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, otherCollateralManager: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4634,10 +4527,7 @@ export default function WarehouseInspectionForm({
                     id="nameOfManager"
                     value={formData.nameOfManager}
                     onChange={(e) => setFormData(prev => ({ ...prev, nameOfManager: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
               )}
@@ -4658,9 +4548,7 @@ export default function WarehouseInspectionForm({
                   id="commodity"
                   value={formData.commodity}
                   onChange={(e) => setFormData(prev => ({ ...prev, commodity: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -4672,9 +4560,7 @@ export default function WarehouseInspectionForm({
                   step="0.01"
                   value={formData.quantity}
                   onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
             </div>
@@ -4693,10 +4579,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="dividedIntoChambers">Whether Warehouse is Divided into Chambers or Partitions <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.dividedIntoChambers} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, dividedIntoChambers: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4717,10 +4601,7 @@ export default function WarehouseInspectionForm({
                     type="number"
                     value={formData.howManyChambers}
                     onChange={(e) => setFormData(prev => ({ ...prev, howManyChambers: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
               )}
@@ -4730,10 +4611,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="usingStackCards">Whether Using Stack Cards <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.usingStackCards} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, usingStackCards: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4749,10 +4628,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="maintainingRegisters">Whether Maintaining Registers at Warehouse <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.maintainingRegisters} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, maintainingRegisters: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4770,10 +4647,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="fireFightingEquipments">Whether Fire Fighting Equipments Available <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.fireFightingEquipments} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, fireFightingEquipments: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4795,9 +4670,7 @@ export default function WarehouseInspectionForm({
                       type="number"
                       value={formData.numberOfExtinguishers}
                       onChange={(e) => setFormData(prev => ({ ...prev, numberOfExtinguishers: e.target.value }))}
-                  className="text-orange-600"
-                      className="text-orange-600"
-                  required
+                    required
                     />
                   </div>
 
@@ -4831,10 +4704,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="weighbridgeFacility">Whether Weighbridge Facility Available at Warehouse <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.weighbridgeFacility} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, weighbridgeFacility: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4851,10 +4722,8 @@ export default function WarehouseInspectionForm({
                 <div className="space-y-2">
                   <Label htmlFor="weighbridgeType">Weighbridge Type <span className="text-red-500">*</span></Label>
                   <Select 
-  className="select-orange"
                     value={formData.weighbridgeType} 
                     onValueChange={(value) => setFormData(prev => ({ ...prev, weighbridgeType: value }))}
-                    className="text-orange-600"
                   required
                   >
                     <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4875,10 +4744,7 @@ export default function WarehouseInspectionForm({
                     step="0.01"
                     value={formData.distanceToWeighbridge}
                     onChange={(e) => setFormData(prev => ({ ...prev, distanceToWeighbridge: e.target.value }))}
-                  className="text-orange-600"
-                    className="text-orange-600"
-                  required
-                  className="text-orange-600"
+                    required
                 />
                 </div>
               )}
@@ -4893,9 +4759,7 @@ export default function WarehouseInspectionForm({
                   step="0.01"
                   value={formData.distanceToPoliceStation}
                   onChange={(e) => setFormData(prev => ({ ...prev, distanceToPoliceStation: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -4907,9 +4771,7 @@ export default function WarehouseInspectionForm({
                   step="0.01"
                   value={formData.distanceToFireStation}
                   onChange={(e) => setFormData(prev => ({ ...prev, distanceToFireStation: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
             </div>
@@ -4929,10 +4791,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="riskOfCargoAffected">Any Risk of Cargo Getting Affected <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.riskOfCargoAffected} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, riskOfCargoAffected: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4948,10 +4808,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="duringMonsoon">During Monsoon <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.duringMonsoon} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, duringMonsoon: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4969,10 +4827,8 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="monsoonRisk">Monsoon Risk <span className="text-red-500">*</span></Label>
                 <Select 
-  className="select-orange"
                   value={formData.monsoonRisk} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, monsoonRisk: value }))}
-                  className="text-orange-600"
                   required
                 >
                   <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -4999,10 +4855,8 @@ export default function WarehouseInspectionForm({
             <div className="space-y-2">
               <Label htmlFor="insuranceClaimHistory">Insurance Claim History <span className="text-red-500">*</span></Label>
               <Select 
-  className="select-orange"
                 value={formData.insuranceClaimHistory} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, insuranceClaimHistory: value }))}
-                className="text-orange-600"
                   required
               >
                 <SelectTrigger className="text-orange-600" style={{ color: "#ea580c" }}>
@@ -5022,9 +4876,7 @@ export default function WarehouseInspectionForm({
                   id="claimRemarks"
                   value={formData.claimRemarks}
                   onChange={(e) => setFormData(prev => ({ ...prev, claimRemarks: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                   rows={4}
                 />
               </div>
@@ -5045,9 +4897,7 @@ export default function WarehouseInspectionForm({
                   id="nameOfOE"
                   value={formData.nameOfOE}
                   onChange={(e) => setFormData(prev => ({ ...prev, nameOfOE: e.target.value }))}
-                  className="text-orange-600"
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -5083,8 +4933,7 @@ export default function WarehouseInspectionForm({
                   type="tel"
                   value={formData.contactNumber}
                   onChange={(e) => setFormData(prev => ({ ...prev, contactNumber: e.target.value }))}
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
 
@@ -5094,8 +4943,7 @@ export default function WarehouseInspectionForm({
                   id="place"
                   value={formData.place}
                   onChange={(e) => setFormData(prev => ({ ...prev, place: e.target.value }))}
-                  className="text-orange-600"
-                  required
+                    required
                 />
               </div>
             </div>
@@ -5142,7 +4990,7 @@ export default function WarehouseInspectionForm({
                       Attached Files ({formData.attachedFiles.length}):
                     </p>
                     <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {formData.attachedFiles.map((file, index) => (
+                      {formData.attachedFiles.map((file: any, index: number) => (
                         <div key={index} className="flex items-center justify-between bg-white p-2 rounded border border-green-200 shadow-sm">
                           <span className="text-sm text-gray-700 font-medium truncate mr-2">{file}</span>
                           {!isFieldReadOnly('attachedFiles') && (
@@ -5150,10 +4998,10 @@ export default function WarehouseInspectionForm({
                               type="button"
                               className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full hover:bg-red-100 transition-colors"
                               onClick={() => {
-                                setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                                setSelectedFiles(prev => prev.filter((_: any, i: number) => i !== index));
                                 setFormData(prev => ({
                                   ...prev,
-                                  attachedFiles: prev.attachedFiles.filter((_, i) => i !== index)
+                                  attachedFiles: prev.attachedFiles.filter((_: any, i: number) => i !== index)
                                 }));
                                 toast({
                                   title: "File Removed",
@@ -5457,7 +5305,7 @@ export default function WarehouseInspectionForm({
               <Select
                 value={editInsuranceFields.insuranceTakenBy}
                 onValueChange={val => {
-                  setEditInsuranceFields(f => ({ ...f, insuranceTakenBy: val, clientName: '', selectedPolicy: null }));
+                  setEditInsuranceFields((f: any) => ({ ...f, insuranceTakenBy: val, clientName: '', selectedPolicy: null }));
                 }}
               >
                 <SelectTrigger className="text-orange-600">
@@ -5479,7 +5327,7 @@ export default function WarehouseInspectionForm({
                   <Select
                     value={editInsuranceFields.clientName || ''}
                     onValueChange={async val => {
-                      setEditInsuranceFields(f => ({ ...f, clientName: val, selectedPolicy: null }));
+                      setEditInsuranceFields((f: any) => ({ ...f, clientName: val, selectedPolicy: null }));
                       // Fetch client insurance data for the selected client
                       try {
                         const clientDoc = await getDocs(query(collection(db, 'clients'), where('firmName', '==', val)));
@@ -5514,7 +5362,7 @@ export default function WarehouseInspectionForm({
                       onValueChange={val => {
                         const selected = clientInsuranceData.find(i => i.insuranceId === val);
                         if (selected) {
-                          setEditInsuranceFields(f => ({
+                          setEditInsuranceFields((f: any) => ({
                             ...f,
                             selectedPolicy: val,
                             insuranceCommodity: selected.commodity || '',
@@ -5579,7 +5427,7 @@ export default function WarehouseInspectionForm({
                   onValueChange={val => {
                     const selected = agrogreenInsuranceData.find(i => i.insuranceId === val);
                     if (selected) {
-                      setEditInsuranceFields(f => ({
+                      setEditInsuranceFields((f: any) => ({
                         ...f,
                         selectedPolicy: val,
                         insuranceCommodity: selected.commodity || '',
@@ -5617,7 +5465,7 @@ export default function WarehouseInspectionForm({
                   <Label>Commodity</Label>
                   <Input
                     value={editInsuranceFields.insuranceCommodity || ''}
-                    onChange={e => setEditInsuranceFields(f => ({ ...f, insuranceCommodity: e.target.value }))}
+                    onChange={e => setEditInsuranceFields((f: any) => ({ ...f, insuranceCommodity: e.target.value }))}
                     className="text-orange-600"
                     placeholder="Enter commodity name"
                   />
@@ -5627,7 +5475,7 @@ export default function WarehouseInspectionForm({
                   <Input
                     type="date"
                     value={editInsuranceFields.firePolicyStartDate ? format(editInsuranceFields.firePolicyStartDate, 'yyyy-MM-dd') : ''}
-                    onChange={e => setEditInsuranceFields(f => ({ ...f, firePolicyStartDate: e.target.value }))}
+                    onChange={e => setEditInsuranceFields((f: any) => ({ ...f, firePolicyStartDate: e.target.value }))}
                   />
                 </div>
                 <div>
@@ -5635,7 +5483,7 @@ export default function WarehouseInspectionForm({
                   <Input
                     type="date"
                     value={editInsuranceFields.firePolicyEndDate ? format(editInsuranceFields.firePolicyEndDate, 'yyyy-MM-dd') : ''}
-                    onChange={e => setEditInsuranceFields(f => ({ ...f, firePolicyEndDate: e.target.value }))}
+                    onChange={e => setEditInsuranceFields((f: any) => ({ ...f, firePolicyEndDate: e.target.value }))}
                   />
                 </div>
                 <div>
@@ -5643,7 +5491,7 @@ export default function WarehouseInspectionForm({
                   <Input
                     type="date"
                     value={editInsuranceFields.burglaryPolicyStartDate ? format(editInsuranceFields.burglaryPolicyStartDate, 'yyyy-MM-dd') : ''}
-                    onChange={e => setEditInsuranceFields(f => ({ ...f, burglaryPolicyStartDate: e.target.value }))}
+                    onChange={e => setEditInsuranceFields((f: any) => ({ ...f, burglaryPolicyStartDate: e.target.value }))}
                   />
                 </div>
                 <div>
@@ -5651,7 +5499,7 @@ export default function WarehouseInspectionForm({
                   <Input
                     type="date"
                     value={editInsuranceFields.burglaryPolicyEndDate ? format(editInsuranceFields.burglaryPolicyEndDate, 'yyyy-MM-dd') : ''}
-                    onChange={e => setEditInsuranceFields(f => ({ ...f, burglaryPolicyEndDate: e.target.value }))}
+                    onChange={e => setEditInsuranceFields((f: any) => ({ ...f, burglaryPolicyEndDate: e.target.value }))}
                   />
                 </div>
               </>

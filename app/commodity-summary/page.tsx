@@ -7,7 +7,7 @@ import CommoditySummaryTable from '@/components/CommoditySummaryTable';
 export default function CommoditySummaryPage() {
   return (
     <DashboardLayout>
-      <CommoditySummaryTable showHeader={true} showAddButton={true} />
+      <CommoditySummaryTable showHeader={true} />
     </DashboardLayout>
   );
 }

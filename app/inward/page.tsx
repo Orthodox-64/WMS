@@ -338,17 +338,17 @@ export default function InwardPage() {
       
       const inwardDataWithReceiptType = await Promise.all(
         inwardSnap.docs
-          .filter(doc => {
-          const data = doc.data();
+          .filter(docSnapshot => {
+          const data = docSnapshot.data();
             // Only process documents that have an inwardId
             if (!data.inwardId) {
-              console.log('Skipping document without inwardId:', doc.id);
+              console.log('Skipping document without inwardId:', docSnapshot.id);
               return false;
             }
             return true;
           })
-          .map(async (doc) => {
-            const data = doc.data();
+          .map(async (docSnapshot) => {
+            const data = docSnapshot.data();
             console.log('Processing inward entry:', data.inwardId, 'for warehouse:', data.warehouseName || 'NO_WAREHOUSE');
           
           // Fetch receipt type from inspection collection
@@ -654,8 +654,8 @@ export default function InwardPage() {
             
             // Combine all entries into one row with combined data
             const combinedEntry = {
-            id: doc.id, 
-              docId: doc.id,
+            id: docSnapshot.id, 
+              docId: docSnapshot.id,
               inwardId: data.inwardId,
               // Base form data
               state: data.state,
@@ -673,9 +673,6 @@ export default function InwardPage() {
               commodity: data.commodity,
               varietyName: data.varietyName,
               marketRate: data.marketRate,
-              totalBags: data.totalBags,
-              totalQuantity: data.totalQuantity,
-              totalValue: data.totalValue,
               bankName: data.bankName,
               bankBranch: data.bankBranch,
               bankState: data.bankState,
@@ -720,6 +717,7 @@ export default function InwardPage() {
               averageWeight: data.inwardEntries[0]?.averageWeight || '-',
               totalBags: data.totalBagsFromEntries || data.totalBags || '-',
               totalQuantity: data.totalQuantityFromEntries || data.totalQuantity || '-',
+              totalValue: data.totalValue || '-',
               // Lab parameters from document level
               dateOfSampling: data.dateOfSampling || '-',
               dateOfTesting: data.dateOfTesting || '-',
@@ -747,7 +745,7 @@ export default function InwardPage() {
             console.log('Found old structure (single entry per document)');
             return [{
               ...data, 
-              id: doc.id, 
+              id: docSnapshot.id, 
               receiptType,
               cirStatus: data.cirStatus || 'Pending',
               // Use insurance data for policy amounts and other fields
@@ -778,7 +776,7 @@ export default function InwardPage() {
 
           const firePolicyAmount = parseAmount(entry.firePolicyAmount);
           const burglaryPolicyAmount = parseAmount(entry.burglaryPolicyAmount);
-          const totalValue = parseAmount(entry.totalValue);
+          const totalValue = parseAmount((entry as any).totalValue || '0');
 
           const fireBalance = firePolicyAmount - totalValue;
           const burglaryBalance = burglaryPolicyAmount - totalValue;
@@ -3659,7 +3657,7 @@ export default function InwardPage() {
         setSrGenerationDate(todayISO);
         
         // Update the selectedRowForSR to reflect the changes
-        setSelectedRowForSR(prev => ({
+        setSelectedRowForSR((prev: any) => ({
           ...prev,
           status: 'approved',
           srGenerationDate: todayISO,
@@ -3678,7 +3676,7 @@ export default function InwardPage() {
       console.error('Error updating status to approve:', error);
       toast({
         title: 'Error',
-        description: `Failed to approve receipt: ${error.message}`,
+        description: `Failed to approve receipt: ${error instanceof Error ? error.message : String(error)}`,
         variant: 'destructive',
       });
       return;

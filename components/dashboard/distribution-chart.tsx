@@ -36,7 +36,7 @@ function useDistributionData() {
       if (!acc[date]) {
         acc[date] = {};
       }
-      acc[date][curr.state] = (acc[date][curr.state] || 0) + parseFloat(curr.aum);
+      acc[date][curr.state] = (acc[date][curr.state] || 0) + (typeof curr.aum === 'string' ? parseFloat(curr.aum) : curr.aum);
       return acc;
     }, {} as Record<string, Record<string, number>>);
     const results = Object.entries(locationData)

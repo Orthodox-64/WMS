@@ -62,14 +62,7 @@ export default function MasterDataPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  // Redirect supervisors who don't have access
-  useEffect(() => {
-    if (user?.role === 'supervisor') {
-      router.push('/dashboard');
-    }
-  }, [user?.role, router]);
-
-  if (user?.role === 'supervisor') return null;
+  // No role-based restrictions for master data access
 
   return (
     <DashboardLayout>

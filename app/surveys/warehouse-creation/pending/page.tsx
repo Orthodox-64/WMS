@@ -56,7 +56,7 @@ function WarehouseInspectionFormWrapper({
   const findAllInsuranceForWarehouse = async (warehouseCode: string, warehouseName: string) => {
     try {
       const querySnapshot = await getDocs(collection(db, 'inspections'));
-      const allInsuranceEntries = [];
+      const allInsuranceEntries: any[] = [];
       let matchingInspections = 0;
       
       console.log(`🔍 Searching for insurance entries using warehouse code: ${warehouseCode}`);
@@ -205,11 +205,11 @@ function WarehouseInspectionFormWrapper({
     let existingWarehouseData = {};
     if (!warehouseData.warehouseName || Object.keys(warehouseData).length <= 5) {
       // This appears to be a fresh inspection, try to find existing filled data for same warehouse
-      existingWarehouseData = await findExistingWarehouseFormData(inspection.warehouseCode, inspection.warehouseName);
+      existingWarehouseData = await findExistingWarehouseFormData(inspection.warehouseCode || '', inspection.warehouseName || '');
     }
     
     // Always fetch and merge insurance entries from all inspections of this warehouse
-    const allInsuranceEntries = await findAllInsuranceForWarehouse(inspection.warehouseCode, inspection.warehouseName);
+    const allInsuranceEntries = await findAllInsuranceForWarehouse(inspection.warehouseCode || '', inspection.warehouseName || '');
     
     // Merge existing warehouse data but prioritize bank details from current inspection
     const mergedData = { ...existingWarehouseData, ...warehouseData };

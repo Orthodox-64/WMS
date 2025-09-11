@@ -178,7 +178,7 @@ export default function InspectionCreationPage() {
   // Extract unique states from branches data
   useEffect(() => {
     if (branchesData.length > 0) {
-      const states = [...new Set(branchesData.map(branch => branch.state))];
+      const states = Array.from(new Set(branchesData.map(branch => branch.state)));
       setAvailableStates(states);
     }
   }, [branchesData]);
@@ -186,7 +186,7 @@ export default function InspectionCreationPage() {
   // Extract unique bank states from banks data
   useEffect(() => {
     if (banksData.length > 0) {
-      const states = [...new Set(banksData.map(bank => bank.state))];
+      const states = Array.from(new Set(banksData.map(bank => bank.state)));
       setAvailableBankStates(states);
     }
   }, [banksData]);
@@ -195,7 +195,7 @@ export default function InspectionCreationPage() {
   useEffect(() => {
     if (formData.state) {
       const branchesInState = branchesData.filter(branch => branch.state === formData.state);
-      const branches = [...new Set(branchesInState.map(branch => branch.branch))];
+      const branches = Array.from(new Set(branchesInState.map(branch => branch.branch)));
       setAvailableBranches(branches);
       setFormData(prev => ({ ...prev, branch: '', location: '' }));
     }

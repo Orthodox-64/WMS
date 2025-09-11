@@ -45,7 +45,7 @@ const columns = [
     cell: ({ row }: { row: Row<any> }) => {
       let status = row.getValue("status");
       let color = "";
-      switch ((status || "").toLowerCase()) {
+      switch (String(status || "").toLowerCase()) {
         case "activated":
         case "active":
           color = "bg-green-200 text-green-800";
@@ -68,7 +68,7 @@ const columns = [
         default:
           color = "bg-gray-100 text-gray-700";
       }
-      return <span className={`px-2 py-1 rounded w-full flex justify-center ${color}`}>{status}</span>;
+      return <span className={`px-2 py-1 rounded w-full flex justify-center ${color}`}>{String(status)}</span>;
     },
     meta: { align: 'center' },
   },
