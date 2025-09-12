@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit, where, getDoc, doc, Timestamp } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { FIELD_NAMES, SEARCH_PATTERNS, FIELD_EXTRACTION, DEFAULTS } from '@/lib/field-config';
 
 interface DeliveryOrderReportData {
   id: string;
@@ -159,13 +160,13 @@ export default function DeliveryOrderReportsPage() {
               let inspectionsQuery;
               if (docData.databaseLocation) {
                 inspectionsQuery = query(
-                  collection(db, 'inspections'),
+                  collection(db, SEARCH_PATTERNS.COLLECTIONS.INSPECTIONS),
                   where('warehouseName', '==', docData.warehouseName),
                   where('databaseLocation', '==', docData.databaseLocation)
                 );
               } else {
                 inspectionsQuery = query(
-                  collection(db, 'inspections'),
+                  collection(db, SEARCH_PATTERNS.COLLECTIONS.INSPECTIONS),
                   where('warehouseName', '==', docData.warehouseName)
                 );
               }
@@ -209,19 +210,23 @@ export default function DeliveryOrderReportsPage() {
           }
         }
         
-        // Fetch commodity and variety - prioritize direct fields, then fetch from commodities collection
+        // Fetch commodity and variety - prioritize inward data based on eye number and warehouse details
         let commodity = '';
         let variety = '';
         
-        console.log('=== COMMODITY/VARIETY FETCHING DEBUG (COMMODITIES COLLECTION ONLY) ===');
+        console.log('=== COMMODITY/VARIETY FETCHING DEBUG (INWARD DATA PRIORITY) ===');
         console.log('DO data commodity fields:', {
           commodityId: docData.commodityId,
           varietyId: docData.varietyId,
           commodityName: docData.commodityName,
           varietyName: docData.varietyName,
           commodity: docData.commodity,
-          variety: docData.variety
+          variety: docData.variety,
+          eyeNumber: docData.eyeNumber,
+          srwrNo: docData.srwrNo
         });
+        console.log('All DO data fields:', Object.keys(docData));
+        console.log('DO data values:', docData);
         
         // Step 1: Check if commodityName and varietyName are directly available in DO data
         if (docData.commodityName) {
@@ -233,11 +238,165 @@ export default function DeliveryOrderReportsPage() {
           console.log('✅ Using varietyName directly from DO data:', variety);
         }
         
-        // Step 2: If we have commodityId but no commodityName, fetch from commodities collection
+        // Step 2: If we don't have commodity/variety names, fetch from inward data based on eye number and warehouse details
+        if ((!commodity || !variety) && docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_NAME]) {
+          try {
+            console.log('🔍 Fetching commodity/variety from inward data for warehouse:', docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_NAME]);
+            const inwardCollection = collection(db, SEARCH_PATTERNS.COLLECTIONS.INWARD);
+            
+            // Build query to find inward data based on warehouse details
+            let inwardQuery;
+            let inwardSnapshot;
+            
+            // Try multiple search strategies based on the actual inward data structure
+            if (docData[FIELD_NAMES.DELIVERY_ORDER.EYE_NUMBER]) {
+              // Strategy 1: Search by eye number and warehouse name
+              inwardQuery = query(
+                inwardCollection,
+                where(FIELD_NAMES.INWARD.EYE_NUMBER, '==', docData[FIELD_NAMES.DELIVERY_ORDER.EYE_NUMBER]),
+                where(FIELD_NAMES.INWARD.WAREHOUSE_NAME, '==', docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_NAME])
+              );
+              console.log('🔍 Strategy 1: Searching inward data by eye number:', docData[FIELD_NAMES.DELIVERY_ORDER.EYE_NUMBER]);
+              inwardSnapshot = await getDocs(inwardQuery);
+            }
+            
+            if ((!inwardSnapshot || inwardSnapshot.empty) && docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_CODE]) {
+              // Strategy 2: Search by warehouse code (most reliable based on the data structure)
+              inwardQuery = query(
+                inwardCollection,
+                where(FIELD_NAMES.INWARD.WAREHOUSE_CODE, '==', docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_CODE])
+              );
+              console.log('🔍 Strategy 2: Searching inward data by warehouse code:', docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_CODE]);
+              inwardSnapshot = await getDocs(inwardQuery);
+            }
+            
+            if ((!inwardSnapshot || inwardSnapshot.empty) && docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_NAME]) {
+              // Strategy 3: Search by warehouse name
+              inwardQuery = query(
+                inwardCollection,
+                where(FIELD_NAMES.INWARD.WAREHOUSE_NAME, '==', docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_NAME])
+              );
+              console.log('🔍 Strategy 3: Searching inward data by warehouse name:', docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_NAME]);
+              inwardSnapshot = await getDocs(inwardQuery);
+            }
+            
+            if ((!inwardSnapshot || inwardSnapshot.empty) && docData[FIELD_NAMES.DELIVERY_ORDER.SRWR_NO]) {
+              // Strategy 4: Try to match by inwardId pattern (INW-XXX format)
+              const inwardIdPattern = docData[FIELD_NAMES.DELIVERY_ORDER.SRWR_NO].includes(SEARCH_PATTERNS.INWARD_ID_PREFIX) ? docData[FIELD_NAMES.DELIVERY_ORDER.SRWR_NO] : null;
+              if (inwardIdPattern) {
+                inwardQuery = query(
+                  inwardCollection,
+                  where(FIELD_NAMES.INWARD.INWARD_ID, '==', inwardIdPattern)
+                );
+                console.log('🔍 Strategy 4: Searching inward data by inwardId:', inwardIdPattern);
+                inwardSnapshot = await getDocs(inwardQuery);
+              }
+            }
+            
+            if ((!inwardSnapshot || inwardSnapshot.empty) && docData[FIELD_NAMES.DELIVERY_ORDER.CLIENT_CODE]) {
+              // Strategy 5: Search by client code and warehouse
+              inwardQuery = query(
+                inwardCollection,
+                where(FIELD_NAMES.INWARD.CLIENT_CODE, '==', docData[FIELD_NAMES.DELIVERY_ORDER.CLIENT_CODE]),
+                where(FIELD_NAMES.INWARD.WAREHOUSE_NAME, '==', docData[FIELD_NAMES.DELIVERY_ORDER.WAREHOUSE_NAME])
+              );
+              console.log('🔍 Strategy 5: Searching inward data by client code:', docData[FIELD_NAMES.DELIVERY_ORDER.CLIENT_CODE]);
+              inwardSnapshot = await getDocs(inwardQuery);
+            }
+            
+            console.log('Inward query result:', inwardSnapshot?.size || 0, 'documents');
+            
+            if (inwardSnapshot && !inwardSnapshot.empty) {
+              // Get the first matching inward entry
+              const inwardData = inwardSnapshot.docs[0].data();
+              console.log('Found inward data:', inwardData);
+              
+              // Extract commodity and variety from inward data using configuration
+              // Check root level fields first
+              if (!commodity) {
+                for (const field of FIELD_EXTRACTION.COMMODITY_FIELDS) {
+                  if (inwardData[field]) {
+                    commodity = inwardData[field];
+                    console.log(`✅ Commodity fetched from inward data (root level ${field}):`, commodity);
+                    break;
+                  }
+                }
+              }
+              
+              if (!variety) {
+                for (const field of FIELD_EXTRACTION.VARIETY_FIELDS) {
+                  if (inwardData[field]) {
+                    variety = inwardData[field];
+                    console.log(`✅ Variety fetched from inward data (root level ${field}):`, variety);
+                    break;
+                  }
+                }
+              }
+              
+              // Check inwardEntries array for commodity and variety
+              if ((!commodity || !variety) && inwardData[FIELD_NAMES.INWARD.INWARD_ENTRIES] && Array.isArray(inwardData[FIELD_NAMES.INWARD.INWARD_ENTRIES])) {
+                console.log('🔍 Checking inwardEntries array for commodity/variety data');
+                console.log('Number of inward entries:', inwardData[FIELD_NAMES.INWARD.INWARD_ENTRIES].length);
+                
+                // Get the entry from inwardEntries array using configured index
+                const entryIndex = FIELD_EXTRACTION.INWARD_ENTRIES_INDEX;
+                const targetEntry = inwardData[FIELD_NAMES.INWARD.INWARD_ENTRIES][entryIndex];
+                if (targetEntry) {
+                  console.log(`Inward entry [${entryIndex}]:`, targetEntry);
+                  
+                  if (!commodity) {
+                    for (const field of FIELD_EXTRACTION.COMMODITY_FIELDS) {
+                      if (targetEntry[field]) {
+                        commodity = targetEntry[field];
+                        console.log(`✅ Commodity fetched from inwardEntries[${entryIndex}].${field}:`, commodity);
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (!variety) {
+                    for (const field of FIELD_EXTRACTION.VARIETY_FIELDS) {
+                      if (targetEntry[field]) {
+                        variety = targetEntry[field];
+                        console.log(`✅ Variety fetched from inwardEntries[${entryIndex}].${field}:`, variety);
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+              
+              // Log all available fields in inward data for debugging
+              console.log('Available fields in inward data:', Object.keys(inwardData));
+              console.log('Commodity-related fields:', {
+                [FIELD_NAMES.INWARD.COMMODITY]: inwardData[FIELD_NAMES.INWARD.COMMODITY],
+                [FIELD_NAMES.INWARD.COMMODITY_NAME]: inwardData[FIELD_NAMES.INWARD.COMMODITY_NAME],
+                commodityId: inwardData.commodityId
+              });
+              console.log('Variety-related fields:', {
+                [FIELD_NAMES.INWARD.VARIETY]: inwardData[FIELD_NAMES.INWARD.VARIETY],
+                [FIELD_NAMES.INWARD.VARIETY_NAME]: inwardData[FIELD_NAMES.INWARD.VARIETY_NAME],
+                varietyId: inwardData.varietyId
+              });
+              console.log('InwardEntries structure:', inwardData[FIELD_NAMES.INWARD.INWARD_ENTRIES] ? inwardData[FIELD_NAMES.INWARD.INWARD_ENTRIES].map((entry: any, index: number) => ({
+                index,
+                [FIELD_NAMES.INWARD.COMMODITY]: entry[FIELD_NAMES.INWARD.COMMODITY],
+                [FIELD_NAMES.INWARD.VARIETY_NAME]: entry[FIELD_NAMES.INWARD.VARIETY_NAME],
+                entryNumber: entry.entryNumber
+              })) : 'No inwardEntries array');
+            } else {
+              console.log('❌ No inward data found for warehouse:', docData.warehouseName);
+            }
+          } catch (error) {
+            console.log('❌ Error fetching from inward collection:', error);
+          }
+        }
+        
+        // Step 3: Fallback to commodities collection if still no commodity/variety found
         if (!commodity && docData.commodityId) {
           try {
-            console.log('🔍 Fetching commodity from commodities collection for commodityId:', docData.commodityId);
-            const commoditiesCollection = collection(db, 'commodities');
+            console.log('🔍 Fallback: Fetching commodity from commodities collection for commodityId:', docData.commodityId);
+            const commoditiesCollection = collection(db, SEARCH_PATTERNS.COLLECTIONS.COMMODITIES);
             const commodityQuery = query(
               commoditiesCollection,
               where('commodityId', '==', docData.commodityId)
@@ -247,7 +406,7 @@ export default function DeliveryOrderReportsPage() {
             if (!commoditySnapshot.empty) {
               const commodityData = commoditySnapshot.docs[0].data();
               commodity = commodityData.commodityName || '';
-              console.log('✅ Commodity fetched from commodities collection:', commodity);
+              console.log('✅ Commodity fetched from commodities collection (fallback):', commodity);
             } else {
               console.log('❌ No commodity found for commodityId:', docData.commodityId);
             }
@@ -256,10 +415,9 @@ export default function DeliveryOrderReportsPage() {
           }
         }
         
-        // Step 3: If we have varietyId but no varietyName, fetch from commodities collection
         if (!variety && docData.varietyId) {
           try {
-            console.log('🔍 Fetching variety from commodities collection for varietyId:', docData.varietyId);
+            console.log('🔍 Fallback: Fetching variety from commodities collection for varietyId:', docData.varietyId);
             const commoditiesCollection = collection(db, 'commodities');
             
             // First try to find variety in the same commodity if we have commodityId
@@ -276,7 +434,7 @@ export default function DeliveryOrderReportsPage() {
                   const varietyData = commodityData.varieties.find((v: any) => v.varietyId === docData.varietyId);
                   if (varietyData) {
                     variety = varietyData.varietyName || '';
-                    console.log('✅ Variety found in same commodity:', variety);
+                    console.log('✅ Variety found in same commodity (fallback):', variety);
                   }
                 }
               }
@@ -284,7 +442,7 @@ export default function DeliveryOrderReportsPage() {
             
             // If still no variety, search across all commodities
             if (!variety) {
-              console.log('🔍 Searching for variety across all commodities...');
+              console.log('🔍 Fallback: Searching for variety across all commodities...');
               const allCommoditiesSnapshot = await getDocs(commoditiesCollection);
               
               for (const commodityDoc of allCommoditiesSnapshot.docs) {
@@ -293,7 +451,7 @@ export default function DeliveryOrderReportsPage() {
                   const varietyData = commodityData.varieties.find((v: any) => v.varietyId === docData.varietyId);
                   if (varietyData) {
                     variety = varietyData.varietyName || '';
-                    console.log('✅ Variety found in commodity:', commodityData.commodityName, 'variety:', variety);
+                    console.log('✅ Variety found in commodity (fallback):', commodityData.commodityName, 'variety:', variety);
                     break;
                   }
                 }
@@ -308,12 +466,16 @@ export default function DeliveryOrderReportsPage() {
           }
         }
         
-        // Note: Only fetching from commodities collection, no inward collection fallback
-        
-        console.log('=== FINAL COMMODITY/VARIETY RESULT (COMMODITIES COLLECTION ONLY) ===');
-        console.log('🎯 Final commodity for report:', commodity || 'NOT FOUND (only using commodities collection)');
-        console.log('🎯 Final variety for report:', variety || 'NOT FOUND (only using commodities collection)');
+        console.log('=== FINAL COMMODITY/VARIETY RESULT (INWARD DATA PRIORITY) ===');
+        console.log('🎯 Final commodity for report:', commodity || DEFAULTS.NOT_FOUND);
+        console.log('🎯 Final variety for report:', variety || DEFAULTS.NOT_FOUND);
         console.log('=== END COMMODITY/VARIETY FETCHING DEBUG ===');
+        
+        // Additional debugging for data assignment
+        console.log('=== DATA ASSIGNMENT DEBUG ===');
+        console.log('About to assign commodity:', commodity);
+        console.log('About to assign variety:', variety);
+        console.log('=== END DATA ASSIGNMENT DEBUG ===');
         
         // Calculate balance values if not present
         const calculatedBalanceBags = docData.balanceBags || (docData.totalBags && docData.doBags ? (docData.totalBags - docData.doBags).toString() : '');
