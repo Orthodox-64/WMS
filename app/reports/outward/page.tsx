@@ -23,6 +23,9 @@ interface OutwardReportData {
   roNumber: string;
   warehouseName: string;
   warehouseType: string;
+  warehouseCode: string;
+  warehouseAddress: string;
+  typeOfBusiness: string;
   client: string;
   commodity: string;
   varietyName: string;
@@ -52,7 +55,7 @@ export default function OutwardReportsPage() {
     'client', 'commodity', 'varietyName', 'outwardBags', 'outwardQty', 'totalValue', 'vehicleNumber', 'gatepass', 'status'
   ]);
 
-  // Column definitions
+  // Enhanced column definitions with additional warehouse details
   const allColumns = [
     { key: 'date', label: 'Date', width: 'w-24' },
     { key: 'outwardId', label: 'Outward ID', width: 'w-24' },
@@ -61,6 +64,9 @@ export default function OutwardReportsPage() {
     { key: 'roNumber', label: 'RO Number', width: 'w-24' },
     { key: 'warehouseName', label: 'Warehouse Name', width: 'w-32' },
     { key: 'warehouseType', label: 'Warehouse Type', width: 'w-28' },
+    { key: 'warehouseCode', label: 'Warehouse Code', width: 'w-28' },
+    { key: 'warehouseAddress', label: 'Warehouse Address', width: 'w-36' },
+    { key: 'typeOfBusiness', label: 'Type of Business', width: 'w-32' },
     { key: 'client', label: 'Client', width: 'w-28' },
     { key: 'commodity', label: 'Commodity', width: 'w-24' },
     { key: 'varietyName', label: 'Variety', width: 'w-24' },
@@ -116,25 +122,92 @@ export default function OutwardReportsPage() {
       const data = await Promise.all(querySnapshot.docs.map(async (doc, index) => {
         const docData = doc.data();
         
-        // Fetch warehouse type from inspections collection
-        let warehouseType = 'N/A';
+        // Debug: Log available fields in outward data
+        console.log('=== OUTWARD DOCUMENT DEBUG ===');
+        console.log('Outward document fields for warehouse:', docData.warehouseName, Object.keys(docData));
+        console.log('Outward document data:', docData);
+        
+        // Fetch warehouse type from inspections collection with enhanced logic
+        let warehouseType = '';
+        let warehouseCode = '';
+        let warehouseAddress = '';
+        let businessType = '';
+        
         if (docData.warehouseName) {
+          console.log('Looking for warehouse type for warehouse name:', docData.warehouseName);
           try {
-            const inspectionsCollection = collection(db, 'inspections');
-            const warehouseQuery = query(
-              inspectionsCollection,
-              where('warehouseName', '==', docData.warehouseName),
-              where('status', '==', 'activated'),
-              limit(1)
-            );
-            const warehouseSnapshot = await getDocs(warehouseQuery);
+            // Query inspections collection with database location filter if available
+            let inspectionsQuery;
+            if (docData.databaseLocation) {
+              inspectionsQuery = query(
+                collection(db, 'inspections'),
+                where('warehouseName', '==', docData.warehouseName),
+                where('databaseLocation', '==', docData.databaseLocation)
+              );
+            } else {
+              inspectionsQuery = query(
+                collection(db, 'inspections'),
+                where('warehouseName', '==', docData.warehouseName)
+              );
+            }
             
-            if (!warehouseSnapshot.empty) {
-              const warehouseData = warehouseSnapshot.docs[0].data();
-              warehouseType = warehouseData.warehouseType || warehouseData.businessType || 'N/A';
+            const inspectionsSnapshot = await getDocs(inspectionsQuery);
+            console.log('Inspections query result:', inspectionsSnapshot.size, 'documents');
+            
+            if (!inspectionsSnapshot.empty) {
+              const inspectionData = inspectionsSnapshot.docs[0].data();
+              console.log('Inspections data found:', inspectionData);
+              
+              // Get warehouse type with multiple fallback options
+              warehouseType = inspectionData.typeOfWarehouse || 
+                            inspectionData.typeofwarehouse || 
+                            inspectionData.warehouseType || 
+                            inspectionData.warehouseInspectionData?.typeOfWarehouse ||
+                            inspectionData.warehouseInspectionData?.warehouseType || '';
+              
+              // Get other warehouse details
+              warehouseCode = inspectionData.warehouseCode || 
+                            inspectionData.warehouseInspectionData?.warehouseCode || '';
+              warehouseAddress = inspectionData.warehouseAddress || 
+                               inspectionData.warehouseInspectionData?.warehouseAddress || '';
+              businessType = inspectionData.businessType || 
+                           inspectionData.warehouseInspectionData?.businessType || '';
+              
+              console.log('Extracted warehouse type from inspections:', warehouseType);
+            } else {
+              console.log('No inspections data found for warehouse:', docData.warehouseName);
             }
           } catch (error) {
-            console.error('Error fetching warehouse type:', error);
+            console.log('Error fetching warehouse type from inspections:', error);
+          }
+        }
+        
+        // Add additional data processing for commodity/variety if needed
+        let commodity = docData.commodity || '';
+        let variety = docData.varietyName || docData.variety || '';
+        
+        // Try to fetch commodity/variety from inward data if missing
+        if ((!commodity || !variety) && docData.inwardId) {
+          try {
+            console.log('Fetching commodity/variety from inward data for inwardId:', docData.inwardId);
+            const inwardCollection = collection(db, 'inward');
+            const inwardQuery = query(
+              inwardCollection,
+              where('inwardId', '==', docData.inwardId)
+            );
+            const inwardSnapshot = await getDocs(inwardQuery);
+            
+            if (!inwardSnapshot.empty) {
+              const inwardData = inwardSnapshot.docs[0].data();
+              console.log('Found inward data for commodity/variety:', inwardData);
+              
+              if (!commodity) commodity = inwardData.commodity || '';
+              if (!variety) variety = inwardData.varietyName || inwardData.variety || '';
+              
+              console.log('Enhanced commodity:', commodity, 'variety:', variety);
+            }
+          } catch (error) {
+            console.log('Error fetching commodity/variety from inward:', error);
           }
         }
         
@@ -147,16 +220,20 @@ export default function OutwardReportsPage() {
           doNumber: docData.doCode || docData.doNumber || '',
           roNumber: docData.srwrNo || docData.roNumber || '',
           warehouseName: docData.warehouseName || '',
-          warehouseType: warehouseType,
+          warehouseType: warehouseType || 'N/A',
           client: docData.client || '',
-          commodity: docData.commodity || '',
-          varietyName: docData.varietyName || docData.variety || '',
+          commodity: commodity,
+          varietyName: variety,
           outwardBags: docData.outwardBags || docData.bags || '',
           outwardQty: docData.outwardQuantity || docData.quantity || '',
           totalValue: docData.totalValue || docData.value || '',
           vehicleNumber: docData.vehicleNumber || '',
           gatepass: docData.gatepass || '',
           status: docData.outwardStatus || docData.status || 'Active',
+          // Additional warehouse details
+          warehouseCode: warehouseCode,
+          warehouseAddress: warehouseAddress,
+          typeOfBusiness: businessType,
           ...docData
         };
       }));
@@ -229,8 +306,9 @@ export default function OutwardReportsPage() {
     
     const headers = [
       'Date', 'SR Number', 'Outward ID', 'Inward ID', 'DO Number', 'RO Number', 
-      'Warehouse Name', 'Warehouse Type', 'Client', 'Commodity', 'Variety', 
-      'Outward Bags', 'Outward Qty (MT)', 'Total Value', 'Vehicle Number', 'Gatepass', 'Status'
+      'Warehouse Name', 'Warehouse Type', 'Warehouse Code', 'Warehouse Address', 'Type of Business',
+      'Client', 'Commodity', 'Variety', 'Outward Bags', 'Outward Qty (MT)', 'Total Value', 
+      'Vehicle Number', 'Gatepass', 'Status'
     ];
     
     const csvContent = [
@@ -244,6 +322,9 @@ export default function OutwardReportsPage() {
         row.roNumber || '',
         row.warehouseName || '',
         row.warehouseType || '',
+        row.warehouseCode || '',
+        row.warehouseAddress || '',
+        row.typeOfBusiness || '',
         row.client || '',
         row.commodity || '',
         row.varietyName || '',
@@ -363,6 +444,14 @@ export default function OutwardReportsPage() {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Dashboard
             </button>
+            <Button 
+              onClick={fetchOutwardData}
+              variant="outline"
+              className="inline-flex items-center"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Refresh Data
+            </Button>
           </div>
           
           <div className="text-center flex flex-col items-center">
@@ -680,6 +769,21 @@ export default function OutwardReportsPage() {
                       {visibleColumns.includes('warehouseType') && (
                         <td className="border border-gray-200 px-4 py-2">
                           {item.warehouseType || 'N/A'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('warehouseCode') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.warehouseCode || 'N/A'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('warehouseAddress') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.warehouseAddress || 'N/A'}
+                        </td>
+                      )}
+                      {visibleColumns.includes('typeOfBusiness') && (
+                        <td className="border border-gray-200 px-4 py-2">
+                          {item.typeOfBusiness || 'N/A'}
                         </td>
                       )}
                       {visibleColumns.includes('client') && (
