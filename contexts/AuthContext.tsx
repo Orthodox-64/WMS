@@ -10,8 +10,11 @@ import {
 import { useRouter } from "next/navigation";
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { emailService } from '@/lib/email-service';
+import { loginAttemptService } from '@/lib/login-attempts';
+import { validatePassword } from '@/lib/password-validator';
 
-type UserRole = "maker" | "checker" | "admin" | null;
+type UserRole = "maker" | "checker" | null;
 
 interface User {
   id: string;
@@ -25,7 +28,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   register: (username: string, email: string, password: string, role: UserRole) => Promise<void>;
-  login: (username: string, email: string, password: string) => Promise<void>;
+  login: (username: string, email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -47,6 +50,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (username: string, email: string, password: string, role: UserRole) => {
     try {
+      // Validate password using the new validation system
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.isValid) {
+        const failedRules = Object.entries(passwordValidation.rules)
+          .filter(([_, rule]) => !rule.passed && rule.required)
+          .map(([_, rule]) => rule.label);
+        
+        throw new Error(`Password validation failed: ${failedRules.join(', ')}`);
+      }
+
       // Check if username is already taken
       const usernameQuery = query(
         collection(db, 'users'),
@@ -56,6 +69,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (!usernameSnapshot.empty) {
         throw new Error("Username is already taken");
+      }
+
+      // Check if email is already registered
+      const emailQuery = query(
+        collection(db, 'users'),
+        where('email', '==', email)
+      );
+      const emailSnapshot = await getDocs(emailQuery);
+      
+      if (!emailSnapshot.empty) {
+        throw new Error("Email ID already used, please try to register with new email ID");
       }
 
       // Create new user document
@@ -81,8 +105,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (username: string, email: string, password: string) => {
+  const login = async (username: string, email: string, password: string): Promise<User> => {
     try {
+      // Get user's IP address for attempt tracking
+      let ipAddress: string | undefined;
+      try {
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipResponse.json();
+        ipAddress = ipData.ip;
+      } catch (ipError) {
+        console.warn('Could not get IP address:', ipError);
+      }
+
+      // Check if user is currently blocked
+      const blockCheck = loginAttemptService.checkIfBlocked(username, ipAddress);
+      if (blockCheck.isBlocked) {
+        throw new Error(blockCheck.message);
+      }
+
       // For demo purposes, allow login with any username if it exists
       // In production, you'd want to implement proper password hashing and verification
       const userQuery = query(
@@ -91,25 +131,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       const userSnapshot = await getDocs(userQuery);
       
-      if (userSnapshot.empty) {
-        throw new Error("Username not found. Please check your username or register a new account.");
-      }
-
-      const userData = userSnapshot.docs[0].data() as User;
+      let userData: User;
       
-      // Basic validation - in production, implement proper password verification
-      if (!password || password.length < 3) {
-        throw new Error("Please enter a valid password");
+      if (userSnapshot.empty) {
+        // Create a demo user if username doesn't exist
+        const userRef = doc(collection(db, 'users'));
+        userData = {
+          id: userRef.id,
+          username,
+          email: email || `${username}@demo.com`,
+          role: "maker",
+          createdAt: new Date().toISOString()
+        };
+        await setDoc(userRef, userData);
+      } else {
+        userData = userSnapshot.docs[0].data() as User;
       }
+      
+      // Record successful login attempt
+      loginAttemptService.recordSuccessfulAttempt(username, ipAddress);
       
       // Store user in local storage
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
       
+      // Send login notification email
+      try {
+        await emailService.sendLoginNotification({
+          username: userData.username,
+          email: userData.email,
+          role: userData.role || 'maker',
+          loginTime: new Date().toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            timeZoneName: 'short'
+          }),
+          ipAddress
+        });
+        console.log('Login notification email sent successfully');
+      } catch (emailError) {
+        console.error('Failed to send login notification email:', emailError);
+        // Don't throw error, just log it - login should still succeed
+      }
+      
       router.push("/dashboard");
+      return userData;
     } catch (error) {
       console.error("Login error:", error);
-      throw error;
+      
+      // Record failed login attempt
+      try {
+        let ipAddress: string | undefined;
+        try {
+          const ipResponse = await fetch('https://api.ipify.org?format=json');
+          const ipData = await ipResponse.json();
+          ipAddress = ipData.ip;
+        } catch (ipError) {
+          console.warn('Could not get IP address:', ipError);
+        }
+        
+        const attemptResult = loginAttemptService.recordFailedAttempt(username, ipAddress);
+        
+        // If user is blocked, throw the block message
+        if (attemptResult.isBlocked) {
+          throw new Error(attemptResult.message);
+        }
+        
+        // If not blocked, throw the remaining attempts message
+        throw new Error(attemptResult.message);
+      } catch (attemptError) {
+        // Re-throw the attempt error (which includes block status)
+        throw attemptError;
+      }
     }
   };
 

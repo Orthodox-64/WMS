@@ -4,11 +4,17 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
+import { UsernameInput } from "@/components/ui/username-input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from 'next/navigation';
 import { useAuth } from "@/contexts/AuthContext";
+import { LoginAttemptStatus } from "@/components/login-attempt-status";
+import { PasswordResetForm } from "@/components/password-reset-form";
+import { RegistrationSuccessPopup } from "@/components/registration-success-popup";
+import { registrationOTPService } from "@/lib/registration-otp-service";
+import { registrationNotificationService } from "@/lib/registration-notification-service";
 
 interface AuthFormsProps {
   onFormTypeChange: (isLogin: boolean) => void;
@@ -18,12 +24,17 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
   // States
   const [isLogin, setIsLogin] = useState(true);
   const [isResetPassword, setIsResetPassword] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"maker" | "checker" | "admin">("maker");
-  const [showAlert, setShowAlert] = useState(false);
-  const [alertMessage, setAlertMessage] = useState("");
+  const [role, setRole] = useState<"maker" | "checker">("maker");
+  const [isUsernameValid, setIsUsernameValid] = useState(false);
+  const [showRegistrationOTP, setShowRegistrationOTP] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpId, setOtpId] = useState<string | null>(null);
+  const [showRegistrationSuccess, setShowRegistrationSuccess] = useState(false);
+  const [registrationData, setRegistrationData] = useState<any>(null);
   
   const { toast } = useToast();
   const router = useRouter();
@@ -34,31 +45,96 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
     try {
       if (isLogin) {
         // Call the login function from auth context
-        await login(username, email, password);
+        const userData = await login(username, email, password);
 
-        // Show success message
+        // Show success toast with username and role
         toast({
-          title: "Success",
-          description: "Successfully logged in!",
+          title: "Welcome to Dashboard!",
+          description: `Logged in as ${userData.username} (${userData.role?.toUpperCase()})`,
           variant: "default",
           className: "bg-green-100 border-green-500 text-green-700"
         });
       } else {
-        // Register - Just use the auth context register function
-        await register(username, email, password, role);
+        // Register - Send OTP first
+        if (!showRegistrationOTP) {
+          // Send OTP for registration
+          const otpResult = await registrationOTPService.sendRegistrationOTP(email, username);
+          
+          if (otpResult.success) {
+            setOtpId(otpResult.otpId!);
+            setShowRegistrationOTP(true);
+            toast({
+              title: "OTP Sent",
+              description: "Please check your email for the OTP code",
+              variant: "default",
+              className: "bg-blue-100 border-blue-500 text-blue-700"
+            });
+          } else {
+            throw new Error(otpResult.message);
+          }
+        } else {
+          // Verify OTP and complete registration
+          if (!otpId) {
+            throw new Error("OTP session not found. Please try again.");
+          }
 
-        setAlertMessage("Registration successful! Please log in to continue.");
-        setShowAlert(true);
-        setTimeout(() => {
-          setShowAlert(false);
-          setIsLogin(true);
-          onFormTypeChange(true);
-        }, 2000);
+          const otpResult = await registrationOTPService.verifyRegistrationOTP(otpId, otpCode);
+          
+          if (!otpResult.success) {
+            throw new Error(otpResult.message);
+          }
+
+          // Complete registration
+          await register(username, email, password, role);
+
+          // Send registration notification email
+          try {
+            await registrationNotificationService.sendRegistrationNotification({
+              to: email,
+              toName: username,
+              username: username,
+              password: password,
+              role: role,
+              registrationTime: new Date().toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZoneName: 'short'
+              })
+            });
+          } catch (emailError) {
+            console.error('Failed to send registration notification email:', emailError);
+            // Don't throw error, registration should still succeed
+          }
+
+          // Show registration success popup
+          setRegistrationData({
+            username,
+            email,
+            role,
+            password,
+            registrationTime: new Date().toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              timeZoneName: 'short'
+            })
+          });
+          setShowRegistrationSuccess(true);
+        }
       }
     } catch (error) {
+      // Show specific error message from login attempt tracking
+      const errorMessage = error instanceof Error ? error.message : "Please try again with valid credentials";
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An error occurred",
+        title: "Login Error",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -87,16 +163,78 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
   const handleFormTypeChange = (newIsLogin: boolean) => {
     setIsLogin(newIsLogin);
     setIsResetPassword(false);
+    setShowPasswordReset(false);
+    setShowRegistrationOTP(false);
+    setShowRegistrationSuccess(false);
     onFormTypeChange(newIsLogin);
     setUsername("");
     setEmail("");
     setPassword("");
-    setShowAlert(false);
+    setOtpCode("");
+    setOtpId(null);
+    setIsUsernameValid(false);
   };
 
+  const handlePasswordReset = () => {
+    setShowPasswordReset(true);
+    setIsResetPassword(false);
+  };
+
+  const handleBackFromReset = () => {
+    setShowPasswordReset(false);
+    setIsResetPassword(false);
+  };
+
+  const handleRegistrationSuccessClose = () => {
+    setShowRegistrationSuccess(false);
+    setShowRegistrationOTP(false);
+    setOtpCode("");
+    setOtpId(null);
+    setIsLogin(true);
+    onFormTypeChange(true);
+  };
+
+  const handleResendOTP = async () => {
+    if (!email || !username) return;
+    
+    try {
+      const otpResult = await registrationOTPService.sendRegistrationOTP(email, username);
+      
+      if (otpResult.success) {
+        setOtpId(otpResult.otpId!);
+        toast({
+          title: "OTP Resent",
+          description: "A new OTP has been sent to your email",
+          variant: "default",
+          className: "bg-blue-100 border-blue-500 text-blue-700"
+        });
+      } else {
+        throw new Error(otpResult.message);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to resend OTP",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Show password reset form
+  if (showPasswordReset) {
+    return (
+      <div className="relative">
+        <PasswordResetForm 
+          onBackToLogin={handleBackFromReset}
+          className="w-[400px]"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="relative">
-      <Card className="w-[350px] border-2 border-orange-500 bg-white/95 shadow-lg backdrop-blur-sm">
+    <div className="relative w-full max-w-md mx-auto px-4">
+      <Card className="w-full border-2 border-orange-500 bg-white/95 shadow-lg backdrop-blur-sm">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-orange-600">
             {isResetPassword ? "Reset Password" : isLogin ? "Login" : "Register"}
@@ -112,15 +250,23 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
 
         <form onSubmit={isResetPassword ? handleResetPassword : handleSubmit}>
           <CardContent className="space-y-4">
+            {isLogin && !isResetPassword && username && (
+              <LoginAttemptStatus 
+                username={username}
+                onStatusChange={(isBlocked, remainingAttempts) => {
+                  // You can add additional logic here if needed
+                }}
+              />
+            )}
             {!isResetPassword && (
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-orange-600">Username</Label>
-                <Input
-                  id="username"
-                  placeholder="Enter your username"
+                <UsernameInput
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
+                  onChange={setUsername}
+                  onValidationChange={setIsUsernameValid}
+                  placeholder="Enter your username (4+ chars, alphabets only, first letter capital)"
+                  showValidation={!isLogin}
                   className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
                 />
               </div>
@@ -144,29 +290,64 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
             {!isResetPassword && (
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-orange-600">Password</Label>
-                <Input
+                <PasswordInput
                   id="password"
-                  type="password"
-                  placeholder="Enter your password"
+                  placeholder="Enter your password (Capital + lowercase + numbers + special chars)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
+                  showValidation={true}
                 />
+              </div>
+            )}
+
+            {/* OTP Verification Step for Registration */}
+            {showRegistrationOTP && (
+              <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold text-blue-800 mb-2">Verify Your Email</h3>
+                  <p className="text-blue-600 text-sm">
+                    Enter the 6-digit OTP sent to <strong>{email}</strong>
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="otp" className="text-blue-600">OTP Code</Label>
+                  <Input
+                    id="otp"
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    maxLength={6}
+                    required
+                    className="border-blue-500 focus:ring-blue-500 focus:border-blue-500 text-blue-600 placeholder:text-blue-400 text-center text-2xl tracking-widest"
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResendOTP}
+                    className="flex-1 border-blue-500 text-blue-600 hover:bg-blue-50"
+                  >
+                    Resend OTP
+                  </Button>
+                </div>
               </div>
             )}
 
             {!isLogin && !isResetPassword && (
               <div className="space-y-2">
                 <Label className="text-orange-600">Role</Label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div className="flex items-center space-x-2">
                     <input
                       type="radio"
                       id="maker"
                       value="maker"
                       checked={role === "maker"}
-                      onChange={(e) => setRole(e.target.value as "maker" | "checker" | "admin")}
+                      onChange={(e) => setRole(e.target.value as "maker" | "checker")}
                       className="text-orange-500 focus:ring-orange-500"
                     />
                     <Label htmlFor="maker" className="text-green-600 text-sm">Maker</Label>
@@ -177,21 +358,10 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
                       id="checker"
                       value="checker"
                       checked={role === "checker"}
-                      onChange={(e) => setRole(e.target.value as "maker" | "checker" | "admin")}
+                      onChange={(e) => setRole(e.target.value as "maker" | "checker")}
                       className="text-orange-500 focus:ring-orange-500"
                     />
                     <Label htmlFor="checker" className="text-green-600 text-sm">Checker</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="admin"
-                      value="admin"
-                      checked={role === "admin"}
-                      onChange={(e) => setRole(e.target.value as "maker" | "checker" | "admin")}
-                      className="text-orange-500 focus:ring-orange-500"
-                    />
-                    <Label htmlFor="admin" className="text-green-600 text-sm">Admin</Label>
                   </div>
                 </div>
               </div>
@@ -202,8 +372,12 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
             <Button
               type="submit"
               className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              disabled={!isLogin && !isUsernameValid && !showRegistrationOTP}
             >
-              {isResetPassword ? "Reset Password" : isLogin ? "Login" : "Register"}
+              {isResetPassword ? "Reset Password" : 
+               isLogin ? "Login" : 
+               showRegistrationOTP ? "Verify OTP & Register" : 
+               "Send OTP & Register"}
             </Button>
 
             {isLogin && !isResetPassword && (
@@ -211,7 +385,7 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
                 type="button"
                 variant="link"
                 className="text-green-600 hover:text-green-700"
-                onClick={() => setIsResetPassword(true)}
+                onClick={handlePasswordReset}
               >
                 Forgot Password?
               </Button>
@@ -241,6 +415,19 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Registration Success Popup */}
+      {registrationData && (
+        <RegistrationSuccessPopup
+          isOpen={showRegistrationSuccess}
+          onClose={handleRegistrationSuccessClose}
+          username={registrationData.username}
+          email={registrationData.email}
+          role={registrationData.role}
+          password={registrationData.password}
+          registrationTime={registrationData.registrationTime}
+        />
+      )}
     </div>
   );
 }

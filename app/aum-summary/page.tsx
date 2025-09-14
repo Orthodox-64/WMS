@@ -102,46 +102,48 @@ export default function AUMSummaryPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-4 md:space-y-6 lg:space-y-8">
         {/* Header row */}
-        <div className="flex items-center justify-between">
-          <button className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-4">
+          <button className="inline-block text-sm md:text-lg font-semibold tracking-tight bg-orange-500 text-white px-3 md:px-4 py-2 rounded-md hover:bg-orange-600 transition-colors">
             ← Dashboard
           </button>
           <div className="flex-1 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-2 md:border-b-4 border-green-500 pb-1 md:pb-2 px-3 md:px-6 py-2 md:py-3 bg-orange-100 rounded-lg">
               AUM Summary
             </h1>
           </div>
-          <Button className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 shadow-lg">
-            <Plus className="w-5 h-5 mr-2" />
-            Add New AUM
+          <Button className="bg-green-500 hover:bg-green-600 text-white px-3 md:px-6 py-2 md:py-3 shadow-lg text-sm md:text-base">
+            <Plus className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">Add New AUM</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         </div>
 
         {/* Search & Export Card */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Search & Export</CardTitle>
+          <CardHeader className="bg-green-50 p-3 md:p-6">
+            <CardTitle className="text-green-700 text-sm md:text-base">Search & Export</CardTitle>
           </CardHeader>
-          <CardContent className="p-4 space-y-4">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-3 md:p-4 space-y-3 md:space-y-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4">
               <div className="relative flex-grow">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-gray-400" />
                 <Input
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   placeholder="Search by state or commodity..."
-                  className="border-green-300 focus:border-green-500 pl-10"
+                  className="border-green-300 focus:border-green-500 pl-8 md:pl-10 text-sm md:text-base"
                 />
               </div>
               <Button
                 onClick={handleExportCSV}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
+                className="bg-blue-500 hover:bg-blue-600 text-white text-sm md:text-base px-3 md:px-4 py-2"
                 disabled={loading || !summaryRows.length}
               >
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
+                <Download className="w-4 h-4 mr-1 md:mr-2" />
+                <span className="hidden sm:inline">Export CSV</span>
+                <span className="sm:hidden">Export</span>
               </Button>
             </div>
           </CardContent>
@@ -149,19 +151,21 @@ export default function AUMSummaryPage() {
 
         {/* Table */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-green-700 text-xl">AUM Summary Table</CardTitle>
+          <CardHeader className="p-3 md:p-6">
+            <CardTitle className="text-green-700 text-lg md:text-xl">AUM Summary Table</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <DataTable
-              columns={columns}
-              data={summaryRows}
-              isLoading={loading}
-              error={error || undefined}
-              wrapperClassName="border-green-300"
-              headClassName="bg-orange-100 text-orange-600 font-bold"
-              cellClassName="text-green-800"
-            />
+            <div className="overflow-x-auto">
+              <DataTable
+                columns={columns}
+                data={summaryRows}
+                isLoading={loading}
+                error={error || undefined}
+                wrapperClassName="border-green-300"
+                headClassName="bg-orange-100 text-orange-600 font-bold"
+                cellClassName="text-green-800"
+              />
+            </div>
           </CardContent>
         </Card>
       </div>

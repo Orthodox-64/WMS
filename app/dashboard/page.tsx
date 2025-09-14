@@ -21,20 +21,20 @@ export default function DashboardPage() {
         ></div>
 
         {/* Main dashboard content */}
-        <div className="relative z-10 space-y-8">
+        <div className="relative z-10 space-y-4 md:space-y-6 lg:space-y-8">
           <button onClick={() => window.location.reload()}>
-            <h1 className="inline-block text-xl font-semibold tracking-tight bg-orange-500 text-white px-3 py-1 rounded-md hover:bg-orange-600 transition-colors">Dashboard</h1>
+            <h1 className="inline-block text-lg md:text-xl font-semibold tracking-tight bg-orange-500 text-white px-2 md:px-3 py-1 rounded-md hover:bg-orange-600 transition-colors">Dashboard</h1>
           </button>
 
           {/* Pie Charts */}
           <DashboardCharts />
 
           {/* Info Panel */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-1">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="lg:col-span-1">
               <SidebarStats />
             </div>
-            <div className="md:col-span-2">
+            <div className="lg:col-span-2">
               <DistributionChart />
             </div>
           </div>

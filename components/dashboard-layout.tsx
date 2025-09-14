@@ -34,8 +34,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="flex flex-col h-screen bg-background">
       <Header />
-      <main className="flex-grow overflow-auto p-6">
-        {children}
+      <main className="flex-grow overflow-auto p-2 md:p-4 lg:p-6">
+        <div className="w-full max-w-7xl mx-auto">
+          {children}
+        </div>
       </main>
       <Footer />
     </div>

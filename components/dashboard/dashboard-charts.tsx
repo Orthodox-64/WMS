@@ -137,17 +137,17 @@ function PieChartCard({ title, data, showVarietiesTooltip = false }: { title: st
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Card className="cursor-pointer bg-white">
-          <CardHeader>
-            <CardTitle className="inline-block w-fit border-b-2 border-green-500 pb-2">{title}</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm md:text-base inline-block w-fit border-b-2 border-green-500 pb-1 md:pb-2">{title}</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[250px] md:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={data}
                   cx="50%"
                   cy="50%"
-                  outerRadius={80}
+                  outerRadius={60}
                   fill="#8884d8"
                   dataKey="value"
                   label={({ name, percent }) =>
@@ -164,7 +164,7 @@ function PieChartCard({ title, data, showVarietiesTooltip = false }: { title: st
           </CardContent>
         </Card>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl w-full max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl w-full max-h-[80vh] overflow-y-auto mx-2 md:mx-0">
         <CommoditySummaryTable showHeader={true} />
       </DialogContent>
     </Dialog>
@@ -178,21 +178,21 @@ export function DashboardCharts() {
 
   if (commodityLoading || aumLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Loading...</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm md:text-base">Loading...</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px] flex items-center justify-center">
-            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <CardContent className="h-[250px] md:h-[300px] flex items-center justify-center">
+            <div className="w-6 h-6 md:w-8 md:h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle>Loading...</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm md:text-base">Loading...</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px] flex items-center justify-center">
-            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <CardContent className="h-[250px] md:h-[300px] flex items-center justify-center">
+            <div className="w-6 h-6 md:w-8 md:h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </CardContent>
         </Card>
       </div>
@@ -200,7 +200,7 @@ export function DashboardCharts() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
       <PieChartCard
         title="Commodity in Quantity"
         data={commodityData}
@@ -209,17 +209,17 @@ export function DashboardCharts() {
       <Dialog open={openAUM} onOpenChange={setOpenAUM}>
         <DialogTrigger asChild>
           <Card className="cursor-pointer bg-white">
-            <CardHeader>
-              <CardTitle className="inline-block w-fit border-b-2 border-green-500 pb-2">AUM Statewise</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm md:text-base inline-block w-fit border-b-2 border-green-500 pb-1 md:pb-2">AUM Statewise</CardTitle>
             </CardHeader>
-            <CardContent className="h-[300px]">
+            <CardContent className="h-[250px] md:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={aumData}
                     cx="50%"
                     cy="50%"
-                    outerRadius={80}
+                    outerRadius={60}
                     fill="#8884d8"
                     dataKey="value"
                     label={({ name, percent }) =>
@@ -236,7 +236,7 @@ export function DashboardCharts() {
             </CardContent>
           </Card>
         </DialogTrigger>
-        <DialogContent className="max-w-6xl w-full max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl w-full max-h-[80vh] overflow-y-auto mx-2 md:mx-0">
           <AUMSummaryTable showHeader={true} />
         </DialogContent>
       </Dialog>
