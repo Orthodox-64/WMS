@@ -11,25 +11,47 @@ import { collection, getDocs } from 'firebase/firestore';
 import { DataTable } from '@/components/data-table';
 import { useRouter } from "next/navigation";
 
+// Helper function to normalize status text for display
+const normalizeStatusText = (status: string) => {
+  const normalizedStatus = status?.toLowerCase().trim() || '';
+  
+  // Capitalize first letter for each status
+  if (normalizedStatus === 'pending') return 'Pending';
+  if (normalizedStatus === 'approved' || normalizedStatus === 'approve') return 'Approved';
+  if (normalizedStatus === 'rejected' || normalizedStatus === 'reject') return 'Rejected';
+  if (normalizedStatus === 'reactivate') return 'Reactivate';
+  if (normalizedStatus === 'resubmit' || normalizedStatus === 'resubmitted') return 'Resubmit';
+  if (normalizedStatus === 'closed') return 'Closed';
+  if (normalizedStatus === 'activate' || normalizedStatus === 'activated' || normalizedStatus === 'active') return 'Active';
+  
+  // Default - capitalize first letter for any other status
+  return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+};
+
 // Helper function to get status styling
 const getStatusStyling = (status: string) => {
   const normalizedStatus = status?.toLowerCase().trim() || '';
   
-  // Pending/inactive/closed - yellow background, black font
-  if (normalizedStatus === 'pending' || normalizedStatus === 'inactive' || normalizedStatus === 'closed') {
-    return 'bg-yellow-100 text-black px-2 py-1 rounded-full text-xs font-medium inline-block';
+  // Pending - yellow background, brown font (same as closed)
+  if (normalizedStatus === 'pending') {
+    return 'bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium inline-block';
   }
   
-  // Approve/activate/reactive - light green background, dark green font
+  // Closed - yellow background, brown font
+  if (normalizedStatus === 'closed') {
+    return 'bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium inline-block';
+  }
+  
+  // Approved/Activate/Reactivate - light green background, dark green font
   if (normalizedStatus === 'approved' || normalizedStatus === 'activate' || normalizedStatus === 'reactivate' || 
-      normalizedStatus === 'approve' || normalizedStatus === 'reactive' || normalizedStatus === 'activated' || normalizedStatus === 'active') {
+      normalizedStatus === 'approve' || normalizedStatus === 'activated' || normalizedStatus === 'active') {
     return 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium inline-block';
   }
   
-  // Resubmit/reject - baby pink background, red font
+  // Rejected/Resubmit - light red background, red font
   if (normalizedStatus === 'resubmit' || normalizedStatus === 'reject' || normalizedStatus === 'rejected' || 
       normalizedStatus === 'resubmitted') {
-    return 'bg-pink-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
+    return 'bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium inline-block';
   }
   
   // Default styling for unknown status
@@ -67,8 +89,9 @@ const columns = [
     header: "Warehouse Status",
     cell: ({ row }: any) => {
       const status = row.getValue("status");
+      const normalizedText = normalizeStatusText(status);
       const statusClass = getStatusStyling(status);
-      return <span className={statusClass}>{status}</span>;
+      return <span className={statusClass}>{normalizedText}</span>;
     },
   },
 ];
@@ -186,10 +209,28 @@ export default function WarehouseStatusPage() {
           </CardContent>
         </Card>
 
+        {/* Entry Count - Positioned between search and table */}
+        <div className="w-full py-4 bg-gray-100">
+          <div className="flex justify-start">
+            <div className="bg-blue-50 border-2 border-blue-500 px-6 py-3 rounded-lg shadow-md">
+              <span className="text-xl font-bold text-blue-800">
+                📊 Total Entries: {summaryRows?.length || 0}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Debug - This should definitely be visible */}
+        <div className="w-full p-4 bg-red-100 border-2 border-red-500">
+          <h2 className="text-xl font-bold text-red-800">
+            DEBUG: Entries Count = {summaryRows?.length || 0} | Loading: {loading ? 'Yes' : 'No'}
+          </h2>
+        </div>
+
         {/* Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-green-700 text-xl">Warehouse Status Table</CardTitle>
+            <CardTitle className="text-green-700 text-xl text-left">Warehouse Status Table</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <DataTable

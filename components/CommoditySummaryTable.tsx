@@ -29,7 +29,7 @@ const columns = [
     header: "AUM-Asset Under Management(Rs/MT)",
     cell: ({ row }: { row: Row<any> }) => {
       const amount = parseFloat(row.getValue("aum"));
-      const formatted = amount.toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+      const formatted = amount.toFixed(2);
       return <span className="text-green-800 text-center w-full block">{formatted}</span>;
     },
   },
@@ -122,13 +122,19 @@ export default function CommoditySummaryTable({ showHeader = false }) {
             </div>
               <Button
                 onClick={handleExportCSV}
-              className="bg-blue-500 hover:bg-blue-600 text-white text-sm md:text-base px-3 md:px-4 py-2"
+              className="bg-orange-500 hover:bg-orange-900 text-white text-sm md:text-base px-3 md:px-4 py-2"
               disabled={loading || !summaryRows.length}
               >
               <Download className="w-4 h-4 mr-1 md:mr-2" />
               <span className="hidden sm:inline">Export CSV</span>
               <span className="sm:hidden">Export</span>
               </Button>
+            </div>
+            {/* Entry Count */}
+            <div className="flex justify-start">
+              <span className="text-sm text-gray-600 font-medium">
+                Total Entries: {summaryRows.length}
+              </span>
             </div>
         </CardContent>
       </Card>

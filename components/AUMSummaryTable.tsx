@@ -32,7 +32,7 @@ const columns = [
     header: "AUM-Asset Under Management(Rs/MT)",
     cell: ({ row }: { row: Row<any> }) => {
       const amount = parseFloat(row.getValue("aum"));
-      const formatted = amount.toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+      const formatted = amount.toFixed(2);
       return <span className="text-green-800 w-full flex justify-center">{formatted}</span>;
     },
     meta: { align: 'center' },
@@ -119,7 +119,7 @@ export default function AUMSummaryTable({ showHeader = false }) {
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 placeholder="Search by state or commodity..."
-                className="border-green-300 focus:border-green-500 pl-10 text-center"
+                className="border-green-300 focus:border-green-500 pl-10"
               />
             </div>
             <Button
@@ -130,6 +130,12 @@ export default function AUMSummaryTable({ showHeader = false }) {
               <Download className="w-4 h-4 mr-2" />
               Export CSV
             </Button>
+          </div>
+          {/* Entry Count */}
+          <div className="flex justify-start">
+            <span className="text-sm text-gray-600 font-medium">
+              Total Entries: {summaryRows.length}
+            </span>
           </div>
         </CardContent>
       </Card>

@@ -15,6 +15,8 @@ const roleBasedRoutes: Record<string, Set<string>> = {
     '/dashboard',
     '/inward',
     '/outward',
+    '/delivery-order',
+    '/ro',
     '/commodity-summary',
     '/aum-summary'
   ]),
@@ -22,6 +24,8 @@ const roleBasedRoutes: Record<string, Set<string>> = {
     '/dashboard',
     '/surveys',
     '/reports',
+    '/delivery-order',
+    '/ro',
     '/commodity-summary',
     '/aum-summary'
   ]),

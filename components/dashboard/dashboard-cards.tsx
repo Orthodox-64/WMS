@@ -1,3 +1,5 @@
+"use client";
+
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import {
@@ -62,7 +64,7 @@ export function DashboardCards() {
       {dashboardCards.map((card) => {
         const Icon = card.icon;
         return (
-          <Link key={card.title} href={card.href} className="w-full">
+          <Link key={card.title} href={card.href}>
             <Card className="hover:shadow-md transition-all duration-300 cursor-pointer bg-gray-100 rounded-lg border border-gray-200">
               <CardContent className="p-3 md:p-4 flex flex-col items-center justify-center space-y-2">
                 <div className="p-2 md:p-2.5 rounded-md bg-white">

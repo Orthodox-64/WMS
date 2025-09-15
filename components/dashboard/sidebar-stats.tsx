@@ -46,21 +46,24 @@ export function SidebarStats() {
           if (!data.status || data.status === 'pending') pendingSurveys++;
         });
 
-        // Pending Inward Entries (inward entries with status not 'approve')
+        // Pending Inward Entries (inward entries with status not 'approved' or 'approve')
         const inwardSnap = await getDocs(collection(db, 'inward'));
         let pendingInward = 0;
         inwardSnap.docs.forEach(doc => {
           const data = doc.data();
-          if (!data.status || data.status !== 'approve') pendingInward++;
+          const status = (data.status || '').toLowerCase().trim();
+          if (status !== 'approved' && status !== 'approve') {
+            pendingInward++;
+          }
         });
 
         // Pending Outward Entries (outward entries with status not 'approved')
-        const outwardSnap = await getDocs(collection(db, 'outward'));
+        const outwardSnap = await getDocs(collection(db, 'outwards'));
         let pendingOutward = 0;
         outwardSnap.docs.forEach(doc => {
           const data = doc.data();
-          const status = data.outwardStatus || data.status;
-          if (!status || (status !== 'approved' && status !== 'approve')) {
+          const status = ((data.outwardStatus || data.status) || '').toLowerCase().trim();
+          if (status !== 'approved' && status !== 'approve') {
             pendingOutward++;
           }
         });
@@ -70,7 +73,10 @@ export function SidebarStats() {
         let pendingDO = 0;
         doSnap.docs.forEach(doc => {
           const data = doc.data();
-          if (!data.doStatus || (data.doStatus !== 'approved' && data.doStatus !== 'approve')) pendingDO++;
+          const status = (data.doStatus || '').toLowerCase().trim();
+          if (status !== 'approved' && status !== 'approve') {
+            pendingDO++;
+          }
         });
 
         // Pending RO Entries (release order entries with status not 'approved')
@@ -78,17 +84,25 @@ export function SidebarStats() {
         let pendingRO = 0;
         roSnap.docs.forEach(doc => {
           const data = doc.data();
-          if (!data.roStatus || (data.roStatus !== 'approved' && data.roStatus !== 'approve')) pendingRO++;
+          const status = (data.roStatus || '').toLowerCase().trim();
+          if (status !== 'approved' && status !== 'approve') {
+            pendingRO++;
+          }
         });
 
-        setStats({
+        const newStats = {
           warehouseCount: warehouseSet.size,
           pendingSurveys,
           pendingInward,
           pendingOutward,
           pendingDO,
           pendingRO,
-        });
+        };
+        
+        // Debug logging
+        console.log('Stats fetched:', newStats);
+        
+        setStats(newStats);
       } catch (error) {
         console.error('Error fetching stats:', error);
         // Keep existing values on error
