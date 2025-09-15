@@ -2836,7 +2836,7 @@ export default function InwardPage() {
       const value = row[accessorKey];
   
       if (accessorKey === 'stacks' && Array.isArray(value)) {
-        return value.map((s: any) => s.stackNumber).join(', ');
+        return value.map((s: any) => `${s.stackNumber} (${s.numberOfBags} bags)`).join('; ');
       }
       if (accessorKey === 'labResults' && Array.isArray(value)) {
         return value.join(', ');
@@ -2859,21 +2859,64 @@ export default function InwardPage() {
       }
       return value ?? '';
     };
+
+    // Function to create detailed rows including nested data
+    const createDetailedRows = (dataToExport: any[]) => {
+      const detailedRows: any[] = [];
+      
+      dataToExport.forEach((row) => {
+        // Main row data
+        const mainRowData = visibleColumns.map(col => {
+          const cellValue = getCellContent(row, col);
+          const stringValue = String(cellValue).replace(/"/g, '""');
+          return `"${stringValue}"`;
+        }).join(',');
+        
+        detailedRows.push(mainRowData);
+        
+        // Add detailed stack information if stacks exist
+        if (row.stacks && Array.isArray(row.stacks) && row.stacks.length > 0) {
+          row.stacks.forEach((stack: any, stackIndex: number) => {
+            const stackDetailRow = visibleColumns.map(col => {
+              if (col.accessorKey === 'inwardCode') {
+                return `"  └─ Stack ${stackIndex + 1}"`;
+              } else if (col.accessorKey === 'stacks') {
+                return `"Stack: ${stack.stackNumber}, Bags: ${stack.numberOfBags}"`;
+              } else if (col.accessorKey === 'commodity') {
+                return `"Stack Details"`;
+              }
+              return '""'; // Empty for other columns
+            }).join(',');
+            
+            detailedRows.push(stackDetailRow);
+          });
+        }
+        
+        // Add lab results details if available
+        if (row.labResults && Array.isArray(row.labResults) && row.labResults.length > 0) {
+          const labDetailRow = visibleColumns.map(col => {
+            if (col.accessorKey === 'inwardCode') {
+              return `"  └─ Lab Results"`;
+            } else if (col.accessorKey === 'labResults') {
+              return `"${row.labResults.join('; ')}"`;
+            } else if (col.accessorKey === 'commodity') {
+              return `"Lab Parameters: ${row.dateOfSampling || 'N/A'}"`;
+            }
+            return '""';
+          }).join(',');
+          
+          detailedRows.push(labDetailRow);
+        }
+      });
+      
+      return detailedRows;
+    };
   
-    const csvHeaders = columns.map(c => (typeof c.header === 'string' ? c.header : c.accessorKey) || '').join(',');
-    const csvRows = dataToExport
-      .map(row =>
-        columns
-          .map(col => {
-            const cellValue = getCellContent(row, col);
-            const stringValue = String(cellValue).replace(/"/g, '""');
-            return `"${stringValue}"`;
-          })
-          .join(',')
-      )
-      .join('\\r\\n');
+    const csvHeaders = visibleColumns.map(c => (typeof c.header === 'string' ? c.header : c.accessorKey) || '').join(',');
+    const detailedRows = createDetailedRows(dataToExport);
+    const csvRows = detailedRows.join('\r\n');
   
-    const csvContent = `\\uFEFF${csvHeaders}\\r\\n${csvRows}`;
+    const csvContent = `\uFEFF${csvHeaders}\r\n${csvRows}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -5024,6 +5067,15 @@ export default function InwardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Entry Count Display */}
+      <div className="px-8 mb-4">
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 p-2 rounded">
+          <span className="text-blue-700 font-medium text-sm">
+            {searchTerm ? `Showing ${filteredData.length} of ${inwardData.length} entries` : `Total entries: ${filteredData.length}`}
+          </span>
+        </div>
+      </div>
       
       {/* Data Table */}
       <div className="px-8">
@@ -5049,7 +5101,7 @@ export default function InwardPage() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="ml-2">Columns</Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
++                <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
                   <DropdownMenuLabel>Show/Hide Columns</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuCheckboxItem
@@ -5279,21 +5331,14 @@ export default function InwardPage() {
               </div>
               <div>
                 <Label className="block font-semibold mb-1">Business Type</Label>
-                <Select value={form.businessType} onValueChange={v => setBaseForm(f => ({ ...f, businessType: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select Business Type" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cm">Collateral Management (CM)</SelectItem>
-                    <SelectItem value="pwh">Professional Warehousing (PWH)</SelectItem>
-                    <SelectItem value="ncdex">NCDEX</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input value={form.businessType ? getBusinessTypeLabel(form.businessType) : 'Auto-filled from survey'} readOnly placeholder="Auto-filled from survey" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label className="block font-semibold mb-1">Warehouse Address</Label>
-              <Input value={form.warehouseAddress} onChange={e => setBaseForm(f => ({ ...f, warehouseAddress: e.target.value }))} placeholder="Enter warehouse address" />
+              <Input value={form.warehouseAddress} readOnly placeholder="Auto-filled from warehouse data" />
             </div>
               <div>
                 <Label className="block font-semibold mb-1">Client Name</Label>
