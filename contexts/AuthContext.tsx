@@ -14,7 +14,7 @@ import { emailService } from '@/lib/email-service';
 import { loginAttemptService } from '@/lib/login-attempts';
 import { validatePassword } from '@/lib/password-validator';
 
-type UserRole = "maker" | "checker" | null;
+type UserRole = "maker" | "checker" | "admin" | null;
 
 interface User {
   id: string;
@@ -22,6 +22,7 @@ interface User {
   email: string;
   role: UserRole;
   createdAt: string;
+  isVerified: boolean;
 }
 
 interface AuthContextType {
@@ -89,16 +90,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username,
         email,
         role,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        isVerified: false
       };
 
       await setDoc(userRef, newUser);
       
-      // Store user in local storage
-      localStorage.setItem('user', JSON.stringify(newUser));
-      setUser(newUser);
-
-      router.push("/dashboard");
+      // Send admin notification for verification
+      try {
+        const { adminNotificationService } = await import('@/lib/admin-notification-service');
+        await adminNotificationService.sendAdminNotification({
+          userId: newUser.id,
+          username: newUser.username,
+          email: newUser.email,
+          role: newUser.role || 'maker',
+          registrationTime: new Date().toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            timeZoneName: 'short'
+          })
+        });
+        console.log('Admin notification sent for user verification');
+      } catch (adminEmailError) {
+        console.error('Failed to send admin notification:', adminEmailError);
+        // Don't throw error, registration should still succeed
+      }
+      
+      // Don't automatically login unverified users
+      // Registration success popup will handle the flow
     } catch (error) {
       console.error("Registration error:", error);
       throw error;
@@ -141,11 +164,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           username,
           email: email || `${username}@demo.com`,
           role: "maker",
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          isVerified: true  // Demo users are auto-verified for testing
         };
         await setDoc(userRef, userData);
       } else {
         userData = userSnapshot.docs[0].data() as User;
+      }
+      
+      // Check if user is verified by admin (skip verification for admin role)
+      if (!userData.isVerified && userData.role !== 'admin') {
+        throw new Error("Your account is pending admin verification. You will be notified via email once approved. Please contact admin if you have been waiting for more than 24 hours.");
       }
       
       // Record successful login attempt
