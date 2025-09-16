@@ -55,7 +55,7 @@ const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
   const srNo = data.srNo || data.inwardId || '-';
   const cadNo = data.cadNo || data.cadNumber || '-';
   const srGenerationDate = data.srGenerationDate || '-';
-  const insurance = data.insuranceDetails[0] || {};
+  const insurance = (Array.isArray(data.insuranceDetails) && data.insuranceDetails[0]) ? data.insuranceDetails[0] : null;
   const receiptType = (data.receiptType || 'SR').toUpperCase();
   const isWR = receiptType === 'WR';
 
@@ -166,6 +166,21 @@ const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
           </tr>
         </tbody>
       </table>
+      {/* Insurance block (defensive) */}
+      <div style={{ marginTop: 8, marginBottom: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: borderColor, marginBottom: 6 }}>Insurance Details</div>
+        {insurance ? (
+          <div style={{ display: 'flex', gap: 24 }}>
+            <div style={{ ...valueStyle }}>Policy No: {insurance.policyNo || '-'}</div>
+            <div style={{ ...valueStyle }}>Company: {insurance.company || '-'}</div>
+            <div style={{ ...valueStyle }}>Valid From: {insurance.validFrom || '-'}</div>
+            <div style={{ ...valueStyle }}>Valid To: {insurance.validTo || '-'}</div>
+            <div style={{ ...valueStyle }}>Sum Insured: {insurance.sumInsured || '-'}</div>
+          </div>
+        ) : (
+          <div style={{ ...valueStyle }}>No insurance details available.</div>
+        )}
+      </div>
       {/* Footer Section - matches uploaded image, with sticker/stamp box in bottom left */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 44, marginBottom: 0, position: 'relative' }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, textAlign: 'left', position: 'relative' }}>

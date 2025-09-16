@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, addDoc, updateDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -226,6 +226,14 @@ export default function InwardPage() {
   const [showSRForm, setShowSRForm] = useState(false);
   const [selectedRowForSR, setSelectedRowForSR] = useState<any>(null);
   const [inspectionInsuranceData, setInspectionInsuranceData] = useState<any[]>([]);
+  // Alert / prevention states for insurance/reservation expiry
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  // Inline rectangular alert (used in-page to match other alert boxes)
+  const [inlineAlert, setInlineAlert] = useState<null | { title: string; message: string; severity: 'error' | 'warning' }>(null);
+  const [preventInward, setPreventInward] = useState(false);
+  
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [dataVersion, setDataVersion] = useState(0);
@@ -952,7 +960,7 @@ export default function InwardPage() {
   };
 
   // Form state
-  const [baseForm, setBaseForm] = useState({
+  const [baseForm, setBaseForm] = useState<any>({
     state: '',
     branch: '',
     location: '',
@@ -999,6 +1007,7 @@ export default function InwardPage() {
     firePolicyBalance: '',
     burglaryPolicyBalance: '',
     bankFundedBy: '',
+    selectedInsurance: null,
   });
 
   // Current entry form (for inward entry details)
@@ -1027,6 +1036,150 @@ export default function InwardPage() {
 
   // Combined form for display
   const form = { ...baseForm, ...currentEntryForm, totalValue: baseForm.totalValue };
+
+  // Helper to format a JS Date or date string to DD-MM-YYYY
+  const formatToDDMMYYYY = (d: Date | string | null) => {
+    if (!d) return '';
+    const dt = typeof d === 'string' ? new Date(d) : d;
+    if (!(dt instanceof Date) || isNaN(dt.getTime())) return '';
+    const dd = String(dt.getDate()).padStart(2, '0');
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const yyyy = dt.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  };
+
+  // Async check for reservation and insurance expiry based on selected warehouse & client
+  const checkReservationAndInsurance = useCallback(async (warehouseName: string, clientName: string) => {
+  setAlertOpen(false);
+  setPreventInward(false);
+  setInlineAlert(null);
+
+    if (!warehouseName || !clientName) return;
+
+    // Check reservation expiry from reservations state
+    try {
+      const warehouseReservation = reservations.find((r: any) => 
+        r.warehouse === warehouseName && r.state === baseForm.state && r.branch === baseForm.branch && r.location === baseForm.location
+      );
+
+      if (warehouseReservation && warehouseReservation.reservationEnd) {
+        const resEnd = new Date(warehouseReservation.reservationEnd);
+        if (resEnd instanceof Date && !isNaN(resEnd.getTime())) {
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          if (resEnd < today) {
+            const msg = `Reservation Expired - The reservation end date (${formatToDDMMYYYY(resEnd)}) has expired. Please update the reservation details in the Reservation & Billing section to continue with inward operations`;
+            setInlineAlert({ title: 'Reservation Expired', message: msg, severity: 'error' });
+            setPreventInward(true);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error checking reservation:', err);
+    }
+
+    // Check inspection insurance entries for the warehouse
+    try {
+      if (warehouseName) {
+        const inspectionsCollection = collection(db, 'inspections');
+        const q = query(inspectionsCollection, where('warehouseName', '==', warehouseName));
+        const querySnapshot = await getDocs(q);
+        let insuranceEntries: any[] = [];
+        if (!querySnapshot.empty) {
+          const inspectionData = querySnapshot.docs[0].data();
+          if (inspectionData.insuranceEntries && Array.isArray(inspectionData.insuranceEntries)) {
+            insuranceEntries = inspectionData.insuranceEntries;
+          } else if (inspectionData.warehouseInspectionData?.insuranceEntries && Array.isArray(inspectionData.warehouseInspectionData.insuranceEntries)) {
+            insuranceEntries = inspectionData.warehouseInspectionData.insuranceEntries;
+          }
+        }
+
+        // If there are insurance entries, prefer checking the specifically selected insurance (when adding inward).
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        // If a specific insurance is selected on the form, only validate that one entry.
+        if (baseForm.selectedInsurance && baseForm.selectedInsurance.insuranceId && baseForm.selectedInsurance.insuranceTakenBy) {
+          const sel = baseForm.selectedInsurance;
+          const match = insuranceEntries.find((ins: any) =>
+            ins.insuranceId === sel.insuranceId && ins.insuranceTakenBy === sel.insuranceTakenBy
+          );
+          if (match) {
+            const fireEnd = match.firePolicyEndDate ? new Date(match.firePolicyEndDate) : (match.firePolicyEnd ? new Date(match.firePolicyEnd) : null);
+            const burglaryEnd = match.burglaryPolicyEndDate ? new Date(match.burglaryPolicyEndDate) : (match.burglaryPolicyEnd ? new Date(match.burglaryPolicyEnd) : null);
+            if (fireEnd instanceof Date && !isNaN(fireEnd.getTime()) && fireEnd < today) {
+              const msg = `Insurance Expired - The insurance end date (${formatToDDMMYYYY(fireEnd)}) has expired.`;
+              setInlineAlert({ title: 'Insurance Expired', message: msg, severity: 'error' });
+              setPreventInward(true);
+              return;
+            }
+            if (burglaryEnd instanceof Date && !isNaN(burglaryEnd.getTime()) && burglaryEnd < today) {
+              const msg = `Insurance Expired - The insurance end date (${formatToDDMMYYYY(burglaryEnd)}) has expired.`;
+              setInlineAlert({ title: 'Insurance Expired', message: msg, severity: 'error' });
+              setPreventInward(true);
+              return;
+            }
+          } else {
+            // No matching inspection entry found for the selected insurance. Fall back to baseForm dates (if any).
+            // (Do not scan other insurance entries when the user chose a specific insurance.)
+            // continue to fallback checks below
+          }
+        } else {
+          // No specific insurance selected - preserve previous behaviour: if any policy expired block inward
+          for (const ins of insuranceEntries) {
+            const fireEnd = ins.firePolicyEndDate ? new Date(ins.firePolicyEndDate) : (ins.firePolicyEnd ? new Date(ins.firePolicyEnd) : null);
+            const burglaryEnd = ins.burglaryPolicyEndDate ? new Date(ins.burglaryPolicyEndDate) : (ins.burglaryPolicyEnd ? new Date(ins.burglaryPolicyEnd) : null);
+            if (fireEnd instanceof Date && !isNaN(fireEnd.getTime()) && fireEnd < today) {
+              const msg = `Insurance Expired - The insurance end date (${formatToDDMMYYYY(fireEnd)}) has expired.`;
+              setInlineAlert({ title: 'Insurance Expired', message: msg, severity: 'error' });
+              setPreventInward(true);
+              return;
+            }
+            if (burglaryEnd instanceof Date && !isNaN(burglaryEnd.getTime()) && burglaryEnd < today) {
+              const msg = `Insurance Expired - The insurance end date (${formatToDDMMYYYY(burglaryEnd)}) has expired.`;
+              setInlineAlert({ title: 'Insurance Expired', message: msg, severity: 'error' });
+              setPreventInward(true);
+              return;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error checking inspection insurance:', err);
+    }
+
+    // Fallback: check any insurance fields in baseForm
+    try {
+      const fireEnd = baseForm.firePolicyEnd ? new Date(baseForm.firePolicyEnd) : null;
+      const burglaryEnd = baseForm.burglaryPolicyEnd ? new Date(baseForm.burglaryPolicyEnd) : null;
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      if (fireEnd instanceof Date && !isNaN(fireEnd.getTime()) && fireEnd < today) {
+        const msg = `Insurance Expired - The insurance end date (${formatToDDMMYYYY(fireEnd)}) has expired.`;
+        setInlineAlert({ title: 'Insurance Expired', message: msg, severity: 'error' });
+        setPreventInward(true);
+        return;
+      }
+      if (burglaryEnd instanceof Date && !isNaN(burglaryEnd.getTime()) && burglaryEnd < today) {
+        const msg = `Insurance Expired - The insurance end date (${formatToDDMMYYYY(burglaryEnd)}) has expired.`;
+        setInlineAlert({ title: 'Insurance Expired', message: msg, severity: 'error' });
+        setPreventInward(true);
+        return;
+      }
+    } catch (err) {
+      console.error('Error checking baseForm insurance dates:', err);
+    }
+
+    // If all checks pass, ensure the modal is closed and allow inward
+    setAlertOpen(false);
+    setPreventInward(false);
+  }, [reservations, baseForm.state, baseForm.branch, baseForm.location, baseForm.firePolicyEnd, baseForm.burglaryPolicyEnd, baseForm.selectedInsurance]);
+
+  // Run check when warehouse or client is selected
+  useEffect(() => {
+    checkReservationAndInsurance(form.warehouseName, form.client).catch(err => console.error(err));
+  }, [form.warehouseName, form.client, checkReservationAndInsurance]);
 
   // Calculate insurance balance amounts
   useEffect(() => {
@@ -1099,7 +1252,7 @@ export default function InwardPage() {
   // Fetch all data on mount
   useEffect(() => {
     fetchData();
-  }, [dataVersion]);
+  }, [dataVersion, fetchData]);
 
   // Filter branches by state
   const filteredBranches = branches.filter((b: any) => b.state === form.state);
@@ -1110,7 +1263,7 @@ export default function InwardPage() {
     const fw = warehouses.filter((w: any) => 
       w.location?.trim().toLowerCase() === form.location.trim().toLowerCase()
     );
-    console.log('Filtered Warehouses:', fw, 'Form:', form);
+    console.log('Filtered Warehouses:', fw, 'location:', form.location);
     return fw;
   }, [warehouses, form.location]);
 
@@ -1385,6 +1538,18 @@ export default function InwardPage() {
     e.preventDefault();
     
     try {
+    // Prevent submit if reservation or insurance expired
+    if (preventInward) {
+      // Prefer inlineAlert content when present (matches inline rectangular alert)
+      const tTitle = inlineAlert?.title || alertTitle || 'Action Blocked';
+      const tDesc = inlineAlert?.message || alertMessage || 'Cannot proceed due to expired reservation or insurance.';
+      toast({
+        title: tTitle,
+        description: tDesc,
+        variant: 'destructive'
+      });
+      return;
+    }
     if (!fileAttachment && !isEditMode) {
       alert('Please attach a file.');
       return;
@@ -1992,9 +2157,10 @@ export default function InwardPage() {
       // Get the current total value being processed
       const currentTotalValue = parseFloat(baseForm.totalValue) || 0;
       
-      // Get the original insurance amounts from the insurance entry
-      const originalFireAmount = safeParseAmount(ins.firePolicyAmount);
-      const originalBurglaryAmount = safeParseAmount(ins.burglaryPolicyAmount);
+  // Get the original (prefer remaining) insurance amounts from the insurance entry
+  // If a remaining amount exists on the inspection entry, use that. Otherwise fall back to the full policy amount.
+  const originalFireAmount = safeParseAmount(ins.remainingFirePolicyAmount ?? ins.firePolicyAmount);
+  const originalBurglaryAmount = safeParseAmount(ins.remainingBurglaryPolicyAmount ?? ins.burglaryPolicyAmount);
       
       // Calculate new remaining amounts
       const newRemainingFire = Math.max(0, parseFloat(originalFireAmount) - currentTotalValue).toFixed(2);
@@ -2061,9 +2227,10 @@ export default function InwardPage() {
       // Get the current total value being processed
       const currentTotalValue = parseFloat(baseForm.totalValue) || 0;
       
-      // Get the original insurance amounts from the insurance entry
-      const originalFireAmount = safeParseAmount(ins.firePolicyAmount);
-      const originalBurglaryAmount = safeParseAmount(ins.burglaryPolicyAmount);
+  // Get the original (prefer remaining) insurance amounts from the insurance entry
+  // If a remaining amount exists on the source insurance entry, use that. Otherwise fall back to the full policy amount.
+  const originalFireAmount = safeParseAmount(ins.remainingFirePolicyAmount ?? ins.firePolicyAmount);
+  const originalBurglaryAmount = safeParseAmount(ins.remainingBurglaryPolicyAmount ?? ins.burglaryPolicyAmount);
       
       // Calculate new remaining amounts
       const newRemainingFire = Math.max(0, parseFloat(originalFireAmount) - currentTotalValue).toFixed(2);
@@ -2337,10 +2504,32 @@ export default function InwardPage() {
 
   // Handle tare weight change
   const handleTareWeightChange = (value: string) => {
+    // Allow empty value
+    if (value === '') {
+      setCurrentEntryForm(f => ({
+        ...f,
+        tareWeight: '',
+        netWeight: calculateNetWeight(f.grossWeight, '')
+      }));
+      return;
+    }
+
+    // Parse numbers and clamp tare to gross if necessary
+    const parsedValue = parseFloat(value);
+    const grossNum = parseFloat(currentEntryForm.grossWeight) || 0;
+
+    if (isNaN(parsedValue)) {
+      // If not a number, ignore the change
+      return;
+    }
+
+    const clamped = parsedValue > grossNum ? grossNum : parsedValue;
+    const clampedStr = clamped.toString();
+
     setCurrentEntryForm(f => ({
       ...f,
-      tareWeight: value,
-      netWeight: calculateNetWeight(f.grossWeight, value)
+      tareWeight: clampedStr,
+      netWeight: calculateNetWeight(f.grossWeight, clampedStr)
     }));
   };
 
@@ -2588,9 +2777,11 @@ export default function InwardPage() {
     return '0.00';
   };
 
-  const columns = [
+  // Columns are static for this table; the cell renderers call handlers that are defined later in
+  // the component. The handlers are declared as function declarations (hoisted) so it's safe to
+  // include them in the dependency list — include them so ESLint won't warn.
+  const columns = useMemo(() => [
     { accessorKey: "inwardId", header: "Inward Code" },
-
     { accessorKey: "dateOfInward", header: "Date of Inward" },
     { accessorKey: "state", header: "State" },
     { accessorKey: "branch", header: "Branch" },
@@ -2781,7 +2972,7 @@ export default function InwardPage() {
         </div>
       ),
     },
-  ];
+  ], []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ... inside InwardPage component, after other useState hooks ...
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -3252,7 +3443,7 @@ export default function InwardPage() {
   };
 
   // Handle edit button click
-  const handleEdit = async (row: any) => {
+  async function handleEdit(row: any) {
     setIsEditMode(true);
     setEditingRow(row);
     
@@ -3294,6 +3485,7 @@ export default function InwardPage() {
       bankState: row.bankState || '',
       ifscCode: row.ifscCode || '',
       bankReceipt: row.bankReceipt || '',
+  selectedInsurance: row.selectedInsurance || null,
       billingStatus: row.billingStatus || '',
       reservationRate: row.reservationRate || '',
       reservationQty: row.reservationQty || '',
@@ -3459,6 +3651,15 @@ export default function InwardPage() {
       if (idx !== -1) {
         setSelectedInsuranceInfoIndex(idx);
         setSelectedInsuranceIndex(idx);
+        // Ensure baseForm.selectedInsurance reflects the auto-selected policy
+        const matched = inspectionInsuranceEntries[idx];
+        setBaseForm(f => ({
+          ...f,
+          selectedInsurance: {
+            insuranceTakenBy: matched?.insuranceTakenBy || null,
+            insuranceId: matched?.insuranceId || null,
+          }
+        }));
       }
       setInsuranceReadOnly(true);
     } else {
@@ -3551,24 +3752,24 @@ export default function InwardPage() {
   };
 
   // Handle delete button click
-  const handleDelete = async (row: any) => {
+  async function handleDelete(row: any) {
     if (confirm('Are you sure you want to delete this inward entry? This action cannot be undone.')) {
       try {
         // Delete from Firebase
         const inwardCollection = collection(db, 'inward');
         const q = query(inwardCollection, where('inwardId', '==', row.inwardId));
         const querySnapshot = await getDocs(q);
-        
+
         if (!querySnapshot.empty) {
           const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
           await deleteDoc(docRef);
-          
+
           toast({
             title: "Success",
             description: "Inward entry deleted successfully.",
             variant: "default",
           });
-          
+
           // Refresh data
           setDataVersion(v => v + 1);
         }
@@ -3581,10 +3782,10 @@ export default function InwardPage() {
         });
       }
     }
-  };
+  }
 
   // Handle view SR button click
-  const handleViewSR = async (row: any) => {
+  async function handleViewSR(row: any) {
     setSelectedRowForSR(row);
     setShowSRForm(true);
     setRemarks(row.remarks || '');
@@ -3779,28 +3980,49 @@ export default function InwardPage() {
   };
 
   const isInsuranceExpired = (sr: any) => {
-    // Check if any insurance policy is expired
     const today = new Date();
-    // Check inspection insurance data first
-    for (const insurance of inspectionInsuranceData) {
-      const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : null;
-      const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : null;
-      if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime()) && fireEndDate < today) {
-        return true;
+
+    // If a specific insurance was selected for this SR, validate only that policy
+    const selected = sr?.selectedInsurance || (sr && sr.insuranceSelected) || null;
+    if (selected && Array.isArray(inspectionInsuranceData) && inspectionInsuranceData.length > 0) {
+      // Try to find a matching inspection entry. Match by insuranceId when available, else by policy numbers / takenBy
+      const match = inspectionInsuranceData.find((ins: any) => {
+        if (!ins) return false;
+        if (selected.insuranceId && ins.insuranceId && ins.insuranceId === selected.insuranceId) return true;
+        if (selected.firePolicyNumber && ins.firePolicyNumber && ins.firePolicyNumber === selected.firePolicyNumber) return true;
+        if (selected.burglaryPolicyNumber && ins.burglaryPolicyNumber && ins.burglaryPolicyNumber === selected.burglaryPolicyNumber) return true;
+        // last resort: match by who took the insurance and commodity
+        if (selected.insuranceTakenBy && ins.insuranceTakenBy && ins.insuranceTakenBy === selected.insuranceTakenBy) return true;
+        return false;
+      });
+
+      if (match) {
+        const fireEndDate = match.firePolicyEndDate ? new Date(match.firePolicyEndDate) : match.firePolicyEnd ? new Date(match.firePolicyEnd) : null;
+        const burglaryEndDate = match.burglaryPolicyEndDate ? new Date(match.burglaryPolicyEndDate) : match.burglaryPolicyEnd ? new Date(match.burglaryPolicyEnd) : null;
+        if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime()) && fireEndDate < today) return true;
+        if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime()) && burglaryEndDate < today) return true;
+        return false;
       }
-      if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime()) && burglaryEndDate < today) {
-        return true;
+
+      // If selected but not found in inspection entries, fall through to check sr fields below
+    }
+
+    // If no specific selection exists, preserve previous behaviour: if any inspection entry for the warehouse is expired, treat as expired
+    if ((!sr?.selectedInsurance || !inspectionInsuranceData || inspectionInsuranceData.length === 0) && Array.isArray(inspectionInsuranceData)) {
+      for (const insurance of inspectionInsuranceData) {
+        const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : insurance.firePolicyEnd ? new Date(insurance.firePolicyEnd) : null;
+        const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : insurance.burglaryPolicyEnd ? new Date(insurance.burglaryPolicyEnd) : null;
+        if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime()) && fireEndDate < today) return true;
+        if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime()) && burglaryEndDate < today) return true;
       }
     }
-    // Fallback to inward data if no inspection insurance found
-    const fireEndDate = sr.firePolicyEnd ? new Date(sr.firePolicyEnd) : null;
-    const burglaryEndDate = sr.burglaryPolicyEnd ? new Date(sr.burglaryPolicyEnd) : null;
-    if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime()) && fireEndDate < today) {
-      return true;
-    }
-    if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime()) && burglaryEndDate < today) {
-      return true;
-    }
+
+    // Fallback to inward/sr stored fields
+    const fireEndDate = sr?.firePolicyEnd ? new Date(sr.firePolicyEnd) : sr?.firePolicyEndDate ? new Date(sr.firePolicyEndDate) : null;
+    const burglaryEndDate = sr?.burglaryPolicyEnd ? new Date(sr.burglaryPolicyEnd) : sr?.burglaryPolicyEndDate ? new Date(sr.burglaryPolicyEndDate) : null;
+    if (fireEndDate instanceof Date && !isNaN(fireEndDate.getTime()) && fireEndDate < today) return true;
+    if (burglaryEndDate instanceof Date && !isNaN(burglaryEndDate.getTime()) && burglaryEndDate < today) return true;
+
     return false;
   };
 
@@ -3894,6 +4116,10 @@ export default function InwardPage() {
     const ins = insuranceEntries[idx];
     setBaseForm(f => ({
       ...f,
+      selectedInsurance: {
+        insuranceTakenBy: ins.insuranceTakenBy || null,
+        insuranceId: ins.insuranceId || null,
+      },
       insuranceManagedBy: ins.insuranceTakenBy || '',
       firePolicyNumber: ins.firePolicyNumber || '',
       firePolicyAmount: ins.firePolicyAmount || '',
@@ -3935,6 +4161,14 @@ export default function InwardPage() {
     
     setSelectedInsuranceInfoIndex(idx);
     const ins = filteredInsuranceInfoEntries[idx];
+    // Also set selectedInsurance on the base form so checks use the selected entry
+    setBaseForm(f => ({
+      ...f,
+      selectedInsurance: {
+        insuranceTakenBy: ins.insuranceTakenBy || null,
+        insuranceId: ins.insuranceId || null,
+      }
+    }));
     
     console.log('=== INSURANCE SELECTION DEBUG ===');
     console.log('Selected insurance index:', idx);
@@ -4190,13 +4424,29 @@ export default function InwardPage() {
             valueOfCommodity: selectedRowForSR?.totalValue || '',
             hologramNumber: hologramNumber || '',
             insuranceDetails: [
-              {
-                policyNo: inspectionInsuranceData[0]?.firePolicyNumber || '-',
-                company: inspectionInsuranceData[0]?.firePolicyCompanyName || '-',
-                validFrom: inspectionInsuranceData[0]?.firePolicyStartDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyStartDate) : '-',
-                validTo: inspectionInsuranceData[0]?.firePolicyEndDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyEndDate) : '-',
-                sumInsured: inspectionInsuranceData[0]?.firePolicyAmount || '-',
-              },
+              (() => {
+                // Prefer the inspection insurance entry that matches the saved selectedInsurance on the inward row
+                const sel = selectedRowForSR?.selectedInsurance;
+                let matched: any = null;
+                try {
+                  if (sel && inspectionInsuranceData && inspectionInsuranceData.length) {
+                    matched = inspectionInsuranceData.find((i: any) => i.insuranceId === sel.insuranceId && i.insuranceTakenBy === sel.insuranceTakenBy) || null;
+                  }
+                } catch (e) {
+                  // ignore and fallback
+                  matched = null;
+                }
+                // fallback to first inspection entry if no explicit match
+                matched = matched || inspectionInsuranceData[0] || null;
+
+                return {
+                  policyNo: matched?.firePolicyNumber || '-',
+                  company: matched?.firePolicyCompanyName || '-',
+                  validFrom: matched?.firePolicyStartDate ? normalizeDate(matched.firePolicyStartDate) : '-',
+                  validTo: matched?.firePolicyEndDate ? normalizeDate(matched.firePolicyEndDate) : '-',
+                  sumInsured: matched?.firePolicyAmount || '-',
+                };
+              })(),
             ],
             bankName: selectedRowForSR?.bankName || '',
             date: selectedRowForSR?.dateOfInward || '',
@@ -4258,42 +4508,42 @@ export default function InwardPage() {
   const [expandModalData, setExpandModalData] = useState<any>(null);
   const [isExpandingEntries, setIsExpandingEntries] = useState(false);
 
-  const handleExpandEntries = async (row: any) => {
+  async function handleExpandEntries(row: any) {
     try {
       setIsExpandingEntries(true);
       console.log('Expanding entries for row:', row);
-      
+
       // Fetch complete inward entries data from the database
       let inwardEntries = row.inwardEntries || [];
-      
+
       // If inwardEntries is missing or empty, fetch from database
       if ((!inwardEntries || inwardEntries.length === 0) && row.inwardId) {
         console.log('Fetching inward entries from database for inwardId:', row.inwardId);
         const inwardCollection = collection(db, 'inward');
         const q = query(inwardCollection, where('inwardId', '==', row.inwardId));
         const querySnapshot = await getDocs(q);
-        
+
         if (!querySnapshot.empty) {
           const docData = querySnapshot.docs[0].data();
           inwardEntries = docData.inwardEntries || [];
           console.log('Fetched inward entries from database:', inwardEntries);
         }
       }
-      
+
       // Calculate total entries count
       const totalEntries = inwardEntries.length;
-      
+
       // Prepare the expand modal data with complete information
       const expandData = {
         ...row,
         inwardEntries: inwardEntries,
         totalEntries: totalEntries
       };
-      
+
       console.log('Setting expand modal data:', expandData);
       setExpandModalData(expandData);
-    setShowExpandModal(true);
-      
+      setShowExpandModal(true);
+
     } catch (error) {
       console.error('Error expanding entries:', error);
       toast({
@@ -4304,9 +4554,9 @@ export default function InwardPage() {
     } finally {
       setIsExpandingEntries(false);
     }
-  };
+  }
 
-  const handleCIRView = async (row: any) => {
+  async function handleCIRView(row: any) {
     setCIRReadOnly(true);
     setShowCIRModal(true);
 
@@ -4994,6 +5244,8 @@ export default function InwardPage() {
             onChange={e => setCIRRemarks(e.target.value)}
             placeholder="Enter remarks or approval note"
             required
+            readOnly={cirModalData?.cirStatus === 'Approved'}
+            disabled={cirModalData?.cirStatus === 'Approved'}
           />
         </div>
         <div className="flex justify-end space-x-2 mt-4">
@@ -5037,6 +5289,18 @@ export default function InwardPage() {
         }}>
           + Add Inward
         </Button>
+        {/* Alert dialog for expired reservation/insurance */}
+        <Dialog open={alertOpen} onOpenChange={(open) => setAlertOpen(open)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-red-700">{alertTitle}</DialogTitle>
+              <DialogDescription className="text-sm text-gray-700">{alertMessage}</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 flex justify-end">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setAlertOpen(false)}>Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
       
       {/* Search and Export */}
@@ -5207,6 +5471,7 @@ export default function InwardPage() {
                     firePolicyCompanyName: '',
                     burglaryPolicyCompanyName: '',
                     bankFundedBy: '',
+                    selectedInsurance: null,
                   }));
                   
                   // Reset insurance type and selection when warehouse changes
@@ -5360,8 +5625,9 @@ export default function InwardPage() {
                 <Label className="block font-semibold mb-1">Client Address</Label>
                 <Input 
                   value={form.clientAddress} 
-                  onChange={e => setBaseForm(f => ({ ...f, clientAddress: e.target.value }))} 
-                  placeholder="Enter client address"
+                  readOnly
+                  disabled
+                  placeholder="Auto-filled from client master"
                 />
               </div>
             </div>
@@ -5546,20 +5812,28 @@ export default function InwardPage() {
                   </div>
                 )}
 
-                {/* Expired Reservation Alert */}
-                {form.billingStatus === 'reservation' && isReservationExpired(form.reservationEnd) && (
-                  <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <h3 className="text-sm font-medium text-red-800">Reservation Expired</h3>
-                        <p className="mt-1 text-sm text-red-700">
-                          The reservation end date ({form.reservationEnd}) has expired. Please update the reservation details in the <strong>Reservation & Billing</strong> section to continue with inward operations.
-                        </p>
+                {/* Inline rectangular alert: shows reservation/insurance expiry messages */}
+                {inlineAlert && (
+                  <div className="mt-4" role="alert">
+                    <div className={`${inlineAlert.severity === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-yellow-50 border-yellow-200 text-yellow-800'} border rounded-lg p-4`}>
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                          {inlineAlert.severity === 'error' ? (
+                            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="ml-3">
+                          <h3 className={`text-sm font-medium ${inlineAlert.severity === 'error' ? 'text-red-800' : 'text-yellow-800'}`}>{inlineAlert.title}</h3>
+                          <p className={`mt-1 text-sm ${inlineAlert.severity === 'error' ? 'text-red-700' : 'text-yellow-700'}`}>
+                            {inlineAlert.message}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -5780,12 +6054,14 @@ export default function InwardPage() {
 
             {!isEditMode && form.commodity && insuranceEntries.length === 0 && (
               <div className="border-t pt-4">
-              //   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              //     {/* <p className="text-yellow-800 text-sm">
-              //       <strong>Note:</strong> No insurance data found for this warehouse in the inspection module. 
-              //       Please ensure insurance data exists in the Warehouse Inspection section.
-              //     </p> */}
-              //   </div>
+                { /*
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-yellow-800 text-sm">
+                      <strong>Note:</strong> No insurance data found for this warehouse in the inspection module. 
+                      Please ensure insurance data exists in the Warehouse Inspection section.
+                    </p>
+                  </div>
+                */ }
               </div>
             )}
 
@@ -6984,7 +7260,7 @@ export default function InwardPage() {
                     </div>
                     <div>
                       <Label className="font-semibold mb-1">Date of Testing</Label>
-                      <Input readOnly value={selectedRowForSR?.dateOfTesting || ''} className="w-full bg-white bg-white border-green-300 text-green-800" />
+                      <Input readOnly value={selectedRowForSR?.dateOfTesting || ''} className="w-full bg-white border-green-300 text-green-800" />
                     </div>
                   </div>
                 </div>
@@ -6997,6 +7273,8 @@ export default function InwardPage() {
                     onChange={e => setRemarks(e.target.value)}
                     placeholder="Enter remarks here"
                     className="w-full bg-white border-green-300 text-green-800"
+                    readOnly={selectedRowForSR?.status === 'approved' || selectedRowForSR?.status === 'Approved'}
+                    disabled={selectedRowForSR?.status === 'approved' || selectedRowForSR?.status === 'Approved'}
                   />
                 </div>
                 {/* Quality Parameters Table - left aligned */}
