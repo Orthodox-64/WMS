@@ -159,11 +159,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (userSnapshot.empty) {
         // Create a demo user if username doesn't exist
         const userRef = doc(collection(db, 'users'));
+        // Determine if this should be an admin user based on username or email
+        const isAdminUser = username.toLowerCase().includes('admin') || 
+                           email.toLowerCase().includes('admin');
+        
         userData = {
           id: userRef.id,
           username,
           email: email || `${username}@demo.com`,
-          role: "maker",
+          role: isAdminUser ? "admin" : "maker",
           createdAt: new Date().toISOString(),
           isVerified: true  // Demo users are auto-verified for testing
         };
@@ -172,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userData = userSnapshot.docs[0].data() as User;
       }
       
-      // Check if user is verified by admin (skip verification for admin role)
+      // Check if user is verified by admin (skip verification for admin users)
       if (!userData.isVerified && userData.role !== 'admin') {
         throw new Error("Your account is pending admin verification. You will be notified via email once approved. Please contact admin if you have been waiting for more than 24 hours.");
       }

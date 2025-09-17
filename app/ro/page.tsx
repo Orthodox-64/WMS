@@ -577,58 +577,68 @@ export default function ReleaseOrderPage() {
   return (
     <DashboardLayout>
       {/* Module title and dashboard button row */}
-      <div className="flex items-center justify-between mt-4 mb-10 px-8">
-        <Button className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 text-2xl font-semibold shadow-lg rounded-xl flex items-center gap-2" onClick={() => router.push('/dashboard')}>
-          <span className="text-2xl">&#8592;</span> Dashboard
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mt-4 mb-6 lg:mb-10 px-4 lg:px-8 gap-4">
+        <Button 
+          className="bg-orange-500 hover:bg-orange-600 text-white px-4 lg:px-8 py-3 text-lg lg:text-2xl font-semibold shadow-lg rounded-xl flex items-center justify-center gap-2 w-full lg:w-auto" 
+          onClick={() => router.push('/dashboard')}
+        >
+          <span className="text-lg lg:text-2xl">&#8592;</span> Dashboard
         </Button>
-        <div className="flex-1 text-center">
-          <h1 className="text-3xl font-extrabold tracking-tight text-orange-600 inline-block border-b-4 border-[#1aad4b] pb-2 px-10 py-1 bg-orange-50 rounded-xl shadow" style={{ letterSpacing: '0.02em' }}>
+        <div className="flex-1 text-center order-first lg:order-none">
+          <h1 className="text-xl lg:text-3xl font-extrabold tracking-tight text-orange-600 inline-block border-b-4 border-[#1aad4b] pb-2 px-4 lg:px-10 py-1 bg-orange-50 rounded-xl shadow" style={{ letterSpacing: '0.02em' }}>
             Release Order
           </h1>
         </div>
-        <Button className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 text-sm font-semibold shadow-lg rounded-xl" onClick={() => setShowAddModal(true)}>
-          <Plus className="mr-2 h-5 w-5" /> Add RO
+        <Button 
+          className="bg-green-500 hover:bg-green-600 text-white px-4 lg:px-8 py-3 text-sm font-semibold shadow-lg rounded-xl w-full lg:w-auto" 
+          onClick={() => setShowAddModal(true)}
+        >
+          <Plus className="mr-2 h-4 lg:h-5 w-4 lg:w-5" /> Add RO
         </Button>
       </div>
 
       {/* Search and Export */}
-      <div className="px-8 mb-4">
+      <div className="px-4 lg:px-8 mb-4">
         <Card className="bg-green-50 border border-green-200">
           <CardHeader>
-            <CardTitle className="text-green-800">Search & Export Options</CardTitle>
+            <CardTitle className="text-green-800 text-lg lg:text-xl">Search & Export Options</CardTitle>
           </CardHeader>
-          <CardContent className="flex items-center gap-4">
-            <div className="flex-grow flex items-center gap-2">
-              <Search className="text-gray-500" />
-              <Label htmlFor="search-input" className="font-semibold text-gray-700">Search:</Label>
-              <Input
-                id="search-input"
-                placeholder="Search by SR/WR No, State, Branch, Location, Warehouse Name/Code, Client Name..."
-                className="w-full pr-8"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <CardContent className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4">
+            <div className="flex-grow">
+              <div className="flex items-center gap-2 mb-2 lg:mb-0">
+                <Search className="text-gray-500 hidden sm:block" />
+                <Label htmlFor="search-input" className="font-semibold text-gray-700 hidden sm:block">Search:</Label>
+              </div>
+              <div className="relative">
+                <Input
+                  id="search-input"
+                  placeholder="Search by SR/WR No, State, Branch, Location..."
+                  className="w-full pr-8"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <button 
+                    type="button" 
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    title="Clear search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
               {searchTerm && (
-                <button 
-                  type="button" 
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  title="Clear search"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-              {searchTerm && (
-                <div className="ml-3 text-sm text-gray-600">
+                <div className="mt-2 text-sm text-gray-600 text-center lg:text-left">
                   {filteredROs.length} of {latestROs.length} entries
                 </div>
               )}
             </div>
             <Button
               onClick={handleExportCSV}
-              className="bg-blue-500 hover:bg-blue-600 text-white"
+              className="bg-blue-500 hover:bg-blue-600 text-white w-full lg:w-auto flex-shrink-0"
             >
               <Download className="mr-2 h-4 w-4" />
               Export CSV
@@ -638,15 +648,15 @@ export default function ReleaseOrderPage() {
       </div>
       {/* Add RO Dialog */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-5xl w-full p-2">
+        <DialogContent className="w-[95vw] max-w-5xl h-[95vh] p-3 sm:p-4">
           <DialogHeader>
-            <DialogTitle>Add Release Order</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">Add Release Order</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto p-2">
+          <form onSubmit={handleSubmit} className="space-y-4 max-h-[calc(95vh-120px)] overflow-y-auto p-1 sm:p-2">
             {/* SR/WR No. Dropdown */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <div>
-                <Label htmlFor="srwr-select">Storage/ Warehouse Receipt No.</Label>
+                <Label htmlFor="srwr-select" className="text-sm sm:text-base">Storage/ Warehouse Receipt No.</Label>
                 <Select value={selectedInward ? `${selectedInward.receiptType || 'SR'}-${selectedInward.inwardId || ''}-${selectedInward.dateOfInward || ''}` : ''} onValueChange={val => {
                   const found = inwardOptions.find(opt => `${opt.receiptType || 'SR'}-${opt.inwardId || ''}-${opt.dateOfInward || ''}` === val);
                   setSelectedInward(found || null);
@@ -670,74 +680,74 @@ export default function ReleaseOrderPage() {
             </div>
             {/* Auto fields */}
             {selectedInward && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <Label>CAD NO</Label>
-                  <Input value={selectedInward.cadNumber || ''} readOnly />
+                  <Label className="text-sm sm:text-base">CAD NO</Label>
+                  <Input value={selectedInward.cadNumber || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>STATE</Label>
-                  <Input value={selectedInward.state || ''} readOnly />
+                  <Label className="text-sm sm:text-base">STATE</Label>
+                  <Input value={selectedInward.state || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>BRANCH</Label>
-                  <Input value={selectedInward.branch || ''} readOnly />
+                  <Label className="text-sm sm:text-base">BRANCH</Label>
+                  <Input value={selectedInward.branch || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>LOCATION</Label>
-                  <Input value={selectedInward.location || ''} readOnly />
+                  <Label className="text-sm sm:text-base">LOCATION</Label>
+                  <Input value={selectedInward.location || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>WAREHOUSE NAME</Label>
-                  <Input value={selectedInward.warehouseName || ''} readOnly />
+                  <Label className="text-sm sm:text-base">WAREHOUSE NAME</Label>
+                  <Input value={selectedInward.warehouseName || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>WAREHOUSE CODE</Label>
-                  <Input value={selectedInward.warehouseCode || ''} readOnly />
+                  <Label className="text-sm sm:text-base">WAREHOUSE CODE</Label>
+                  <Input value={selectedInward.warehouseCode || ''} readOnly className="text-sm" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-sm sm:text-base">WAREHOUSE ADDRESS</Label>
+                  <Input value={selectedInward.warehouseAddress || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>WAREHOUSE ADDRESS</Label>
-                  <Input value={selectedInward.warehouseAddress || ''} readOnly />
+                  <Label className="text-sm sm:text-base">CLIENT NAME</Label>
+                  <Input value={selectedInward.client || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>CLIENT NAME</Label>
-                  <Input value={selectedInward.client || ''} readOnly />
+                  <Label className="text-sm sm:text-base">CLIENT CODE</Label>
+                  <Input value={selectedInward.clientCode || ''} readOnly className="text-sm" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-sm sm:text-base">CLIENT ADDRESS</Label>
+                  <Input value={selectedInward.clientAddress || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>CLIENT CODE</Label>
-                  <Input value={selectedInward.clientCode || ''} readOnly />
+                  <Label className="text-sm sm:text-base">INWARD BAGS</Label>
+                  <Input value={selectedInward.totalBags || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>CLIENT ADDRESS</Label>
-                  <Input value={selectedInward.clientAddress || ''} readOnly />
+                  <Label className="text-sm sm:text-base">INWARD QTY(MT)</Label>
+                  <Input value={selectedInward.totalQuantity || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>INWARD BAGS</Label>
-                  <Input value={selectedInward.totalBags || ''} readOnly />
+                  <Label className="text-sm sm:text-base">BALANCE BAGS</Label>
+                  <Input value={currentBalanceBags || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>INWARD QTY(MT) </Label>
-                  <Input value={selectedInward.totalQuantity || ''} readOnly />
+                  <Label className="text-sm sm:text-base">BALANCE QTY (MT)</Label>
+                  <Input value={currentBalanceQty || ''} readOnly className="text-sm" />
                 </div>
                 <div>
-                  <Label>BALANCE BAGS</Label>
-                  <Input value={currentBalanceBags || ''} readOnly />
+                  <Label className="text-sm sm:text-base">RELEASE BAGS</Label>
+                  <Input value={releaseBags} onChange={e => setReleaseBags(e.target.value)} type="number" min="0" required className="text-sm" />
                 </div>
                 <div>
-                  <Label>BALANCE QTY (MT)</Label>
-                  <Input value={currentBalanceQty || ''} readOnly />
+                  <Label className="text-sm sm:text-base">RELEASE QTY (MT)</Label>
+                  <Input value={releaseQty} onChange={e => setReleaseQty(e.target.value)} type="number" min="0" required className="text-sm" />
                 </div>
-                <div>
-                  <Label>RELEASE BAGS</Label>
-                  <Input value={releaseBags} onChange={e => setReleaseBags(e.target.value)} type="number" min="0" required />
-                </div>
-                <div>
-                  <Label>RELEASE QTY (MT)</Label>
-                  <Input value={releaseQty} onChange={e => setReleaseQty(e.target.value)} type="number" min="0" required />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Attachments (JPG, JPEG, PNG, PDF, DOCX)</Label>
-                  <Input type="file" accept=".jpg,.jpeg,.png,.pdf,.docx" multiple onChange={handleFileChange} required />
+                <div className="sm:col-span-2">
+                  <Label className="text-sm sm:text-base">Attachments (JPG, JPEG, PNG, PDF, DOCX)</Label>
+                  <Input type="file" accept=".jpg,.jpeg,.png,.pdf,.docx" multiple onChange={handleFileChange} required className="text-sm" />
                 </div>
               </div>
             )}
@@ -746,28 +756,28 @@ export default function ReleaseOrderPage() {
             {/* Previous ROs Table for this SR/WR */}
             {selectedInward && previousROs.length > 0 && (
               <div className="mb-4">
-                <div className="font-semibold mb-2 text-green-700">Previous Release Orders for this SR/WR</div>
+                <div className="font-semibold mb-2 text-green-700 text-sm sm:text-base">Previous Release Orders for this SR/WR</div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full border text-sm">
+                  <table className="min-w-full border text-xs sm:text-sm">
                     <thead className="bg-orange-100">
                       <tr>
-                        <th className="px-2 py-1 border text-orange-500">Date</th>
-                        <th className="px-2 py-1 border text-orange-500">RO Code</th>
-                        <th className="px-2 py-1 border text-orange-500">Release Bags</th>
-                        <th className="px-2 py-1 border text-orange-500">Release Qty</th>
-                        <th className="px-2 py-1 border text-orange-500">Balance Bags</th>
-                        <th className="px-2 py-1 border text-orange-500">Balance Qty</th>
+                        <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Date</th>
+                        <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">RO Code</th>
+                        <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Release Bags</th>
+                        <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Release Qty</th>
+                        <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Balance Bags</th>
+                        <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Balance Qty</th>
                       </tr>
                     </thead>
                     <tbody>
                       {previousROs.map((ro, idx) => (
                         <tr key={ro.roCode || idx} className="even:bg-gray-50">
-                          <td className="px-2 py-1 border text-center">{ro.createdAt ? new Date(ro.createdAt).toLocaleDateString('en-GB') : ''}</td>
-                          <td className="px-2 py-1 border text-center">{ro.roCode}</td>
-                          <td className="px-2 py-1 border text-center">{ro.releaseBags}</td>
-                          <td className="px-2 py-1 border text-center">{ro.releaseQuantity}</td>
-                          <td className="px-2 py-1 border text-center">{ro.balanceBags}</td>
-                          <td className="px-2 py-1 border text-center">{ro.balanceQuantity}</td>
+                          <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.createdAt ? new Date(ro.createdAt).toLocaleDateString('en-GB') : ''}</td>
+                          <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.roCode}</td>
+                          <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.releaseBags}</td>
+                          <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.releaseQuantity}</td>
+                          <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.balanceBags}</td>
+                          <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.balanceQuantity}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -775,23 +785,121 @@ export default function ReleaseOrderPage() {
                 </div>
               </div>
             )}
-            <DialogFooter>
-              <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white" disabled={isUploading}>{isUploading ? 'Uploading...' : 'Submit'}</Button>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+              <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto order-2 sm:order-1" disabled={isUploading}>
+                {isUploading ? 'Uploading...' : 'Submit'}
+              </Button>
               <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
+                <Button type="button" variant="outline" className="w-full sm:w-auto order-1 sm:order-2">Cancel</Button>
               </DialogClose>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
       {/* RO table with grouping and expand/collapse */}
-      <div className="px-8">
+      <div className="px-4 lg:px-8">
         <Card>
           <CardHeader>
-            <CardTitle className="text-green-700 text-xl">Release Orders</CardTitle>
+            <CardTitle className="text-green-700 text-lg lg:text-xl">Release Orders</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div style={{ width: '100%', overflowX: 'auto' }}>
+            {/* Mobile Card Layout */}
+            <div className="block lg:hidden">
+              {filteredROs.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-500">
+                  {releaseOrders.length === 0 
+                    ? "No release orders found. Click 'Add RO' to create your first entry."
+                    : "No release orders match your search criteria. Try adjusting your search terms."
+                  }
+                </div>
+              ) : (
+                <div className="space-y-3 p-4">
+                  {filteredROs.map(ro => (
+                    <Card key={ro.roCode} className="border border-gray-200 bg-white">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="font-semibold text-lg text-green-700">{ro.roCode}</div>
+                            <div className="text-sm text-gray-600">{ro.srwrNo}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={getStatusStyling(ro.roStatus || 'pending')}>{normalizeStatusText(ro.roStatus || 'pending')}</span>
+                            <Button variant="ghost" size="sm" className="p-1" title="View Details" onClick={() => { setSelectedRO(ro); setShowRODetails(true); }}>
+                              <Eye className="h-4 w-4 text-green-600" />
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="font-medium text-gray-700">State:</span>
+                            <div className="text-gray-600">{ro.state}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Branch:</span>
+                            <div className="text-gray-600">{ro.branch}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Warehouse:</span>
+                            <div className="text-gray-600">{ro.warehouseName}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Client:</span>
+                            <div className="text-gray-600">{ro.client}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Release Bags:</span>
+                            <div className="text-gray-600">{ro.releaseBags !== undefined ? ro.releaseBags : (groupedROs[ro.srwrNo]?.[0]?.releaseBags ?? '')}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Balance Bags:</span>
+                            <div className="text-gray-600">{getBalanceBags(ro)}</div>
+                          </div>
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 w-full"
+                          onClick={() => setExpandedRows(prev => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
+                        >
+                          {expandedRows[ro.srwrNo] ? 'Hide Details ▼' : 'Show Details ▶'}
+                        </Button>
+                        
+                        {expandedRows[ro.srwrNo] && (
+                          <div className="mt-3 p-3 bg-green-50 border-t">
+                            <div className="font-semibold mb-2 text-orange-700 text-sm">All Release Orders for {ro.srwrNo}</div>
+                            <div className="space-y-2">
+                              {groupedROs[ro.srwrNo].map((entry, idx) => (
+                                <div key={entry.roCode || idx} className="bg-white p-3 rounded border text-xs">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div><span className="font-medium">Date:</span> {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : ''}</div>
+                                    <div><span className="font-medium">RO Code:</span> {entry.roCode}</div>
+                                    <div><span className="font-medium">Release Bags:</span> {entry.releaseBags}</div>
+                                    <div><span className="font-medium">Release Qty:</span> {entry.releaseQuantity}</div>
+                                    <div><span className="font-medium">Balance Bags:</span> {entry.balanceBags}</div>
+                                    <div><span className="font-medium">Balance Qty:</span> {entry.balanceQuantity}</div>
+                                  </div>
+                                  <div className="mt-2 flex justify-between items-center">
+                                    <span className={getStatusStyling(entry.roStatus || 'pending')}>{normalizeStatusText(entry.roStatus || 'pending')}</span>
+                                    <Button variant="ghost" size="sm" className="p-1" title="View Details" onClick={() => { setSelectedRO(entry); setShowRODetails(true); }}>
+                                      <Eye className="h-3 w-3 text-green-600" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Desktop Table Layout */}
+            <div className="hidden lg:block" style={{ width: '100%', overflowX: 'auto' }}>
               <table className="min-w-[1400px] border text-sm">
                 <thead className="bg-orange-100">
                   <tr>
@@ -923,28 +1031,21 @@ export default function ReleaseOrderPage() {
         </Card>
         {/* RO Details Dialog */}
         <Dialog open={showRODetails} onOpenChange={setShowRODetails}>
-          <DialogContent className="max-w-5xl w-full p-2">
+          <DialogContent className="w-[95vw] max-w-5xl h-[95vh] p-3 sm:p-4">
             <DialogHeader>
-              <DialogTitle>RO Details</DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl">RO Details</DialogTitle>
             </DialogHeader>
             {selectedRO && (
-              <form id="ro-details-form" className="max-h-[80vh] overflow-y-auto p-2">
+              <form id="ro-details-form" className="max-h-[calc(95vh-120px)] overflow-y-auto p-1 sm:p-2">
                 {/* CIR-style header */}
-                <div style={{ textAlign: 'center', marginBottom: 8 }}>
-                  <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
-                  <div style={{ fontSize: 28, fontWeight: 700, color: '#e67c1f', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
-                  <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>RO Details</div>
+                <div className="text-center mb-2">
+                  <img src="/Group 86.png" alt="Agrogreen Logo" className="w-16 sm:w-20 lg:w-24 h-16 sm:h-20 lg:h-24 rounded-full mx-auto mb-2" />
+                  <div className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-500 tracking-wide mb-1">AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                  <div className="text-sm sm:text-base lg:text-lg font-medium text-green-600 mb-2">603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                  <div className="text-base sm:text-lg lg:text-xl font-bold text-orange-500 mt-4 underline">RO Details</div>
                 </div>
-                {/* Three-column grid for fields */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr',
-                    gap: '0 24px',
-                    marginTop: 32,
-                  }}
-                >
+                {/* Responsive grid for fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 lg:gap-x-6 mt-4">
                   {/* All fields except attachments */}
                   {[
                     { label: 'RO Code', value: selectedRO.roCode },
@@ -967,17 +1068,17 @@ export default function ReleaseOrderPage() {
                     { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedRO) },
                     { label: 'Remark', value: selectedRO.remark },
                   ].map((f, idx) => (
-                    <div key={idx} style={{ marginBottom: 12 }}>
-                      <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>{f.label}</div>
-                      <div style={{ fontWeight: 500, color: '#222', fontSize: 16, marginBottom: 8, background: '#f6fef9', borderRadius: 8, padding: '6px 12px', border: '1px solid #e0f2e9' }}>{f.value ?? '-'}</div>
+                    <div key={idx} className="mb-3">
+                      <div className="font-bold text-green-600 text-sm sm:text-base mb-1 mt-2 tracking-wide">{f.label}</div>
+                      <div className="font-medium text-gray-800 text-sm sm:text-base bg-green-50 rounded-lg p-2 sm:p-3 border border-green-200">{f.value ?? '-'}</div>
                     </div>
                   ))}
                 </div>
-                {/* Attachments row below grid */}
-                <div style={{ marginTop: 24 }}>
-                  <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Attachment</div>
+                {/* Attachments section below grid */}
+                <div className="mt-6">
+                  <div className="font-bold text-green-600 text-sm sm:text-base mb-2 mt-2 tracking-wide">Attachment</div>
                   {Array.isArray(selectedRO.attachmentUrls) && selectedRO.attachmentUrls.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div className="flex flex-col gap-1">
                       {selectedRO.attachmentUrls.map((url: string, idx: number) => {
                         const ext = url.split('.').pop()?.toLowerCase();
                         let label = 'View File';
@@ -985,20 +1086,20 @@ export default function ReleaseOrderPage() {
                         else if (ext === 'docx') label = 'View DOCX';
                         else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
                         return (
-                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db', textDecoration: 'underline', fontSize: 15 }}>
+                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm">
                             {label} {idx + 1}
                           </a>
                         );
                       })}
                     </div>
                   ) : (
-                    <span style={{ color: '#888', fontSize: 15 }}>No file</span>
+                    <span className="text-gray-500 text-sm">No file</span>
                   )}
                 </div>
                 {/* Generate Receipt Button (only if approved) */}
                 {selectedRO.roStatus === 'approved' && (
-                  <div className="flex justify-end mt-2">
-                    <Button type="button" className="bg-green-600 hover:bg-green-700 text-white" onClick={async () => {
+                  <div className="flex justify-center sm:justify-end mt-4">
+                    <Button type="button" className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto" onClick={async () => {
                       try {
                         // Import required libraries
                         const html2canvas = (await import('html2canvas')).default;
@@ -1137,28 +1238,28 @@ export default function ReleaseOrderPage() {
                 {/* Previous ROs Table for this SR/WR in RO Details Dialog */}
                 {selectedRO.srwrNo && groupedROs[selectedRO.srwrNo] && groupedROs[selectedRO.srwrNo].length > 0 && (
                   <div className="mb-4 mt-6">
-                    <div className="font-semibold mb-2 text-green-700">Previous Release Orders for this SR/WR</div>
+                    <div className="font-semibold mb-2 text-green-700 text-sm sm:text-base">Previous Release Orders for this SR/WR</div>
                     <div className="overflow-x-auto">
-                      <table className="min-w-full border text-sm">
+                      <table className="min-w-full border text-xs sm:text-sm">
                         <thead className="bg-orange-100">
                           <tr>
-                            <th className="px-2 py-1 border text-orange-500">Date</th>
-                            <th className="px-2 py-1 border text-orange-500">RO Code</th>
-                            <th className="px-2 py-1 border text-orange-500">Release Bags</th>
-                            <th className="px-2 py-1 border text-orange-500">Release Qty</th>
-                            <th className="px-2 py-1 border text-orange-500">Balance Bags</th>
-                            <th className="px-2 py-1 border text-orange-500">Balance Qty</th>
+                            <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Date</th>
+                            <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">RO Code</th>
+                            <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Release Bags</th>
+                            <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Release Qty</th>
+                            <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Balance Bags</th>
+                            <th className="px-1 sm:px-2 py-1 border text-orange-500 text-xs">Balance Qty</th>
                           </tr>
                         </thead>
                         <tbody>
                           {groupedROs[selectedRO.srwrNo].map((ro, idx) => (
                             <tr key={ro.roCode || idx} className="even:bg-gray-50">
-                              <td className="px-2 py-1 border text-center">{ro.createdAt ? new Date(ro.createdAt).toLocaleDateString('en-GB') : ''}</td>
-                              <td className="px-2 py-1 border text-center">{ro.roCode}</td>
-                              <td className="px-2 py-1 border text-center">{ro.releaseBags}</td>
-                              <td className="px-2 py-1 border text-center">{ro.releaseQuantity}</td>
-                              <td className="px-2 py-1 border text-center">{ro.balanceBags}</td>
-                              <td className="px-2 py-1 border text-center">{ro.balanceQuantity}</td>
+                              <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.createdAt ? new Date(ro.createdAt).toLocaleDateString('en-GB') : ''}</td>
+                              <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.roCode}</td>
+                              <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.releaseBags}</td>
+                              <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.releaseQuantity}</td>
+                              <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.balanceBags}</td>
+                              <td className="px-1 sm:px-2 py-1 border text-center text-xs">{ro.balanceQuantity}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1167,13 +1268,13 @@ export default function ReleaseOrderPage() {
                   </div>
                 )}
                 <div className="mt-4">
-                  <Label>Remark</Label>
-                  <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="Enter remark..." />
+                  <Label className="text-sm sm:text-base">Remark</Label>
+                  <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="Enter remark..." className="text-sm" />
                 </div>
-                <div className="flex gap-4 mt-4 justify-end">
-                  <Button type="button" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleROStatusChange('approved')} disabled={roStatusUpdating}>Approve</Button>
-                  <Button type="button" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleROStatusChange('rejected')} disabled={roStatusUpdating}>Reject</Button>
-                  <Button type="button" className="bg-yellow-500 hover:bg-yellow-600 text-white" onClick={() => handleROStatusChange('resubmitted')} disabled={roStatusUpdating}>Resubmit</Button>
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-4 sm:justify-end">
+                  <Button type="button" className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto" onClick={() => handleROStatusChange('approved')} disabled={roStatusUpdating}>Approve</Button>
+                  <Button type="button" className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto" onClick={() => handleROStatusChange('rejected')} disabled={roStatusUpdating}>Reject</Button>
+                  <Button type="button" className="bg-yellow-500 hover:bg-yellow-600 text-white w-full sm:w-auto" onClick={() => handleROStatusChange('resubmitted')} disabled={roStatusUpdating}>Resubmit</Button>
                 </div>
               </form>
             )}

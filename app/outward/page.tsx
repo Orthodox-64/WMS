@@ -449,29 +449,36 @@ export default function OutwardPage() {
   
   return (
     <DashboardLayout>
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <Button onClick={() => router.push('/dashboard')} variant="ghost" className="flex items-center bg-orange-500 text-white hover:bg-orange-600">
+      <div className="p-3 sm:p-6">
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-4 lg:mb-6 gap-4">
+          <Button 
+            onClick={() => router.push('/dashboard')} 
+            variant="ghost" 
+            className="flex items-center justify-center bg-orange-500 text-white hover:bg-orange-600 w-full lg:w-auto px-4 py-3"
+          >
             ← Dashboard
           </Button>
-          <h1 className="text-3xl font-bold text-orange-600 text-center flex-1">Outward Module</h1>
-          <Button onClick={() => setShowAddModal(true)} className="bg-green-500 hover:bg-green-600 text-white">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-600 text-center order-first lg:order-none">Outward Module</h1>
+          <Button 
+            onClick={() => setShowAddModal(true)} 
+            className="bg-green-500 hover:bg-green-600 text-white w-full lg:w-auto px-4 py-3"
+          >
             <Plus className="h-4 w-4 mr-2" /> Add Outward
           </Button>
         </div>
 
         {/* Search and Export */}
-        <div className="bg-blue-50 rounded-lg p-4 mb-6 border border-blue-200">
-          <div className="text-lg font-semibold text-orange-500 mb-3">Search & Export Options</div>
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <span className="mr-2 text-gray-600">Search:</span>
-              <div className="relative">
+        <div className="bg-blue-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 border border-blue-200">
+          <div className="text-base sm:text-lg font-semibold text-orange-500 mb-3">Search & Export Options</div>
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1">
+              <span className="text-gray-600 text-sm sm:text-base whitespace-nowrap">Search:</span>
+              <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   type="search"
-                  placeholder="Search by SR/WR No, State, Branch, Location, Warehouse Name/Code, Client Name..."
-                  className="pl-8 pr-8 w-[400px]"
+                  placeholder="Search by SR/WR No, State, Branch, Location..."
+                  className="pl-8 pr-8 w-full"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -489,12 +496,15 @@ export default function OutwardPage() {
                 )}
               </div>
               {searchTerm && (
-                <div className="ml-3 text-sm text-gray-600">
+                <div className="text-sm text-gray-600 text-center sm:text-left whitespace-nowrap">
                   {filteredOutwards.length} of {latestOutwards.length} entries
                 </div>
               )}
             </div>
-            <Button onClick={exportToCSV} className="bg-blue-500 hover:bg-blue-600 text-white">
+            <Button 
+              onClick={exportToCSV} 
+              className="bg-blue-500 hover:bg-blue-600 text-white w-full lg:w-auto flex-shrink-0"
+            >
               <Download className="h-4 w-4 mr-2" /> Export CSV
             </Button>
           </div>
@@ -503,9 +513,99 @@ export default function OutwardPage() {
         {/* Main Table */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="py-3 px-4 bg-blue-50 border-b border-blue-100">
-            <h2 className="text-orange-500 text-xl font-semibold">Outward Entries</h2>
+            <h2 className="text-orange-500 text-lg sm:text-xl font-semibold">Outward Entries</h2>
           </div>
-          <div className="overflow-x-auto">
+          
+          {/* Mobile Card Layout */}
+          <div className="block lg:hidden">
+            {outwardEntries.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No outward entries found. Click "Add Outward" to create your first entry.
+              </div>
+            ) : filteredOutwards.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No outward entries match your search criteria. Try adjusting your search terms.
+              </div>
+            ) : (
+              <div className="space-y-3 p-4">
+                {filteredOutwards.map((outward) => (
+                  <div key={outward.id} className="border border-gray-200 bg-white rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="font-semibold text-lg text-orange-600">{outward.outwardCode}</div>
+                        <div className="text-sm text-gray-600">{outward.srwrNo}</div>
+                        <div className="text-xs text-gray-500">{outward.doCode}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          outward.outwardStatus === 'approved' 
+                            ? 'bg-green-100 text-green-800' 
+                            : outward.outwardStatus === 'rejected'
+                            ? 'bg-red-100 text-red-600'
+                            : outward.outwardStatus === 'resubmitted'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {outward.outwardStatus || 'pending'}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setSelectedOutward(outward);
+                            setShowOutwardDetails(true);
+                          }}
+                          className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                          title="View Details"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700">State:</span>
+                        <div className="text-gray-600">{outward.state}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Branch:</span>
+                        <div className="text-gray-600">{outward.branch}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Warehouse:</span>
+                        <div className="text-gray-600 truncate">{outward.warehouseName}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Client:</span>
+                        <div className="text-gray-600 truncate">{outward.client}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Vehicle:</span>
+                        <div className="text-gray-600">{outward.vehicleNumber}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Outward Bags:</span>
+                        <div className="text-gray-600">{outward.outwardBags}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Outward Qty:</span>
+                        <div className="text-gray-600">{outward.outwardQuantity} MT</div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Net Weight:</span>
+                        <div className="text-gray-600">{outward.netWeight || '-'} MT</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Desktop Table Layout */}
+          <div className="hidden lg:block overflow-x-auto">
             {outwardEntries.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 No outward entries found. Click "Add Outward" to create your first entry.
@@ -687,11 +787,10 @@ export default function OutwardPage() {
       
       {/* Add Outward Dialog (Form) */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl h-[95vh] p-3 sm:p-4">
           <DialogHeader>
-            <DialogTitle className="text-xl text-left text-orange-600 font-bold">
+            <DialogTitle className="text-lg sm:text-xl text-left text-orange-600 font-bold">
               New Outward Entry
-              
             </DialogTitle>
           </DialogHeader>
           
@@ -883,13 +982,13 @@ export default function OutwardPage() {
               setFormError(`An error occurred: ${error?.message || 'Unknown error'}. Please try again.`);
               setIsUploading(false);
             }
-          }} className="overflow-y-auto pr-1">
-            {formError && <div className="bg-red-100 p-3 mb-4 text-red-600 rounded-md text-center font-medium">{formError}</div>}
+          }} className="max-h-[calc(95vh-120px)] overflow-y-auto p-1 sm:p-2">
+            {formError && <div className="bg-red-100 p-2 sm:p-3 mb-4 text-red-600 rounded-md text-center font-medium text-sm sm:text-base">{formError}</div>}
             
-            <div className="space-y-5 pt-4">
+            <div className="space-y-4 sm:space-y-5 pt-2 sm:pt-4">
               {/* DO Selection */}
-              <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-                <Label htmlFor="do-select" className="text-green-800 font-semibold text-lg mb-2 block">
+              <div className="bg-blue-50 p-3 sm:p-4 rounded-md border border-blue-200">
+                <Label htmlFor="do-select" className="text-green-800 font-semibold text-base sm:text-lg mb-2 block">
                   Select Delivery Order
                 </Label>
                 <div className="relative">
@@ -1298,14 +1397,14 @@ export default function OutwardPage() {
 
               {/* Auto-populated Fields */}
               {selectedDO && (
-                <div className="grid grid-cols-2 gap-6 p-4 bg-blue-50 rounded-md border border-blue-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 p-3 sm:p-4 bg-blue-50 rounded-md border border-blue-200">
                   <div>
-                    <Label className="text-green-800 font-medium">SR/WR NO</Label>
-                    <Input value={selectedDO.srwrNo || ''} readOnly className="bg-white border-blue-100" />
+                    <Label className="text-green-800 font-medium text-sm sm:text-base">SR/WR NO</Label>
+                    <Input value={selectedDO.srwrNo || ''} readOnly className="bg-white border-blue-100 text-sm" />
                   </div>
                   <div>
-                    <Label className="text-green-800 font-medium">CAD NUMBER</Label>
-                    <Input value={selectedDO.cadNumber || ''} readOnly className="bg-white border-blue-100" />
+                    <Label className="text-green-800 font-medium text-sm sm:text-base">CAD NUMBER</Label>
+                    <Input value={selectedDO.cadNumber || ''} readOnly className="bg-white border-blue-100 text-sm" />
                   </div>
                   <div>
                     <Label className="text-green-800 font-medium">STATE</Label>
@@ -1409,9 +1508,9 @@ export default function OutwardPage() {
                   </div>
                   
                   {/* Outward entry details */}
-                  <div className="col-span-2 mt-4">
-                    <h3 className="text-orange-800 font-semibold mb-3 border-b border-blue-200 pb-1">Outward Entry Details</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                  <div className="sm:col-span-2 mt-4">
+                    <h3 className="text-orange-800 font-semibold mb-3 border-b border-blue-200 pb-1 text-sm sm:text-base">Outward Entry Details</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <Label htmlFor="vehicleNumber" className="text-green-600 font-medium">VEHICLE NUMBER</Label>
                         <Input
@@ -1726,12 +1825,12 @@ export default function OutwardPage() {
               )}
             </div>
 
-            <DialogFooter className="mt-8 pt-4 border-t border-blue-100">
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6" disabled={isUploading}>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0 mt-6 sm:mt-8 pt-4 border-t border-blue-100">
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 w-full sm:w-auto order-2 sm:order-1" disabled={isUploading}>
                 {isUploading ? 'Submitting...' : 'SUBMIT'}
               </Button>
               <DialogClose asChild>
-                <Button type="button" variant="outline" className="border-blue-200 text-blue-800 hover:bg-blue-50">Cancel</Button>
+                <Button type="button" variant="outline" className="border-blue-200 text-blue-800 hover:bg-blue-50 w-full sm:w-auto order-1 sm:order-2">Cancel</Button>
               </DialogClose>
             </DialogFooter>
           </form>
@@ -1740,28 +1839,21 @@ export default function OutwardPage() {
       
       {/* Outward Details Dialog */}
       <Dialog open={showOutwardDetails} onOpenChange={setShowOutwardDetails}>
-        <DialogContent className="max-w-5xl w-full p-2">
+        <DialogContent className="w-[95vw] max-w-5xl h-[95vh] p-3 sm:p-4">
           <DialogHeader>
-            <DialogTitle>Outward Details</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">Outward Details</DialogTitle>
           </DialogHeader>
           {selectedOutward && (
-            <form id="outward-details-form" className="max-h-[80vh] overflow-y-auto p-2">
+            <form id="outward-details-form" className="max-h-[calc(95vh-120px)] overflow-y-auto p-1 sm:p-2">
               {/* CIR-style header */}
-              <div style={{ textAlign: 'center', marginBottom: 8 }}>
-                <img src="/Group 86.png" alt="Agrogreen Logo" style={{ width: 90, height: 90, borderRadius: '50%', margin: '0 auto 8px' }} />
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#e67c1f', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
-                <div style={{ fontSize: 18, fontWeight: 500, color: '#1aad4b', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#e67c1f', margin: '24px 0 0 0', textDecoration: 'underline' }}>Outward Details</div>
+              <div className="text-center mb-2">
+                <img src="/Group 86.png" alt="Agrogreen Logo" className="w-16 sm:w-20 lg:w-24 h-16 sm:h-20 lg:h-24 rounded-full mx-auto mb-2" />
+                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-500 tracking-wide mb-1">AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                <div className="text-sm sm:text-base lg:text-lg font-medium text-green-600 mb-2">603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                <div className="text-base sm:text-lg lg:text-xl font-bold text-orange-500 mt-4 underline">Outward Details</div>
               </div>
-              {/* Three-column grid for fields */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 1fr',
-                  gap: '0 24px',
-                  marginTop: 32,
-                }}
-              >
+              {/* Responsive grid for fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 lg:gap-x-6 mt-4">
                 {/* All fields except attachments */}
                 {[
                   { label: 'Outward Code', value: selectedOutward.outwardCode },
@@ -1792,9 +1884,9 @@ export default function OutwardPage() {
                   { label: 'Net Weight (MT)', value: selectedOutward.netWeight },
                   { label: 'Total Bags Outward', value: selectedOutward.totalBagsOutward },
                 ].map((f, idx) => (
-                  <div key={idx} style={{ marginBottom: 12 }}>
-                    <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>{f.label}</div>
-                    <div style={{ fontWeight: 500, color: '#222', fontSize: 16, marginBottom: 8, background: '#f6fef9', borderRadius: 8, padding: '6px 12px', border: '1px solid #e0f2e9' }}>{f.value ?? '-'}</div>
+                  <div key={idx} className="mb-3">
+                    <div className="font-bold text-green-600 text-sm sm:text-base mb-1 mt-2 tracking-wide">{f.label}</div>
+                    <div className="font-medium text-gray-800 text-sm sm:text-base bg-green-50 rounded-lg p-2 sm:p-3 border border-green-200">{f.value ?? '-'}</div>
                   </div>
                 ))}
               </div>
@@ -1841,7 +1933,7 @@ export default function OutwardPage() {
                 </div>
               </div>
               {/* Action buttons at bottom right */}
-              <div className="flex justify-end gap-4 mt-6 pt-4 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row justify-center sm:justify-end gap-3 sm:gap-4 mt-6 pt-4 border-t border-gray-200">
                 {/* Show all buttons when pending or resubmitted */}
                 {(selectedOutward.outwardStatus === 'pending' || selectedOutward.outwardStatus === 'resubmitted') && (userRole === 'checker' || userRole === 'admin') && (
                   <>
@@ -1868,7 +1960,7 @@ export default function OutwardPage() {
                           setOutwardStatusUpdating(false);
                         }
                       }}
-                      className="bg-green-600 hover:bg-green-700 text-white px-6"
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 w-full sm:w-auto"
                       disabled={outwardStatusUpdating}
                     >
                       Approve
@@ -1940,7 +2032,7 @@ export default function OutwardPage() {
                 {selectedOutward.outwardStatus === 'approved' && (
                   <Button 
                     type="button" 
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 w-full sm:w-auto"
                     onClick={async () => {
                       try {
                         // Import required libraries
@@ -2121,9 +2213,9 @@ export default function OutwardPage() {
             </form>
           )}
           
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <DialogClose asChild>
-              <Button type="button" variant="outline">Close</Button>
+              <Button type="button" variant="outline" className="w-full sm:w-auto">Close</Button>
             </DialogClose>
           </DialogFooter>
         </DialogContent>
