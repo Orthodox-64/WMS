@@ -80,21 +80,21 @@ export default function ReleaseOrderPage() {
   // Placeholder state for search
   const [searchTerm, setSearchTerm] = React.useState('');
   const [showAddModal, setShowAddModal] = React.useState(false);
-  const [inwardOptions, setInwardOptions] = React.useState<any[]>([]);
+  const [inwardOptions, setInwardOptions] = React.useState([] as any[]);
   const [inwardSearch, setInwardSearch] = React.useState('');
-  const [selectedInward, setSelectedInward] = React.useState<any>(null);
+  const [selectedInward, setSelectedInward] = React.useState(null as any | null);
   const [releaseBags, setReleaseBags] = React.useState('');
   const [releaseQty, setReleaseQty] = React.useState('');
-  const [fileAttachments, setFileAttachments] = React.useState<File[]>([]);
+  const [fileAttachments, setFileAttachments] = React.useState([] as File[]);
   const [isUploading, setIsUploading] = React.useState(false);
-  const [formError, setFormError] = React.useState<string | null>(null);
+  const [formError, setFormError] = React.useState(null as string | null);
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
-  const [currentBalanceBags, setCurrentBalanceBags] = React.useState<number | null>(null);
-  const [currentBalanceQty, setCurrentBalanceQty] = React.useState<number | null>(null);
-  const [releaseOrders, setReleaseOrders] = React.useState<any[]>([]);
-  const [previousROs, setPreviousROs] = React.useState<any[]>([]);
+  const [currentBalanceBags, setCurrentBalanceBags] = React.useState(null as number | null);
+  const [currentBalanceQty, setCurrentBalanceQty] = React.useState(null as number | null);
+  const [releaseOrders, setReleaseOrders] = React.useState([] as any[]);
+  const [previousROs, setPreviousROs] = React.useState([] as any[]);
   const [showRODetails, setShowRODetails] = React.useState(false);
-  const [selectedRO, setSelectedRO] = React.useState<any>(null);
+  const [selectedRO, setSelectedRO] = React.useState(null as any | null);
   const [remark, setRemark] = React.useState('');
   const [roStatusUpdating, setROStatusUpdating] = React.useState(false);
 
@@ -103,7 +103,7 @@ export default function ReleaseOrderPage() {
     const fetchROs = async () => {
       const roCol = collection(db, 'releaseOrders');
       const snap = await getDocs(roCol);
-      let data = snap.docs.map((doc, idx) => {
+  let data = snap.docs.map((doc: any, idx: number) => {
         const d = doc.data();
         // Ensure roCode and roStatus
         return {
@@ -114,7 +114,7 @@ export default function ReleaseOrderPage() {
         };
       });
       // Sort by roCode descending (latest first)
-      data.sort((a, b) => (b.roCode || '').localeCompare(a.roCode || ''));
+  data.sort((a: any, b: any) => (b.roCode || '').localeCompare(a.roCode || ''));
       setReleaseOrders(data);
     };
     fetchROs();
@@ -139,7 +139,7 @@ export default function ReleaseOrderPage() {
   };
 
   // Group releaseOrders by srwrNo, show only latest per group
-  const [expandedRows, setExpandedRows] = React.useState<{ [key: string]: boolean }>({});
+  const [expandedRows, setExpandedRows] = React.useState({} as { [key: string]: boolean });
   const groupedROs: { [key: string]: any[] } = {};
   releaseOrders.forEach((ro: any) => {
     if (!groupedROs[ro.srwrNo]) groupedROs[ro.srwrNo] = [];
@@ -184,7 +184,7 @@ export default function ReleaseOrderPage() {
           variant="ghost"
           size="sm"
           onClick={() => {
-            setExpandedRows(prev => ({ ...prev, [row.original.srwrNo]: !prev[row.original.srwrNo] }));
+            setExpandedRows((prev: { [key: string]: boolean }) => ({ ...prev, [row.original.srwrNo]: !prev[row.original.srwrNo] }));
           }}
         >
           {expandedRows[row.original.srwrNo] ? '▼' : '▶'}
@@ -351,14 +351,12 @@ export default function ReleaseOrderPage() {
       const inwardCol = collection(db, 'inward');
       const q = query(inwardCol, where('status', '==', 'approve'));
       const snap = await getDocs(q);
-      const inwardData: any[] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const inwardData: any[] = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+    const inwardData: any[] = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 
       // Fetch all inspections once for efficiency
       const inspectionsCol = collection(db, 'inspections');
       const inspectionsSnap = await getDocs(inspectionsCol);
-      const inspections = inspectionsSnap.docs.map(doc => doc.data());
-  const inspections = inspectionsSnap.docs.map((doc: any) => doc.data());
+    const inspections = inspectionsSnap.docs.map((doc: any) => doc.data());
 
       // Map inward entries to include receiptType from inspection
       const merged = inwardData.map((inward: any) => {
@@ -379,8 +377,7 @@ export default function ReleaseOrderPage() {
   // Filtered options for dropdown
   const filteredInwardOptions = React.useMemo(() => {
     if (!inwardSearch) return inwardOptions;
-    return inwardOptions.filter(opt => {
-  return inwardOptions.filter((opt: any) => {
+    return inwardOptions.filter((opt: any) => {
       const srwr = `${opt.receiptType || 'SR'}-${opt.inwardId || ''}-${opt.dateOfInward || ''}`.toLowerCase();
       return srwr.includes(inwardSearch.toLowerCase());
     });
@@ -618,7 +615,6 @@ export default function ReleaseOrderPage() {
                   placeholder="Search by SR/WR No, State, Branch, Location..."
                   className="w-full pr-8"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                 />
                 {searchTerm && (
@@ -653,9 +649,9 @@ export default function ReleaseOrderPage() {
       {/* Add RO Dialog */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="w-[95vw] max-w-5xl h-[95vh] p-3 sm:p-4">
-          <DialogHeader>
+          <div className="flex flex-col space-y-1.5 text-center sm:text-left">
             <DialogTitle className="text-lg sm:text-xl">Add Release Order</DialogTitle>
-          </DialogHeader>
+          </div>
           <form onSubmit={handleSubmit} className="space-y-4 max-h-[calc(95vh-120px)] overflow-y-auto p-1 sm:p-2">
             {/* SR/WR No. Dropdown */}
             <div className="grid grid-cols-1 gap-3">
@@ -789,14 +785,14 @@ export default function ReleaseOrderPage() {
                 </div>
               </div>
             )}
-            <DialogFooter>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2">
               <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto order-2 sm:order-1" disabled={isUploading}>
                 {isUploading ? 'Uploading...' : 'Submit'}
               </Button>
               <DialogClose asChild>
                 <Button type="button" variant="outline" className="w-full sm:w-auto order-1 sm:order-2">Cancel</Button>
               </DialogClose>
-            </DialogFooter>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
@@ -865,8 +861,7 @@ export default function ReleaseOrderPage() {
                           variant="outline"
                           size="sm"
                           className="mt-3 w-full"
-                          onClick={() => setExpandedRows(prev => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
-                          onClick={() => setExpandedRows((prev: any) => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
+                          onClick={() => setExpandedRows((prev: { [key: string]: boolean }) => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
                         >
                           {expandedRows[ro.srwrNo] ? 'Hide Details ▼' : 'Show Details ▶'}
                         </Button>
@@ -947,7 +942,7 @@ export default function ReleaseOrderPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setExpandedRows(prev => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
+                            onClick={() => setExpandedRows((prev: { [key: string]: boolean }) => ({ ...prev, [ro.srwrNo]: !prev[ro.srwrNo] }))}
                           >
                             {expandedRows[ro.srwrNo] ? '▼' : '▶'}
                           </Button>
@@ -1037,9 +1032,9 @@ export default function ReleaseOrderPage() {
         {/* RO Details Dialog */}
         <Dialog open={showRODetails} onOpenChange={setShowRODetails}>
           <DialogContent className="w-[95vw] max-w-5xl h-[95vh] p-3 sm:p-4">
-            <DialogHeader>
+            <div className="flex flex-col space-y-1.5 text-center sm:text-left">
               <DialogTitle className="text-lg sm:text-xl">RO Details</DialogTitle>
-            </DialogHeader>
+            </div>
             {selectedRO && (
               <form id="ro-details-form" className="max-h-[calc(95vh-120px)] overflow-y-auto p-1 sm:p-2">
                 {/* CIR-style header */}

@@ -19,7 +19,8 @@ class RegistrationOTPService {
   async sendRegistrationOTP(email: string, username: string): Promise<{ success: boolean; message: string; otpId?: string }> {
     try {
       // Check if there's already an active OTP for this email
-      for (const [otpId, otpData] of this.registrationOTPs.entries()) {
+      for (const otpId of Array.from(this.registrationOTPs.keys())) {
+        const otpData = this.registrationOTPs.get(otpId)!;
         if (otpData.email === email && !this.isOTPExpired(otpData) && !otpData.verified) {
           return {
             success: false,
@@ -179,11 +180,11 @@ class RegistrationOTPService {
 
   cleanupExpiredOTPs(): void {
     const now = Date.now();
-    for (const [otpId, otpData] of this.registrationOTPs.entries()) {
+    this.registrationOTPs.forEach((otpData, otpId) => {
       if (now > otpData.expiresAt) {
         this.registrationOTPs.delete(otpId);
       }
-    }
+    });
   }
 }
 

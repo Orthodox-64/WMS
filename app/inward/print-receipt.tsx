@@ -49,8 +49,8 @@ const mockQualityParameters = [
 ];
 
 export default function PrintReceiptPage() {
-  const printRef = useRef(null) as React.RefObject<HTMLDivElement>;
-  const testCertRef = useRef(null) as React.RefObject<HTMLDivElement>;
+  const printRef = useRef<HTMLDivElement | null>(null);
+  const testCertRef = useRef<HTMLDivElement | null>(null);
 
   const handlePrint = async () => {
     if (!printRef.current || !testCertRef.current) return;

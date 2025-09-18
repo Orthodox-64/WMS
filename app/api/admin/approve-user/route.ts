@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// This route reads request.nextUrl and sends emails; mark it dynamic
+export const dynamic = 'force-dynamic';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { verifySecureToken } from '@/lib/server-token-utils';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    // Use Next.js provided parsed URL to avoid static generation bailouts
+    const { searchParams } = request.nextUrl;
     const userId = searchParams.get('userId');
     const token = searchParams.get('token');
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard-layout';
@@ -104,16 +104,6 @@ export default function BankModulePage() {
     }
   }, [user?.role, router]);
 
-  // Load banks data
-  useEffect(() => {
-    loadBanks();
-  }, []);
-
-  // Filter banks based on search term
-  useEffect(() => {
-    filterBanksBySearch();
-  }, [banks, searchTerm]);
-
   const loadBanks = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'banks'));
@@ -128,7 +118,7 @@ export default function BankModulePage() {
     }
   };
 
-  const filterBanksBySearch = () => {
+  const filterBanksBySearch = useCallback(() => {
     if (!searchTerm.trim()) {
       setFilteredBanks(banks);
       return;
@@ -146,7 +136,17 @@ export default function BankModulePage() {
     );
 
     setFilteredBanks(filtered);
-  };
+  }, [banks, searchTerm]);
+
+  // Load banks data
+  useEffect(() => {
+    loadBanks();
+  }, []);
+
+  // Filter banks based on search term
+  useEffect(() => {
+    filterBanksBySearch();
+  }, [banks, searchTerm, filterBanksBySearch]);
 
   const exportToCSV = () => {
     const dataToExport = searchTerm.trim() ? filteredBanks : banks;
@@ -800,7 +800,7 @@ export default function BankModulePage() {
             
             {searchTerm && (
               <div className="mt-3 text-sm text-green-600">
-                {filteredBanks.length} banks found for "{searchTerm}"
+                {filteredBanks.length} banks found for &quot;{searchTerm}&quot;
               </div>
             )}
           </CardContent>
@@ -1002,7 +1002,7 @@ export default function BankModulePage() {
                   {displayBanks.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={10} className="text-center text-gray-500 py-8 border-r border-gray-300">
-                        {searchTerm ? 'No banks found for the search term.' : 'No banks registered yet. Click "Add New Bank" to get started.'}
+                        {searchTerm ? 'No banks found for the search term.' : 'No banks registered yet. Click \"Add New Bank\" to get started.'}
                       </TableCell>
                     </TableRow>
                   )}

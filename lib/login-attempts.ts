@@ -1,4 +1,4 @@
-interface LoginAttempt {
+export interface LoginAttempt {
   username: string;
   attempts: number;
   lastAttempt: number;
@@ -6,7 +6,7 @@ interface LoginAttempt {
   ipAddress?: string;
 }
 
-interface LoginAttemptResult {
+export interface LoginAttemptResult {
   isBlocked: boolean;
   remainingAttempts: number;
   blockTimeRemaining?: number;
@@ -137,11 +137,11 @@ class LoginAttemptService {
   // Clean up expired blocks (optional - for memory management)
   cleanupExpiredBlocks(): void {
     const now = Date.now();
-    for (const [key, attempt] of this.attempts.entries()) {
+    this.attempts.forEach((attempt, key) => {
       if (attempt.blockedUntil && now >= attempt.blockedUntil) {
         this.attempts.delete(key);
       }
-    }
+    });
   }
 
   // Get attempt statistics (for admin purposes)
@@ -149,12 +149,12 @@ class LoginAttemptService {
     let totalBlocked = 0;
     let totalAttempts = 0;
     
-    for (const attempt of this.attempts.values()) {
+    this.attempts.forEach((attempt) => {
       totalAttempts += attempt.attempts;
       if (this.isBlocked(attempt)) {
         totalBlocked++;
       }
-    }
+    });
     
     return { totalBlocked, totalAttempts };
   }

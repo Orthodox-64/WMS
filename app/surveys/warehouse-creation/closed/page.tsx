@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from "@/hooks/use-toast";
@@ -46,6 +46,31 @@ interface InspectionData {
   };
 }
 
+// Shape of the saved warehouse inspection form data we read from inspection.warehouseInspectionData
+interface WarehouseFormData {
+  warehouseName?: string;
+  warehouseCode?: string;
+  status?: string;
+  bankState?: string;
+  bankBranch?: string;
+  bankName?: string;
+  ifscCode?: string;
+  state?: string;
+  branch?: string;
+  location?: string;
+  businessType?: string;
+  receiptType?: string;
+  createdAt?: string;
+  inspectionCode?: string;
+  nameOfBank?: any[];
+  attachedFiles?: any[];
+  warehouseFitCertification?: boolean;
+  dateOfInspection?: string | Date | null;
+  validityOfInsurance?: string | Date | null;
+  expiryDate?: string | Date | null;
+  oeDate?: string | Date | null;
+}
+
 export default function ClosedWarehousePage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -62,12 +87,7 @@ export default function ClosedWarehousePage() {
   const [filterReceiptType, setFilterReceiptType] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Load inspections from Firebase
-  useEffect(() => {
-    loadInspections();
-  }, []);
-
-  const loadInspections = async () => {
+  const loadInspections = useCallback(async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'inspections'));
       const inspectionData: InspectionData[] = [];
@@ -108,7 +128,12 @@ export default function ClosedWarehousePage() {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
+
+  // Load inspections from Firebase
+  useEffect(() => {
+    loadInspections();
+  }, [loadInspections]);
 
   // Get unique values for filter dropdowns
   const uniqueStates = useMemo(() => Array.from(new Set(inspections.map(i => i.state || '').filter(Boolean))), [inspections]);
@@ -235,7 +260,7 @@ export default function ClosedWarehousePage() {
 
   const convertInspectionToFormData = (inspection: InspectionData) => {
     // Get the saved warehouse inspection data from the inspection record
-    const warehouseData = inspection.warehouseInspectionData || {};
+    const warehouseData = (inspection.warehouseInspectionData || {}) as Partial<WarehouseFormData>;
     
     // Return the saved form data with fallbacks to inspection data
     return {
@@ -455,7 +480,7 @@ export default function ClosedWarehousePage() {
                 <span className="text-sm font-medium text-green-700">Active Filters:</span>
                 {searchTerm && (
                   <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                    Search: "{searchTerm}"
+                    Search: &quot;{searchTerm}&quot;
                   </Badge>
                 )}
                 {filterState && filterState !== 'all' && (
