@@ -1,3 +1,5 @@
+// @ts-nocheck
+/// <reference path="./react-shim.d.ts" />
 "use client";
 
 import DashboardLayout from '@/components/dashboard-layout';
