@@ -182,7 +182,7 @@ export function usePasswordReset() {
         return false;
       }
 
-      // Update password in database
+      // Get current user data to check password history
       const userQuery = query(
         collection(db, 'users'),
         where('email', '==', state.email)
@@ -199,6 +199,19 @@ export function usePasswordReset() {
       }
 
       const userDoc = userSnapshot.docs[0];
+      const userData = userDoc.data();
+      
+      // Check if new password matches current password
+      if (userData.password && userData.password === newPassword) {
+        setState(prev => ({ 
+          ...prev, 
+          isLoading: false, 
+          error: 'Password already exists' 
+        }));
+        return false;
+      }
+
+      // Update password in database
       await updateDoc(doc(db, 'users', userDoc.id), {
         password: newPassword, // In production, hash this password
         updatedAt: new Date().toISOString()
@@ -260,6 +273,80 @@ export function usePasswordReset() {
     });
   }, []);
 
+  const resendOTP = useCallback(async (): Promise<boolean> => {
+    if (!state.email || !state.username) {
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Invalid session. Please start the reset process again.' 
+      }));
+      return false;
+    }
+
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      // Use the new resendOTP method from otpService
+      const otpResult = otpService.resendOTP(state.email, state.username);
+      
+      if (!otpResult.success) {
+        setState(prev => ({ 
+          ...prev, 
+          isLoading: false, 
+          error: otpResult.message 
+        }));
+        return false;
+      }
+
+      // Send OTP email
+      const emailSent = await passwordResetEmailService.sendOTPEmail({
+        to_email: state.email,
+        to_name: state.username,
+        otp_code: otpService.getOTPData(otpResult.otpId!)?.code || '',
+        expiry_minutes: 10,
+        from_name: 'WMS System',
+        subject: 'Password Reset OTP - WMS System (Resent)'
+      });
+
+      if (!emailSent) {
+        setState(prev => ({ 
+          ...prev, 
+          isLoading: false, 
+          error: 'Failed to send OTP email. Please try again.' 
+        }));
+        return false;
+      }
+
+      setState(prev => ({
+        ...prev,
+        otpId: otpResult.otpId!,
+        isLoading: false,
+        error: null
+      }));
+
+      return true;
+    } catch (error) {
+      console.error('Error resending OTP:', error);
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        error: 'Failed to resend OTP. Please try again.' 
+      }));
+      return false;
+    }
+  }, [state.email, state.username]);
+
+  const getResendStatus = useCallback(() => {
+    if (!state.email) {
+      return {
+        canResend: false,
+        cooldownRemaining: 0,
+        blockedUntil: 0,
+        remainingAttempts: 0
+      };
+    }
+    return otpService.getResendStatus(state.email);
+  }, [state.email]);
+
   const clearError = useCallback(() => {
     setState(prev => ({ ...prev, error: null }));
   }, []);
@@ -269,6 +356,8 @@ export function usePasswordReset() {
     sendOTP,
     verifyOTP,
     resetPassword,
+    resendOTP,
+    getResendStatus,
     resetState,
     clearError
   };

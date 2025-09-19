@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { PasswordResetForm } from "@/components/password-reset-form";
 import { RegistrationSuccessPopup } from "@/components/registration-success-popup";
 import { registrationOTPService } from "@/lib/registration-otp-service";
 import { registrationNotificationService } from "@/lib/registration-notification-service";
+import { AlertCircle, RefreshCw, Clock } from "lucide-react";
 
 interface AuthFormsProps {
   onFormTypeChange: (isLogin: boolean) => void;
@@ -35,6 +36,13 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
   const [otpId, setOtpId] = useState<string | null>(null);
   const [showRegistrationSuccess, setShowRegistrationSuccess] = useState(false);
   const [registrationData, setRegistrationData] = useState<any>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendStatus, setResendStatus] = useState({
+    canResend: false,
+    cooldownRemaining: 0,
+    blockedUntil: 0,
+    remainingAttempts: 0
+  });
   
   const { toast } = useToast();
   const router = useRouter();
@@ -187,18 +195,51 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
 
   const handleRegistrationSuccessClose = () => {
     setShowRegistrationSuccess(false);
+    setRegistrationData(null);
+    // Clear all form state completely for fresh login
+    setUsername("");
+    setEmail("");
+    setPassword("");
+    setRole("maker");
     setShowRegistrationOTP(false);
     setOtpCode("");
     setOtpId(null);
+    setResendCooldown(0);
+    setResendStatus({
+      canResend: false,
+      cooldownRemaining: 0,
+      blockedUntil: 0,
+      remainingAttempts: 0
+    });
     setIsLogin(true);
     onFormTypeChange(true);
   };
 
+  // Update resend status periodically
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (showRegistrationOTP && email) {
+      const updateStatus = () => {
+        const status = registrationOTPService.getResendStatus(email);
+        setResendStatus(status);
+        setResendCooldown(status.cooldownRemaining);
+      };
+      
+      updateStatus(); // Initial update
+      interval = setInterval(updateStatus, 1000); // Update every second
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showRegistrationOTP, email]);
+
   const handleResendOTP = async () => {
-    if (!email || !username) return;
+    if (!email || !resendStatus.canResend) return;
     
     try {
-      const otpResult = await registrationOTPService.sendRegistrationOTP(email, username);
+      const otpResult = await registrationOTPService.resendRegistrationOTP(email, username);
       
       if (otpResult.success) {
         setOtpId(otpResult.otpId!);
@@ -208,8 +249,15 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
           variant: "default",
           className: "bg-blue-100 border-blue-500 text-blue-700"
         });
+        
+        // Reset cooldown
+        setResendCooldown(60);
       } else {
-        throw new Error(otpResult.message);
+        toast({
+          title: "Error",
+          description: otpResult.message,
+          variant: "destructive"
+        });
       }
     } catch (error) {
       toast({
@@ -218,6 +266,12 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
         variant: "destructive"
       });
     }
+  };
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Show password reset form
@@ -265,7 +319,7 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
                   value={username}
                   onChange={setUsername}
                   onValidationChange={setIsUsernameValid}
-                  placeholder="Enter your username (4+ chars, alphabets only, first letter capital)"
+                  placeholder="Enter your username "
                   showValidation={!isLogin}
                   className="border-orange-500 focus:ring-orange-500 focus:border-orange-500 text-orange-600 placeholder:text-green-500"
                 />
@@ -292,7 +346,7 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
                 <Label htmlFor="password" className="text-orange-600">Password</Label>
                 <PasswordInput
                   id="password"
-                  placeholder="Enter your password (Capital + lowercase + numbers + special chars)"
+                  placeholder="Enter your password "
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -324,15 +378,30 @@ export function AuthForms({ onFormTypeChange }: AuthFormsProps) {
                     className="border-blue-500 focus:ring-blue-500 focus:border-blue-500 text-blue-600 placeholder:text-blue-400 text-center text-2xl tracking-widest"
                   />
                 </div>
-                <div className="flex space-x-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleResendOTP}
-                    className="flex-1 border-blue-500 text-blue-600 hover:bg-blue-50"
-                  >
-                    Resend OTP
-                  </Button>
+                
+                {/* Resend OTP Section */}
+                <div className="text-center space-y-2">
+                  {resendStatus.blockedUntil > 0 ? (
+                    <div className="text-red-500 text-sm">
+                      <AlertCircle className="h-4 w-4 inline mr-1" />
+                      Too many attempts. Try again in {formatTime(Math.ceil((resendStatus.blockedUntil - Date.now()) / 1000))}
+                    </div>
+                  ) : resendStatus.canResend ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleResendOTP}
+                      className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Resend OTP ({resendStatus.remainingAttempts} left)
+                    </Button>
+                  ) : (
+                    <div className="text-gray-500 text-sm">
+                      <Clock className="h-4 w-4 inline mr-1" />
+                      Resend available in {resendCooldown}s ({resendStatus.remainingAttempts} left)
+                    </div>
+                  )}
                 </div>
               </div>
             )}

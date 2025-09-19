@@ -1,27 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 interface ApprovalNotificationData {
-  userId: string;
-  action: 'approved' | 'rejected';
-  userData: {
+  user: {
+    id: string;
     username: string;
     email: string;
     role: string;
   };
+  approved: boolean;
+  adminName: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: ApprovalNotificationData = await request.json();
-    const { action, userData } = body;
+    const { user, approved, adminName } = body;
 
-    const isApproved = action === 'approved';
-    const subject = isApproved 
+    const subject = approved 
       ? 'WMS Account Approved - Welcome!' 
       : 'WMS Account Registration Not Approved';
 
-    const htmlContent = isApproved ? generateApprovalHTML(userData) : generateRejectionHTML(userData);
-    const textContent = isApproved ? generateApprovalText(userData) : generateRejectionText(userData);
+    const htmlContent = approved ? generateApprovalHTML(user) : generateRejectionHTML(user);
+    const textContent = approved ? generateApprovalText(user) : generateRejectionText(user);
 
     // Send email using the email API
     const emailResponse = await fetch(`${request.nextUrl.origin}/api/send-email`, {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        to: userData.email,
+        to: user.email,
         subject,
         html: htmlContent,
         text: textContent,
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (emailResponse.ok) {
       return NextResponse.json({ 
         success: true, 
-        message: `${action} notification sent successfully` 
+        message: `${approved ? 'Approval' : 'Rejection'} notification sent successfully` 
       });
     } else {
       const errorText = await emailResponse.text();

@@ -1,22 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { usePasswordReset } from '@/hooks/use-password-reset';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Mail, 
   Shield, 
   CheckCircle, 
-  ArrowLeft, 
   Clock, 
   Key,
-  AlertCircle 
+  AlertCircle,
+  RefreshCw,
+  ArrowLeft
 } from 'lucide-react';
 
 interface PasswordResetFormProps {
@@ -34,6 +36,8 @@ export function PasswordResetForm({ onBackToLogin, className }: PasswordResetFor
     sendOTP,
     verifyOTP,
     resetPassword,
+    resendOTP,
+    getResendStatus,
     resetState,
     clearError
   } = usePasswordReset();
@@ -41,6 +45,14 @@ export function PasswordResetForm({ onBackToLogin, className }: PasswordResetFor
   const [otpCode, setOtpCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendStatus, setResendStatus] = useState({
+    canResend: false,
+    cooldownRemaining: 0,
+    blockedUntil: 0,
+    remainingAttempts: 0
+  });
+  const [showBackConfirmation, setShowBackConfirmation] = useState(false);
   const { toast } = useToast();
 
   const handleSendOTP = async (e: React.FormEvent) => {
@@ -142,14 +154,50 @@ export function PasswordResetForm({ onBackToLogin, className }: PasswordResetFor
   };
 
   const handleBackToLogin = () => {
+    // Show confirmation dialog only if user has started the process (not on initial screen)
+    if (step !== 'email') {
+      setShowBackConfirmation(true);
+    } else {
+      // Direct back to login if on initial screen
+      resetState();
+      onBackToLogin?.();
+    }
+  };
+
+  const confirmBackToLogin = () => {
+    setShowBackConfirmation(false);
     resetState();
     onBackToLogin?.();
   };
 
-  const handleResendOTP = async () => {
-    if (!email) return;
+  const cancelBackToLogin = () => {
+    setShowBackConfirmation(false);
+  };
+
+  // Update resend status periodically
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
     
-    const success = await sendOTP(email);
+    if (step === 'otp' && email) {
+      const updateStatus = () => {
+        const status = getResendStatus();
+        setResendStatus(status);
+        setResendCooldown(status.cooldownRemaining);
+      };
+      
+      updateStatus(); // Initial update
+      interval = setInterval(updateStatus, 1000); // Update every second
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [step, email, getResendStatus]);
+
+  const handleResendOTP = async () => {
+    if (!email || !resendStatus.canResend) return;
+    
+    const success = await resendOTP();
     if (success) {
       toast({
         title: "OTP Resent",
@@ -157,30 +205,44 @@ export function PasswordResetForm({ onBackToLogin, className }: PasswordResetFor
         variant: "default",
         className: "bg-blue-100 border-blue-500 text-blue-700"
       });
+      
+      // Reset cooldown
+      setResendCooldown(60);
+    } else {
+      toast({
+        title: "Error",
+        description: error || "Failed to resend OTP",
+        variant: "destructive"
+      });
     }
+  };
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
     <Card className={`w-full max-w-md mx-auto px-4 ${className}`}>
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleBackToLogin}
+            className="text-gray-500 hover:text-gray-700 p-2"
+            title="Back to Login"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <CardTitle className="text-2xl font-bold text-orange-600">
             {step === 'email' && 'Reset Password'}
             {step === 'otp' && 'Verify OTP'}
             {step === 'new-password' && 'New Password'}
             {step === 'success' && 'Success'}
           </CardTitle>
-          {step !== 'email' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBackToLogin}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-          )}
+          <div className="w-10"></div> {/* Spacer for centering */}
         </div>
         <CardDescription className="text-green-500">
           {step === 'email' && 'Enter your email address to receive an OTP'}
@@ -250,35 +312,40 @@ export function PasswordResetForm({ onBackToLogin, className }: PasswordResetFor
               </p>
             </div>
             
-            <div className="flex space-x-2">
+            <div className="space-y-3">
               <Button
                 type="submit"
                 disabled={isLoading || otpCode.length !== 6}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
               >
                 {isLoading ? 'Verifying...' : 'Verify OTP'}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleResendOTP}
-                disabled={isLoading}
-                className="px-3"
-              >
-                <Clock className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="text-center">
-              <Button
-                type="button"
-                variant="link"
-                onClick={handleResendOTP}
-                disabled={isLoading}
-                className="text-green-600 hover:text-green-700"
-              >
-                Resend OTP
-              </Button>
+              
+              {/* Resend OTP Section */}
+              <div className="text-center space-y-2">
+                {resendStatus.blockedUntil > 0 ? (
+                  <div className="text-red-500 text-sm">
+                    <AlertCircle className="h-4 w-4 inline mr-1" />
+                    Too many attempts. Try again in {formatTime(Math.ceil((resendStatus.blockedUntil - Date.now()) / 1000))}
+                  </div>
+                ) : resendStatus.canResend ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResendOTP}
+                    disabled={isLoading}
+                    className="text-green-600 hover:text-green-700 border-green-500 hover:border-green-600"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Resend OTP ({resendStatus.remainingAttempts} left)
+                  </Button>
+                ) : (
+                  <div className="text-gray-500 text-sm">
+                    <Clock className="h-4 w-4 inline mr-1" />
+                    Resend available in {resendCooldown}s ({resendStatus.remainingAttempts} left)
+                  </div>
+                )}
+              </div>
             </div>
           </form>
         )}
@@ -338,10 +405,10 @@ export function PasswordResetForm({ onBackToLogin, className }: PasswordResetFor
               </p>
             </div>
             <Button
-              onClick={handleBackToLogin}
+              onClick={confirmBackToLogin}
               className="w-full bg-green-500 hover:bg-green-600 text-white"
             >
-              Back to Login
+              Continue to Login
             </Button>
           </div>
         )}
@@ -353,12 +420,40 @@ export function PasswordResetForm({ onBackToLogin, className }: PasswordResetFor
             <ul className="text-sm text-blue-700 space-y-1">
               <li>• OTP is valid for 10 minutes only</li>
               <li>• Maximum 3 verification attempts allowed</li>
-              <li>• New password will be sent to your email</li>
-              <li>• Change password after first login</li>
+              <li>• Resend available after 60 seconds (3 attempts)</li>
+              <li>• 10-minute block after maximum resend attempts</li>
+              <li>• New password cannot match current password</li>
             </ul>
           </div>
         )}
       </CardContent>
+      
+      {/* Back to Login Confirmation Dialog */}
+      <Dialog open={showBackConfirmation} onOpenChange={setShowBackConfirmation}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-orange-600">Cancel Password Reset?</DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Are you sure you want to go back to the login page? Your progress will be lost and you'll need to start the password reset process again.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={cancelBackToLogin}
+              className="flex-1 sm:flex-none"
+            >
+              Stay Here
+            </Button>
+            <Button
+              onClick={confirmBackToLogin}
+              className="flex-1 sm:flex-none bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              Yes, Go Back
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

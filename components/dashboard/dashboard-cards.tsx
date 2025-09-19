@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Warehouse,
   ClipboardCheck,
@@ -10,7 +11,9 @@ import {
   Box,
   ArrowRightLeft,
   FileText,
-  Database
+  Database,
+  Users,
+  Shield
 } from "lucide-react";
 
 const dashboardCards = [
@@ -58,10 +61,33 @@ const dashboardCards = [
   },
 ];
 
+// Admin-only cards
+const adminCards = [
+  {
+    title: "Admin Portal",
+    icon: Shield,
+    href: "/admin",
+    color: "text-emerald-500",
+  },
+  {
+    title: "User Management",
+    icon: Users,
+    href: "/admin/users",
+    color: "text-cyan-500",
+  },
+];
+
 export function DashboardCards() {
+  const { user } = useAuth();
+  
+  // Combine regular cards with admin cards if user is admin
+  const availableCards = user?.role === 'admin' 
+    ? [...dashboardCards, ...adminCards] 
+    : dashboardCards;
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-6">
-      {dashboardCards.map((card) => {
+      {availableCards.map((card) => {
         const Icon = card.icon;
         return (
           <Link key={card.title} href={card.href}>

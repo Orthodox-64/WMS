@@ -15,28 +15,22 @@ class RegistrationOTPService {
   private registrationOTPs: Map<string, RegistrationOTPData> = new Map();
   private readonly OTP_EXPIRY_MINUTES = 10;
   private readonly MAX_ATTEMPTS = 3;
+  private readonly RESEND_COOLDOWN_SECONDS = 60; // 60 seconds cooldown between resends
+  private readonly MAX_RESEND_ATTEMPTS = 3; // 3 resend attempts allowed
+  private readonly BLOCK_DURATION_MINUTES = 10; // 10 minutes block after max resends
 
-  async sendRegistrationOTP(email: string, username: string): Promise<{ success: boolean; message: string; otpId?: string }> {
+  async sendRegistrationOTP(email: string, username: string): Promise<{ success: boolean; message: string; otpId?: string; canResend?: boolean; resendCooldown?: number; blockedUntil?: number }> {
     try {
-      // Check if there's already an active OTP for this email
-      for (const otpId of Array.from(this.registrationOTPs.keys())) {
-        const otpData = this.registrationOTPs.get(otpId)!;
-        if (otpData.email === email && !this.isOTPExpired(otpData) && !otpData.verified) {
-          return {
-            success: false,
-            message: 'An OTP has already been sent to this email. Please wait before requesting a new one.',
-            otpId
-          };
-        }
-      }
-
-      // Generate OTP using the main OTP service
+      // Use the enhanced OTP service directly for generation and blocking logic
       const otpResult = otpService.generateOTP(email, username);
       
       if (!otpResult.success) {
         return {
           success: false,
-          message: otpResult.message
+          message: otpResult.message,
+          canResend: otpResult.canResend,
+          resendCooldown: otpResult.resendCooldown,
+          blockedUntil: otpResult.blockedUntil
         };
       }
 
@@ -49,7 +43,7 @@ class RegistrationOTPService {
         };
       }
 
-      // Send OTP email
+      // Send OTP email for REGISTRATION (not password reset)
       const emailSent = await clientEmailService.sendOTPEmail({
         to: email,
         toName: username,
@@ -80,7 +74,9 @@ class RegistrationOTPService {
       return {
         success: true,
         message: `OTP sent successfully to ${email}. Valid for ${this.OTP_EXPIRY_MINUTES} minutes.`,
-        otpId: otpResult.otpId!
+        otpId: otpResult.otpId!,
+        canResend: otpResult.canResend,
+        resendCooldown: otpResult.resendCooldown
       };
     } catch (error) {
       console.error('Error sending registration OTP:', error);
@@ -176,6 +172,80 @@ class RegistrationOTPService {
 
   private isOTPExpired(otpData: RegistrationOTPData): boolean {
     return Date.now() > otpData.expiresAt;
+  }
+
+  // Resend OTP with proper blocking logic
+  async resendRegistrationOTP(email: string, username: string): Promise<{ success: boolean; message: string; otpId?: string; canResend?: boolean; resendCooldown?: number; blockedUntil?: number }> {
+    try {
+      // Use the enhanced OTP service resend functionality
+      const otpResult = otpService.resendOTP(email, username);
+      
+      if (!otpResult.success) {
+        return {
+          success: false,
+          message: otpResult.message,
+          canResend: otpResult.canResend,
+          resendCooldown: otpResult.resendCooldown,
+          blockedUntil: otpResult.blockedUntil
+        };
+      }
+
+      // Get the OTP data
+      const otpData = otpService.getOTPData(otpResult.otpId!);
+      if (!otpData) {
+        return {
+          success: false,
+          message: 'Failed to generate OTP. Please try again.'
+        };
+      }
+
+      // Send OTP email for REGISTRATION (not password reset)
+      const emailSent = await clientEmailService.sendOTPEmail({
+        to: email,
+        toName: username,
+        otpCode: otpData.code,
+        expiryMinutes: this.OTP_EXPIRY_MINUTES
+      });
+
+      if (!emailSent) {
+        return {
+          success: false,
+          message: 'Failed to send OTP email. Please try again.'
+        };
+      }
+
+      // Update registration OTP data
+      const registrationOTPData: RegistrationOTPData = {
+        email,
+        username,
+        otpId: otpResult.otpId!,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + (this.OTP_EXPIRY_MINUTES * 60 * 1000),
+        attempts: 0,
+        verified: false
+      };
+
+      this.registrationOTPs.set(otpResult.otpId!, registrationOTPData);
+
+      return {
+        success: true,
+        message: otpResult.message,
+        otpId: otpResult.otpId!,
+        canResend: otpResult.canResend,
+        resendCooldown: otpResult.resendCooldown
+      };
+    } catch (error) {
+      console.error('Error resending registration OTP:', error);
+      return {
+        success: false,
+        message: 'An error occurred while resending OTP. Please try again.'
+      };
+    }
+  }
+
+  // Get resend status for UI
+  getResendStatus(email: string): { canResend: boolean; cooldownRemaining: number; blockedUntil: number; remainingAttempts: number } {
+    return otpService.getResendStatus(email);
   }
 
   cleanupExpiredOTPs(): void {

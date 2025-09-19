@@ -38,6 +38,8 @@ const roleBasedRoutes: Record<string, Set<string>> = {
     '/commodity-summary',
     '/aum-summary',
     '/warehouse-status', // Allow warehouse status for admin
+    '/admin',
+    '/admin/users'
   ]),
 };
 

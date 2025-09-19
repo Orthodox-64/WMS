@@ -153,7 +153,12 @@ export function RegistrationSuccessPopup({
           {/* Action Buttons */}
           <div className="flex justify-center">
             <Button
-              onClick={onClose}
+              onClick={() => {
+                // Clear all form data and redirect to fresh login
+                onClose();
+                // Force page refresh to ensure clean state
+                window.location.href = '/login';
+              }}
               className="bg-green-600 hover:bg-green-700 text-white px-6 md:px-8 py-2 text-sm md:text-base w-full sm:w-auto"
             >
               Continue to Login

@@ -42,7 +42,9 @@ const roleBasedRoutes: Record<string, Set<string>> = {
     '/outward',
     '/ro',
     '/commodity-summary',
-    '/aum-summary'
+    '/aum-summary',
+    '/admin',
+    '/admin/users'
   ]),
 };
 
