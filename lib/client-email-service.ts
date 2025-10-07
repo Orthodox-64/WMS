@@ -51,8 +51,8 @@ class ClientEmailService {
       port: 587,
       secure: false, // true for 465, false for other ports
       auth: {
-        user: 'atharvapatange07@gmail.com',
-        pass: 'brkivwmgbxrcorsu'
+        user: 'agrogreensoftware@gmail.com',
+        pass: 'lsln qkyd qvml whgk'
       },
       from: 'QuickCourt <noreply@quickcourt.com>'
     };

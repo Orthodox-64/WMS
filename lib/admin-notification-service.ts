@@ -128,8 +128,8 @@ export const adminNotificationService = {
             port: 587,
             secure: false,
             auth: {
-              user: 'atharvapatange07@gmail.com',
-              pass: 'brkivwmgbxrcorsu'
+              user: 'agrogreensoftware@gmail.com',
+              pass: 'lsln qkyd qvml whgk'
             },
             from: 'WMS System <noreply@wms.com>'
           }
