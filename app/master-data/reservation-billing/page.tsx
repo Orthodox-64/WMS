@@ -157,7 +157,7 @@ export default function ReservationBillingPage() {
 
       // If still no warehouses, add some sample ones for testing
       if (fetchedWarehouses.length === 0) {
-        const sampleWarehouses = [
+        const sampleWarehouses: any[] = [
          
         ];
         fetchedWarehouses.push(...sampleWarehouses);

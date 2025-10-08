@@ -257,7 +257,7 @@ export default function CommodityModulePage() {
       document.removeEventListener('editCommodity', handleEditCommodity);
       document.removeEventListener('deleteCommodity', handleDeleteCommodity);
     };
-  }, []);
+  }, [commodities]); // Add commodities dependency so handlers update when data loads
 
   // Real-time validation for commodity name uniqueness
   useEffect(() => {
@@ -355,12 +355,23 @@ export default function CommodityModulePage() {
       // If it's a variety row, use the parent commodity
       originalCommodity = rowData.parentCommodity;
     } else {
-      // If it's a commodity row, find it by ID
-      originalCommodity = commodities.find(c => c.id === rowData.id) || null;
+      // If it's a commodity row, find it by ID or commodityId
+      originalCommodity = commodities.find(c => 
+        c.id === rowData.id || c.commodityId === rowData.commodityId
+      ) || null;
+      
+      // If still not found, try searching in both commodityName as last resort
+      if (!originalCommodity) {
+        originalCommodity = commodities.find(c => 
+          c.commodityName === rowData.commodityName
+        ) || null;
+      }
     }
     
     if (!originalCommodity) {
       console.error('❌ Could not find original commodity');
+      console.error('Row data:', rowData);
+      console.error('Available commodities:', commodities.map(c => ({ id: c.id, commodityId: c.commodityId, name: c.commodityName })));
       toast({
         title: "❌ Error",
         description: "Could not find commodity data. Please refresh the page and try again.",
@@ -401,12 +412,23 @@ export default function CommodityModulePage() {
       // If it's a variety row, use the parent commodity
       originalCommodity = rowData.parentCommodity;
     } else {
-      // If it's a commodity row, find it by ID
-      originalCommodity = commodities.find(c => c.id === rowData.id) || null;
+      // If it's a commodity row, find it by ID or commodityId
+      originalCommodity = commodities.find(c => 
+        c.id === rowData.id || c.commodityId === rowData.commodityId
+      ) || null;
+      
+      // If still not found, try searching by commodityName as last resort
+      if (!originalCommodity) {
+        originalCommodity = commodities.find(c => 
+          c.commodityName === rowData.commodityName
+        ) || null;
+      }
     }
     
     if (!originalCommodity) {
       console.error('❌ Could not find original commodity for editing');
+      console.error('Row data:', rowData);
+      console.error('Available commodities:', commodities.map(c => ({ id: c.id, commodityId: c.commodityId, name: c.commodityName })));
       toast({
         title: "❌ Error",
         description: "Could not find commodity data. Please refresh the page and try again.",

@@ -110,7 +110,7 @@ export default function BankModulePage() {
     },
     {
       accessorKey: "bankName",
-      header: "Bank/Branch Name", 
+      header: "Bank Name", 
       cell: ({ row }: { row: Row<any> }) => <span className="text-green-700 font-medium w-full flex justify-center">{row.getValue("bankName") || '-'}</span>,
       meta: { align: 'center' },
     },
@@ -121,12 +121,6 @@ export default function BankModulePage() {
       meta: { align: 'center' },
     },
     {
-      accessorKey: "branch",
-      header: "Branch",
-      cell: ({ row }: { row: Row<any> }) => <span className="text-green-700 font-medium w-full flex justify-center">{row.getValue("branch")}</span>,
-      meta: { align: 'center' },
-    },
-    {
       accessorKey: "locationId",
       header: "Location ID",
       cell: ({ row }: { row: Row<any> }) => <span className="text-blue-700 w-full flex justify-center">{row.getValue("locationId") || '-'}</span>,
@@ -134,14 +128,17 @@ export default function BankModulePage() {
     },
     {
       accessorKey: "locationName",
-      header: "Location Name",
-      cell: ({ row }: { row: Row<any> }) => <span className="text-blue-700 w-full flex justify-center">{row.getValue("locationName") || '-'}</span>,
-      meta: { align: 'center' },
-    },
-    {
-      accessorKey: "branchName",
       header: "Branch Name",
-      cell: ({ row }: { row: Row<any> }) => <span className="text-blue-700 w-full flex justify-center">{row.getValue("branchName") || '-'}</span>,
+      cell: ({ row }: { row: Row<any> }) => {
+        const value = row.getValue("locationName") as string;
+        const rowData = row.original;
+        const isHint = rowData.isBank;
+        return (
+          <span className={`w-full flex justify-center ${isHint ? 'text-gray-500 italic text-sm' : 'text-blue-700'}`}>
+            {value || '-'}
+          </span>
+        );
+      },
       meta: { align: 'center' },
     },
     {
@@ -348,12 +345,16 @@ export default function BankModulePage() {
     const sortedBanks = [...dataToDisplay].sort((a, b) => (a.bankId || '').localeCompare(b.bankId || ''));
     
     sortedBanks.forEach(bank => {
+      // Get the bank name from the first location's branchName (since it's stored there)
+      const actualBankName = bank.locations.length > 0 ? bank.locations[0].branchName : (bank.bankName || bank.branch);
+      const branchCount = bank.locations.length;
+      
       if (bank.locations.length === 0) {
         // Bank without locations
         flattened.push({
           id: bank.id,
           bankId: bank.bankId,
-          bankName: bank.bankName || bank.branch,
+          bankName: actualBankName,
           state: bank.state,
           branch: bank.branch,
           locationId: '',
@@ -364,43 +365,45 @@ export default function BankModulePage() {
           authorizePerson2: '',
           createdAt: bank.createdAt,
           isBank: true,
-          isLocation: false
+          isLocation: false,
+          branchCount: 0
         });
       } else {
-        // Add bank row first
+        // Add bank summary row first showing total branches
         flattened.push({
           id: bank.id,
           bankId: bank.bankId,
-          bankName: bank.bankName || bank.branch,
+          bankName: actualBankName,
           state: bank.state,
-          branch: bank.branch,
+          branch: `${branchCount} branches`,
           locationId: '',
-          locationName: `${bank.locations.length} locations`,
-          branchName: '',
+          locationName: `Click + to add more branches`,
+          branchName: actualBankName,
           ifscCode: '',
           authorizePerson1: '',
           authorizePerson2: '',
           createdAt: bank.createdAt,
           isBank: true,
           isLocation: false,
-          locationsCount: bank.locations.length
+          locationsCount: bank.locations.length,
+          branchCount: branchCount
         });
         
-        // Then add location rows sorted by location ID
+        // Then add location rows (branches) sorted by location ID
         const sortedLocations = [...bank.locations].sort((a, b) => (a.locationId || '').localeCompare(b.locationId || ''));
         sortedLocations.forEach(location => {
           flattened.push({
             id: `${bank.id}-${location.locationId}`,
             bankId: '',
-            bankName: bank.bankName || bank.branch,
+            bankName: actualBankName,
             state: bank.state,
-            branch: bank.branch,
+            branch: location.locationName, // The actual branch location
             locationId: location.locationId,
             locationName: location.locationName,
-            branchName: location.branchName,
+            branchName: location.branchName, // The bank name
             ifscCode: location.ifscCode,
-            authorizePerson1: location.authorizePerson1,
-            authorizePerson2: location.authorizePerson2,
+            authorizePerson1: location.authorizePerson1 || '',
+            authorizePerson2: location.authorizePerson2 || '',
             createdAt: location.createdAt,
             isBank: false,
             isLocation: true,
