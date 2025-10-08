@@ -158,30 +158,7 @@ export default function ReservationBillingPage() {
       // If still no warehouses, add some sample ones for testing
       if (fetchedWarehouses.length === 0) {
         const sampleWarehouses = [
-          {
-            id: 'sample-1',
-            warehouseName: 'Central Warehouse',
-            warehouseCode: 'CW-001',
-            state: 'Maharashtra',
-            branch: 'Mumbai',
-            location: 'Andheri'
-          },
-          {
-            id: 'sample-2', 
-            warehouseName: 'North Storage',
-            warehouseCode: 'NS-001',
-            state: 'Delhi',
-            branch: 'New Delhi',
-            location: 'Connaught Place'
-          },
-          {
-            id: 'sample-3',
-            warehouseName: 'South Hub',
-            warehouseCode: 'SH-001', 
-            state: 'Karnataka',
-            branch: 'Bangalore',
-            location: 'Electronic City'
-          }
+         
         ];
         fetchedWarehouses.push(...sampleWarehouses);
       }
