@@ -208,9 +208,9 @@ export default function BankModulePage() {
     },
   ];
 
-  // Check if user has access
+  // Check if user has access (admin and checker can access)
   useEffect(() => {
-    if (user?.role !== 'admin') {
+    if (user?.role !== 'admin' && user?.role !== 'checker') {
       router.push('/dashboard');
     }
   }, [user?.role, router]);
@@ -1198,7 +1198,8 @@ export default function BankModulePage() {
     setEditingLocationId(null);
   };
 
-  if (user?.role !== 'admin') return null;
+  // Allow both admin and checker roles to access this page
+  if (user?.role !== 'admin' && user?.role !== 'checker') return null;
 
   const displayBanks = searchTerm.trim() ? filteredBanks : banks;
 

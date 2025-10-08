@@ -232,9 +232,9 @@ export default function ClientModulePage() {
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Check if user has access
+  // Check if user has access (admin and checker can access)
   useEffect(() => {
-    if (user?.role !== 'admin') {
+    if (user?.role !== 'admin' && user?.role !== 'checker') {
       router.push('/dashboard');
     }
   }, [user?.role, router]);
@@ -959,7 +959,8 @@ export default function ClientModulePage() {
     }
   };
 
-  if (user?.role !== 'admin') return null;
+  // Allow both admin and checker roles to access this page
+  if (user?.role !== 'admin' && user?.role !== 'checker') return null;
 
   const displayClients = filteredClients.length > 0 || searchTerm ? filteredClients : clients;
 
