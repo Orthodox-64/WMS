@@ -143,8 +143,8 @@ class ClientEmailService {
       <body>
         <div class="container">
           <div class="header">
-            <h1>🔐 Password Reset OTP</h1>
-            <p>Verify your identity to reset your password</p>
+            <h1>🔐 Verify OTP</h1>
+           
           </div>
           <div class="content">
             <div class="otp-box">
