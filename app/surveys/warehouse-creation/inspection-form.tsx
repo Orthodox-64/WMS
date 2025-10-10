@@ -1112,6 +1112,81 @@ export default function WarehouseInspectionForm({
     loadClientInsuranceData();
   }, [formData.clientName, formData.insuranceTakenBy, fetchClientInsurances]);
 
+  // Load Agrogreen insurance data when Agrogreen is selected
+  useEffect(() => {
+    const loadAgrogreenInsuranceData = async () => {
+      if (formData.insuranceTakenBy === 'agrogreen' && (formData.warehouseCode || formData.warehouseName)) {
+        try {
+          console.log('🔍 Loading Agrogreen insurance data');
+          console.log('Filters:', {
+            warehouseCode: formData.warehouseCode,
+            warehouseName: formData.warehouseName,
+            selectedCommodity: formData.insuranceCommodity
+          });
+
+          let agrogreenQuery;
+          
+          if (formData.warehouseCode) {
+            // Prefer warehouse code for precise filtering
+            agrogreenQuery = query(
+              collection(db, 'insurance'),
+              where('insuranceType', '==', 'agrogreen'),
+              where('warehouseCode', '==', formData.warehouseCode)
+            );
+            console.log('✅ Using warehouse code filter for Agrogreen insurance');
+          } else if (formData.warehouseName) {
+            // Fallback to warehouse name
+            agrogreenQuery = query(
+              collection(db, 'insurance'),
+              where('insuranceType', '==', 'agrogreen'),
+              where('warehouseName', '==', formData.warehouseName)
+            );
+            console.log('✅ Using warehouse name filter for Agrogreen insurance');
+          } else {
+            console.log('⚠️ No warehouse filters available');
+            setAgrogreenInsuranceData([]);
+            return;
+          }
+
+          const agrogreenDocs = await getDocs(agrogreenQuery);
+          console.log('📊 Agrogreen insurance found (before commodity filter):', agrogreenDocs.docs.length, 'documents');
+
+          let insurances = agrogreenDocs.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            sourceCollection: 'insurance',
+            // Add remaining amounts fields for compatibility
+            remainingFirePolicyAmount: doc.data().firePolicyRemainingAmount || doc.data().firePolicyAmount || '',
+            remainingBurglaryPolicyAmount: doc.data().burglaryPolicyRemainingAmount || doc.data().burglaryPolicyAmount || '',
+          }));
+
+          // Additional filtering by commodity if selected
+          if (formData.insuranceCommodity) {
+            const selectedCommodity = formData.insuranceCommodity.toLowerCase().trim();
+            insurances = insurances.filter((ins: any) => {
+              const insuranceCommodity = (ins.commodity || ins.commodityName || '').toLowerCase().trim();
+              const matches = insuranceCommodity === selectedCommodity || insuranceCommodity.includes(selectedCommodity);
+              console.log(`Commodity match check: "${insuranceCommodity}" vs "${selectedCommodity}" = ${matches}`);
+              return matches;
+            });
+            console.log('📊 After commodity filtering:', insurances.length, 'documents');
+          }
+
+          console.log('✅ Agrogreen insurance data loaded:', insurances);
+          setAgrogreenInsuranceData(insurances);
+        } catch (error) {
+          console.error('❌ Error loading Agrogreen insurance data:', error);
+          setAgrogreenInsuranceData([]);
+        }
+      } else if (formData.insuranceTakenBy !== 'agrogreen') {
+        // Clear Agrogreen insurance data if not Agrogreen
+        setAgrogreenInsuranceData([]);
+      }
+    };
+
+    loadAgrogreenInsuranceData();
+  }, [formData.insuranceTakenBy, formData.warehouseCode, formData.warehouseName, formData.insuranceCommodity]);
+
   // Load insurance data based on selected commodities
   const loadInsuranceForCommodities = useCallback(async (commodities: CommodityData[]) => {
     if (commodities.length === 0) {
@@ -1142,31 +1217,72 @@ export default function WarehouseInspectionForm({
           setCommodityInsuranceData(filteredInsurances);
         }
       } else if (formData.insuranceTakenBy === 'agrogreen') {
-        const agrogreenQuery = query(collection(db, 'agrogreen-insurance'));
+        // Fetch Agrogreen insurance from insurance master collection with warehouse and commodity filters
+        console.log('🔍 Fetching Agrogreen insurance from Insurance Master');
+        console.log('Filters:', {
+          insuranceType: 'agrogreen',
+          warehouseCode: formData.warehouseCode,
+          warehouseName: formData.warehouseName,
+          commodities: commodities.map(c => c.commodityName)
+        });
+
+        let agrogreenQuery;
+        
+        if (formData.warehouseCode && formData.warehouseName) {
+          // Filter by warehouse code and agrogreen type
+          agrogreenQuery = query(
+            collection(db, 'insurance'),
+            where('insuranceType', '==', 'agrogreen'),
+            where('warehouseCode', '==', formData.warehouseCode)
+          );
+          console.log('✅ Using warehouse code filter for Agrogreen insurance query');
+        } else if (formData.warehouseName) {
+          // Fallback to warehouse name if code not available
+          agrogreenQuery = query(
+            collection(db, 'insurance'),
+            where('insuranceType', '==', 'agrogreen'),
+            where('warehouseName', '==', formData.warehouseName)
+          );
+          console.log('✅ Using warehouse name filter for Agrogreen insurance query');
+        } else {
+          // Only filter by type if no warehouse info
+          agrogreenQuery = query(
+            collection(db, 'insurance'),
+            where('insuranceType', '==', 'agrogreen')
+          );
+          console.log('⚠️ Using only insuranceType filter for Agrogreen insurance query');
+        }
+        
         const agrogreenDocs = await getDocs(agrogreenQuery);
+        console.log('📊 Agrogreen Insurance Master query result:', agrogreenDocs.docs.length, 'documents found');
         
         const insurances: any[] = [];
-        agrogreenDocs.forEach(doc => {
+        agrogreenDocs.docs.forEach((doc, index) => {
           const data = doc.data();
-          if (data.insurances && Array.isArray(data.insurances)) {
-            insurances.push(...data.insurances);
-          }
+          console.log(`Agrogreen Insurance ${index + 1}:`, {
+            warehouseCode: data.warehouseCode,
+            warehouseName: data.warehouseName,
+            commodityName: data.commodityName,
+            firePolicyNumber: data.firePolicyNumber,
+            firePolicyAmount: data.firePolicyAmount
+          });
+          insurances.push(data);
         });
         
         // Filter insurances based on selected commodities
         const commodityNames = commodities.map(c => c.commodityName.toLowerCase());
-        const filteredInsurances = insurances.filter((insurance: any) => 
-          commodityNames.some(name => 
-            insurance.commodity && insurance.commodity.toLowerCase().includes(name)
-          )
-        );
+        const filteredInsurances = insurances.filter((insurance: any) => {
+          const insuranceCommodity = (insurance.commodity || insurance.commodityName || '').toLowerCase();
+          return commodityNames.some(name => insuranceCommodity.includes(name));
+        });
         
+        console.log('✅ Filtered Agrogreen insurances:', filteredInsurances.length);
         setCommodityInsuranceData(filteredInsurances);
       }
     } catch (error) {
       console.error('Error loading insurance for commodities:', error);
     }
-  }, [formData.insuranceTakenBy, formData.clientName]);
+  }, [formData.insuranceTakenBy, formData.clientName, formData.warehouseCode, formData.warehouseName]);
 
   // Load initial client insurance data when form is opened with existing data
   useEffect(() => {
@@ -4009,7 +4125,17 @@ export default function WarehouseInspectionForm({
                     <Label className="text-green-600 font-medium">Select Agrogreen Insurance Policies</Label>
                     <div className="border border-green-200 rounded-lg p-4 bg-green-50">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {agrogreenInsuranceData.map((insurance, index) => (
+                        {agrogreenInsuranceData
+                          .filter((ins: any) => {
+                            // Filter by selected commodity if one is chosen
+                            if (!formData.insuranceCommodity) return true;
+                            
+                            const insuranceCommodity = (ins.commodity || ins.commodityName || '').toLowerCase().trim();
+                            const selectedCommodity = formData.insuranceCommodity.toLowerCase().trim();
+                            
+                            return insuranceCommodity === selectedCommodity || insuranceCommodity.includes(selectedCommodity);
+                          })
+                          .map((insurance, index) => (
                           <div key={index} className="border border-green-300 rounded p-3 bg-white">
                             <div className="flex items-center space-x-2 mb-2">
                               <input
