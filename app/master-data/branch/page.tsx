@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, Edit, CheckCircle, AlertCircle, X, Download, Search, Plus, MapPin, Building2 } from "lucide-react";
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -92,44 +92,93 @@ const branchColumns = [
     header: "Actions",
     cell: ({ row }: { row: Row<any> }) => {
       const rowData = row.original;
+      const isBranchRow = rowData.isBranch;
+      const isLocationRow = rowData.isLocation;
+      
       return (
         <div className="flex space-x-2 justify-center">
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-blue-300 text-blue-600 hover:bg-blue-50"
-            onClick={() => {
-              const event = new CustomEvent('addLocation', { detail: rowData });
-              document.dispatchEvent(event);
-            }}
-            title="Add Location"
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-orange-300 text-orange-600 hover:bg-orange-50"
-            onClick={() => {
-              const event = new CustomEvent('editBranch', { detail: rowData });
-              document.dispatchEvent(event);
-            }}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            size="sm" 
-            variant="outline"
-            className="border-red-300 text-red-600 hover:bg-red-50"
-            onClick={() => {
-              if (confirm(`Are you sure you want to delete ${rowData.branch} and all its locations? This action cannot be undone.`)) {
-                const event = new CustomEvent('deleteBranch', { detail: rowData.id });
-                document.dispatchEvent(event);
-              }
-            }}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          {isBranchRow && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                onClick={() => {
+                  const event = new CustomEvent('addLocation', { detail: rowData });
+                  document.dispatchEvent(event);
+                }}
+                title="Add Location"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                onClick={() => {
+                  const event = new CustomEvent('editBranch', { detail: rowData });
+                  document.dispatchEvent(event);
+                }}
+                title="Edit Branch"
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm" 
+                variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-50"
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete ${rowData.branch} and all its locations? This action cannot be undone.`)) {
+                    const event = new CustomEvent('deleteBranch', { detail: rowData.id });
+                    document.dispatchEvent(event);
+                  }
+                }}
+                title="Delete Branch"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </>
+          )}
+          {isLocationRow && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                onClick={() => {
+                  const event = new CustomEvent('editLocation', { 
+                    detail: { 
+                      branch: rowData.parentBranch,
+                      locationId: rowData.locationId 
+                    } 
+                  });
+                  document.dispatchEvent(event);
+                }}
+                title="Edit Location"
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm" 
+                variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-50"
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete ${rowData.locationName}? This action cannot be undone.`)) {
+                    const event = new CustomEvent('deleteLocation', { 
+                      detail: { 
+                        branchId: rowData.parentBranch.id,
+                        locationId: rowData.locationId 
+                      } 
+                    });
+                    document.dispatchEvent(event);
+                  }
+                }}
+                title="Delete Location"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </>
+          )}
         </div>
       );
     },
@@ -215,14 +264,26 @@ export default function BranchModulePage() {
       handleDelete(event.detail);
     };
     
+    const handleEditLocation = (event: any) => {
+      handleEditLocationAction(event.detail);
+    };
+    
+    const handleDeleteLocation = (event: any) => {
+      handleDeleteLocationAction(event.detail);
+    };
+    
     document.addEventListener('addLocation', handleAddLocation);
     document.addEventListener('editBranch', handleEditBranch);
     document.addEventListener('deleteBranch', handleDeleteBranch);
+    document.addEventListener('editLocation', handleEditLocation);
+    document.addEventListener('deleteLocation', handleDeleteLocation);
     
     return () => {
       document.removeEventListener('addLocation', handleAddLocation);
       document.removeEventListener('editBranch', handleEditBranch);
       document.removeEventListener('deleteBranch', handleDeleteBranch);
+      document.removeEventListener('editLocation', handleEditLocation);
+      document.removeEventListener('deleteLocation', handleDeleteLocation);
     };
   }, []);
 
@@ -301,7 +362,74 @@ export default function BranchModulePage() {
       address: '',
       pincode: '',
     });
+    setIsEditingLocation(false);
+    setEditingLocationId(null);
     setShowAddLocationModal(true);
+  };
+
+  const handleEditLocationAction = (detail: { branch: BranchData; locationId: string }) => {
+    console.log('Editing location:', detail.locationId, 'in branch:', detail.branch.branch);
+    const locationToEdit = detail.branch.locations.find(loc => loc.locationId === detail.locationId);
+    if (locationToEdit) {
+      setSelectedBranch(detail.branch);
+      setLocationFormData({
+        locationId: locationToEdit.locationId,
+        locationName: locationToEdit.locationName,
+        address: locationToEdit.address || '',
+        pincode: locationToEdit.pincode || '',
+      });
+      setIsEditingLocation(true);
+      setEditingLocationId(detail.locationId);
+      setShowAddLocationModal(true);
+    }
+  };
+
+  const handleDeleteLocationAction = async (detail: { branchId: string; locationId: string }) => {
+    console.log('Deleting location:', detail.locationId, 'from branch:', detail.branchId);
+    try {
+      // Get the current branch data
+      const branchDocRef = doc(db, 'branches', detail.branchId);
+      const branchDocSnap = await getDoc(branchDocRef);
+      
+      if (!branchDocSnap.exists()) {
+        throw new Error('Branch not found');
+      }
+      
+      const branchData = branchDocSnap.data() as BranchData;
+      const existingLocations = Array.isArray(branchData.locations) ? branchData.locations : [];
+      
+      // Filter out the location to delete
+      const updatedLocations = existingLocations.filter(loc => loc.locationId !== detail.locationId);
+      
+      console.log('Existing locations:', existingLocations);
+      console.log('Updated locations after deletion:', updatedLocations);
+      
+      // Update the branch with the new locations array
+      await updateDoc(branchDocRef, { locations: updatedLocations });
+      
+      setSuccessMessage({
+        title: "Location Deleted Successfully! 🗑️",
+        description: "The location has been permanently removed from the branch."
+      });
+      setShowSuccessModal(true);
+      
+      // Reload branches to get updated data
+      await loadBranches();
+      
+      // Auto close modal after 3 seconds for delete
+      setTimeout(() => {
+        setShowSuccessModal(false);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error deleting location:', error);
+      toast({
+        title: "❌ Delete Failed",
+        description: `Failed to delete location. Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+        duration: 4000,
+      });
+    }
   };
 
   const handleEdit = (branch: BranchData) => {
@@ -493,22 +621,24 @@ export default function BranchModulePage() {
     // Get all existing location IDs from all branches
     const allLocationIds: string[] = [];
     branches.forEach(branch => {
-      branch.locations.forEach(location => {
+      const locations = Array.isArray(branch.locations) ? branch.locations : [];
+      locations.forEach(location => {
         if (location.locationId) {
           allLocationIds.push(location.locationId);
         }
       });
     });
 
+    // Use LOC- prefix for locations (different from BR- for branches)
     const existingNumbers = allLocationIds
-      .filter(id => id && id.startsWith('BR-'))
+      .filter(id => id && id.startsWith('LOC-'))
       .map(id => parseInt(id.split('-')[1]))
       .filter(num => !isNaN(num));
     
     const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
     const nextNumber = maxNumber + 1;
     
-    return `BR-${nextNumber.toString().padStart(4, '0')}`;
+    return `LOC-${nextNumber.toString().padStart(4, '0')}`;
   };
 
   const handleInputChange = (field: keyof BranchData, value: string) => {
@@ -583,24 +713,55 @@ export default function BranchModulePage() {
   const handleLocationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedBranch) return;
+    if (!selectedBranch) {
+      console.error('No branch selected');
+      toast({
+        title: "❌ Error",
+        description: "No branch selected. Please try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
+    
+    if (!selectedBranch.id) {
+      console.error('Selected branch has no ID:', selectedBranch);
+      toast({
+        title: "❌ Error",
+        description: "Invalid branch data. Please refresh and try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
     
     setIsSubmitting(true);
     
     try {
+      // Get the latest branch data from Firestore to avoid overwriting recent changes
+      const branchDocRef = doc(db, 'branches', selectedBranch.id);
+      const branchDocSnap = await getDoc(branchDocRef);
+      
+      if (!branchDocSnap.exists()) {
+        throw new Error('Branch not found');
+      }
+      
+      const latestBranchData = branchDocSnap.data() as BranchData;
+      const existingLocations = Array.isArray(latestBranchData.locations) ? latestBranchData.locations : [];
+      
       let updatedLocations;
       let successMsg;
       
       if (isEditingLocation && editingLocationId) {
         // Edit existing location
-        updatedLocations = selectedBranch.locations.map(location =>
+        updatedLocations = existingLocations.map(location =>
           location.locationId === editingLocationId
             ? { ...locationFormData, createdAt: location.createdAt }
             : location
         );
         successMsg = {
           title: "Location Updated Successfully! ✅",
-          description: `${locationFormData.locationName} has been updated in ${selectedBranch.name}`
+          description: `${locationFormData.locationName} has been updated in ${selectedBranch.branch}`
         };
       } else {
         // Add new location
@@ -610,16 +771,19 @@ export default function BranchModulePage() {
           locationId: newLocationId,
           createdAt: new Date().toISOString(),
         };
-        updatedLocations = [...selectedBranch.locations, newLocation];
+        updatedLocations = [...existingLocations, newLocation];
         successMsg = {
           title: "Location Added Successfully! 📍",
-          description: `${locationFormData.locationName} has been added to ${selectedBranch.name} with Location ID: ${newLocationId}`
+          description: `${locationFormData.locationName} has been added to ${selectedBranch.branch} with Location ID: ${newLocationId}`
         };
       }
       
-      const updatedBranch = { ...selectedBranch, locations: updatedLocations };
+      console.log('Updating branch:', selectedBranch.id);
+      console.log('Existing locations:', existingLocations);
+      console.log('Updated locations:', updatedLocations);
       
-      await updateDoc(doc(db, 'branches', selectedBranch.id!), updatedBranch);
+      // Update only the locations field
+      await updateDoc(branchDocRef, { locations: updatedLocations });
       
       setSuccessMessage(successMsg);
       setShowSuccessModal(true);
@@ -633,7 +797,9 @@ export default function BranchModulePage() {
       setSelectedBranch(null);
       setIsEditingLocation(false);
       setEditingLocationId(null);
-      loadBranches();
+      
+      // Reload branches to get updated data
+      await loadBranches();
       
       // Auto close modal after 4 seconds
       setTimeout(() => {
@@ -641,9 +807,10 @@ export default function BranchModulePage() {
       }, 4000);
       
     } catch (error) {
+      console.error('Error adding/updating location:', error);
       toast({
         title: "❌ Error Occurred",
-        description: `Failed to ${isEditingLocation ? 'update' : 'add'} location. Please check your connection and try again.`,
+        description: `Failed to ${isEditingLocation ? 'update' : 'add'} location. Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
         duration: 4000,
       });
