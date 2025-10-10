@@ -931,6 +931,8 @@ export default function WarehouseInspectionForm({
         inspectionCode: initialData.inspectionCode || formDataSource.inspectionCode || prev.inspectionCode,
         warehouseCode: initialData.warehouseCode || formDataSource.warehouseCode || prev.warehouseCode,
         warehouseName: initialData.warehouseName || formDataSource.warehouseName || prev.warehouseName,
+        // Status is stored at top level of inspection, not in warehouseInspectionData
+        status: initialData.status || formDataSource.status || prev.status,
         // Bank details are stored at top level of inspection, not in warehouseInspectionData
         bankState: initialData.bankState || formDataSource.bankState || prev.bankState,
         bankBranch: initialData.bankBranch || formDataSource.bankBranch || prev.bankBranch,
@@ -6172,7 +6174,75 @@ export default function WarehouseInspectionForm({
                   <Button 
                     type="button" 
                     className="bg-green-500 hover:bg-green-600 action-button"
-                    onClick={onActivate}
+                    onClick={async () => {
+                      // Save the form data FIRST before validating
+                      try {
+                        // Find and update the inspection document
+                        let documentFound = false;
+                        
+                        if (formData.inspectionCode) {
+                          const inspectionsRef = collection(db, 'inspections');
+                          const q = query(inspectionsRef, where('inspectionCode', '==', formData.inspectionCode));
+                          const querySnapshot = await getDocs(q);
+                        
+                          if (!querySnapshot.empty) {
+                            const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
+                          
+                            // Clean the form data to avoid invalid date issues
+                            const cleanFormData = { ...formData };
+                            
+                            // Fix any invalid dates
+                            Object.keys(cleanFormData).forEach(key => {
+                              if (cleanFormData[key] instanceof Date) {
+                                if (isNaN(cleanFormData[key].getTime())) {
+                                  cleanFormData[key] = null;
+                                }
+                              }
+                            });
+
+                            // Update the document with the latest form data
+                            await updateDoc(docRef, {
+                              warehouseInspectionData: cleanFormData,
+                              updatedAt: new Date().toISOString()
+                            });
+                            
+                            documentFound = true;
+                          }
+                        }
+
+                        if (!documentFound) {
+                          toast({
+                            title: "Error",
+                            description: "Could not find the inspection record to update.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+
+                        // NOW validate insurance after saving
+                        const missingInsuranceFields = validateInsuranceForActivation();
+                        if (missingInsuranceFields.length > 0) {
+                          toast({
+                            title: "Cannot Activate Warehouse",
+                            description: `Missing insurance details: ${missingInsuranceFields.join(', ')}. Please complete the Insurance of Stock section.`,
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+
+                        // After successful save and validation, trigger activation
+                        if (onActivate) {
+                          onActivate();
+                        }
+                      } catch (error) {
+                        console.error('Error saving before activation:', error);
+                        toast({
+                          title: "Error",
+                          description: "Failed to save changes. Please try again.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
                   >
                     Proceed to Activate
                   </Button>
@@ -6199,15 +6269,40 @@ export default function WarehouseInspectionForm({
               </>
             )}
             
-            {/* ACTIVATED state - Only show Close button */}
+            {/* ACTIVATED state - Show Save Changes and Close button */}
             {formData.status === 'activated' && canApproveSurvey(formData.status) && (
-              <Button 
-                type="button" 
-                className="bg-red-500 hover:bg-red-600 action-button"
-                onClick={() => handleStatusAction('close')}
-              >
-                Close
-              </Button>
+              <>
+                <Button 
+                  type="button" 
+                  className="bg-blue-500 hover:bg-blue-600 action-button"
+                  onClick={async () => {
+                    try {
+                      await saveFormData();
+                      toast({
+                        title: "Saved",
+                        description: "Changes saved successfully",
+                      });
+                    } catch (error) {
+                      console.error('Save error:', error);
+                      const errorMessage = error instanceof Error ? error.message : "Failed to save changes";
+                      toast({
+                        title: "Error",
+                        description: errorMessage,
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  Save Changes
+                </Button>
+                <Button 
+                  type="button" 
+                  className="bg-red-500 hover:bg-red-600 action-button"
+                  onClick={() => handleStatusAction('close')}
+                >
+                  Close
+                </Button>
+              </>
             )}
             
             {/* RESUBMITTED state */}
