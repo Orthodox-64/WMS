@@ -21,7 +21,7 @@ class RegistrationOTPService {
 
   async sendRegistrationOTP(email: string, username: string): Promise<{ success: boolean; message: string; otpId?: string; canResend?: boolean; resendCooldown?: number; blockedUntil?: number }> {
     try {
-      // Use the enhanced OTP service directly for generation and blocking logic
+      // Use the enhanced OTP service
       const otpResult = otpService.generateOTP(email, username);
       
       if (!otpResult.success) {
@@ -48,7 +48,8 @@ class RegistrationOTPService {
         to: email,
         toName: username,
         otpCode: otpData.code,
-        expiryMinutes: this.OTP_EXPIRY_MINUTES
+        expiryMinutes: this.OTP_EXPIRY_MINUTES,
+        subject: 'Login OTP Verification - WMS System'
       });
 
       if (!emailSent) {
@@ -204,7 +205,8 @@ class RegistrationOTPService {
         to: email,
         toName: username,
         otpCode: otpData.code,
-        expiryMinutes: this.OTP_EXPIRY_MINUTES
+        expiryMinutes: this.OTP_EXPIRY_MINUTES,
+        subject: 'Login OTP Verification - WMS System'
       });
 
       if (!emailSent) {

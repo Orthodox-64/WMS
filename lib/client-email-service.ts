@@ -14,6 +14,7 @@ interface OTPEmailData {
   toName: string;
   otpCode: string;
   expiryMinutes: number;
+  subject?: string; // Optional: defaults to password reset if not provided
 }
 
 interface PasswordResetEmailData {
@@ -90,7 +91,7 @@ class ClientEmailService {
   }
 
   async sendOTPEmail(data: OTPEmailData): Promise<boolean> {
-    const subject = 'Password Reset OTP - WMS System';
+    const subject = data.subject || 'Password Reset OTP - WMS System';
     const htmlContent = this.generateOTPHTML(data);
     const textContent = this.generateOTPText(data);
 
