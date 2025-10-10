@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, Edit, CheckCircle, AlertCircle, X, Download, Search, Plus, Package, Minus } from "lucide-react";
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -134,44 +134,93 @@ const commodityColumns = [
     header: "Actions",
     cell: ({ row }: { row: Row<any> }) => {
       const rowData = row.original;
+      const isCommodityRow = !rowData.isVariety;
+      const isVarietyRow = rowData.isVariety;
+      
       return (
         <div className="flex space-x-2 justify-center">
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-blue-300 text-blue-600 hover:bg-blue-50"
-            onClick={() => {
-              const event = new CustomEvent('addVariety', { detail: rowData });
-              document.dispatchEvent(event);
-            }}
-            title="Add Variety"
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-orange-300 text-orange-600 hover:bg-orange-50"
-            onClick={() => {
-              const event = new CustomEvent('editCommodity', { detail: rowData });
-              document.dispatchEvent(event);
-            }}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            size="sm" 
-            variant="outline"
-            className="border-red-300 text-red-600 hover:bg-red-50"
-            onClick={() => {
-              if (confirm(`Are you sure you want to delete ${rowData.commodityName}? This action cannot be undone.`)) {
-                const event = new CustomEvent('deleteCommodity', { detail: rowData.id });
-                document.dispatchEvent(event);
-              }
-            }}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          {isCommodityRow && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                onClick={() => {
+                  const event = new CustomEvent('addVariety', { detail: rowData });
+                  document.dispatchEvent(event);
+                }}
+                title="Add Variety"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                onClick={() => {
+                  const event = new CustomEvent('editCommodity', { detail: rowData });
+                  document.dispatchEvent(event);
+                }}
+                title="Edit Commodity"
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm" 
+                variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-50"
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete ${rowData.commodityName} and all its varieties? This action cannot be undone.`)) {
+                    const event = new CustomEvent('deleteCommodity', { detail: rowData.id });
+                    document.dispatchEvent(event);
+                  }
+                }}
+                title="Delete Commodity"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </>
+          )}
+          {isVarietyRow && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                onClick={() => {
+                  const event = new CustomEvent('editVariety', { 
+                    detail: { 
+                      commodity: rowData.parentCommodity,
+                      varietyId: rowData.varietyId 
+                    } 
+                  });
+                  document.dispatchEvent(event);
+                }}
+                title="Edit Variety"
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm" 
+                variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-50"
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete ${rowData.varietyName}? This action cannot be undone.`)) {
+                    const event = new CustomEvent('deleteVariety', { 
+                      detail: { 
+                        commodityId: rowData.parentCommodity.id,
+                        varietyId: rowData.varietyId 
+                      } 
+                    });
+                    document.dispatchEvent(event);
+                  }
+                }}
+                title="Delete Variety"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </>
+          )}
         </div>
       );
     },
@@ -248,14 +297,26 @@ export default function CommodityModulePage() {
       handleDelete(event.detail);
     };
     
+    const handleEditVariety = (event: any) => {
+      handleEditVarietyAction(event.detail);
+    };
+    
+    const handleDeleteVariety = (event: any) => {
+      handleDeleteVarietyAction(event.detail);
+    };
+    
     document.addEventListener('addVariety', handleAddVariety);
     document.addEventListener('editCommodity', handleEditCommodity);
     document.addEventListener('deleteCommodity', handleDeleteCommodity);
+    document.addEventListener('editVariety', handleEditVariety);
+    document.addEventListener('deleteVariety', handleDeleteVariety);
     
     return () => {
       document.removeEventListener('addVariety', handleAddVariety);
       document.removeEventListener('editCommodity', handleEditCommodity);
       document.removeEventListener('deleteCommodity', handleDeleteCommodity);
+      document.removeEventListener('editVariety', handleEditVariety);
+      document.removeEventListener('deleteVariety', handleDeleteVariety);
     };
   }, [commodities]); // Add commodities dependency so handlers update when data loads
 
@@ -445,9 +506,99 @@ export default function CommodityModulePage() {
     setShowAddCommodityModal(true);
   };
 
-  const handleDelete = (commodityId: string) => {
+  const handleDelete = async (commodityId: string) => {
     console.log('Deleting commodity with ID:', commodityId);
-    setDeleteId(commodityId);
+    try {
+      await deleteDoc(doc(db, 'commodities', commodityId));
+      setSuccessMessage({
+        title: "Commodity Deleted Successfully! 🗑️",
+        description: "The commodity and all its varieties have been permanently removed from the database."
+      });
+      setShowSuccessModal(true);
+      loadCommodities();
+      
+      // Auto close modal after 3 seconds for delete
+      setTimeout(() => {
+        setShowSuccessModal(false);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error deleting commodity:', error);
+      toast({
+        title: "❌ Delete Failed",
+        description: "Failed to delete commodity. Please check your connection and try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+    }
+  };
+
+  const handleEditVarietyAction = (detail: { commodity: CommodityData; varietyId: string }) => {
+    console.log('Editing variety:', detail.varietyId, 'in commodity:', detail.commodity.commodityName);
+    const varietyToEdit = detail.commodity.varieties.find(v => v.varietyId === detail.varietyId);
+    if (varietyToEdit) {
+      setSelectedCommodity(detail.commodity);
+      setVarietyFormData({
+        varietyId: varietyToEdit.varietyId,
+        varietyName: varietyToEdit.varietyName,
+        locationId: varietyToEdit.locationId,
+        locationName: varietyToEdit.locationName,
+        branchName: varietyToEdit.branchName,
+        rate: varietyToEdit.rate,
+        particulars: varietyToEdit.particulars || [{ name: 'Moisture', minPercentage: 0, maxPercentage: 15 }],
+      });
+      setIsEditingVariety(true);
+      setEditingVarietyId(detail.varietyId);
+      setShowAddVarietyModal(true);
+    }
+  };
+
+  const handleDeleteVarietyAction = async (detail: { commodityId: string; varietyId: string }) => {
+    console.log('Deleting variety:', detail.varietyId, 'from commodity:', detail.commodityId);
+    try {
+      // Get the current commodity data
+      const commodityDocRef = doc(db, 'commodities', detail.commodityId);
+      const commodityDocSnap = await getDoc(commodityDocRef);
+      
+      if (!commodityDocSnap.exists()) {
+        throw new Error('Commodity not found');
+      }
+      
+      const commodityData = commodityDocSnap.data() as CommodityData;
+      const existingVarieties = Array.isArray(commodityData.varieties) ? commodityData.varieties : [];
+      
+      // Filter out the variety to delete
+      const updatedVarieties = existingVarieties.filter(v => v.varietyId !== detail.varietyId);
+      
+      console.log('Existing varieties:', existingVarieties);
+      console.log('Updated varieties after deletion:', updatedVarieties);
+      
+      // Update the commodity with the new varieties array
+      await updateDoc(commodityDocRef, { varieties: updatedVarieties });
+      
+      setSuccessMessage({
+        title: "Variety Deleted Successfully! 🗑️",
+        description: "The variety has been permanently removed from the commodity."
+      });
+      setShowSuccessModal(true);
+      
+      // Reload commodities to get updated data
+      await loadCommodities();
+      
+      // Auto close modal after 3 seconds for delete
+      setTimeout(() => {
+        setShowSuccessModal(false);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error deleting variety:', error);
+      toast({
+        title: "❌ Delete Failed",
+        description: `Failed to delete variety. Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+        duration: 4000,
+      });
+    }
   };
 
   const loadCommodities = async () => {
