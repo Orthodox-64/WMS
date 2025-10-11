@@ -708,7 +708,7 @@ export default function ReservationBillingPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/master-data')}
               variant="outline"
               className="border-orange-300 text-orange-600 hover:bg-orange-50"
             >

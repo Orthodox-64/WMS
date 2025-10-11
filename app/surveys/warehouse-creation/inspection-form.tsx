@@ -3668,23 +3668,63 @@ export default function WarehouseInspectionForm({
                     // Load Warehouse Owner insurance data if Warehouse Owner is selected
                     if (value === 'warehouse owner') {
                       try {
-                        console.log('Loading Warehouse Owner insurance data');
-                        const insuranceDocs = await getDocs(collection(db, 'insurance'));
-                        if (!insuranceDocs.empty) {
-                          const warehouseInsurances = insuranceDocs.docs
-                            .map(doc => ({
-                              id: doc.id,
-                              ...doc.data(),
-                              sourceDocumentId: doc.id,
-                              sourceCollection: 'insurance'
-                            }))
-                            .filter((insurance: any) => insurance.insuranceType === 'warehouse-owner');
-                          console.log('Found Warehouse Owner insurance data:', warehouseInsurances);
-                          setWarehouseInsuranceData(warehouseInsurances);
+                        console.log('🔍 Fetching Warehouse Owner insurance from Insurance Master');
+                        console.log('Filters:', {
+                          insuranceType: 'warehouse-owner',
+                          warehouseCode: formData.warehouseCode,
+                          warehouseName: formData.warehouseName
+                        });
+
+                        let warehouseOwnerQuery;
+                        
+                        if (formData.warehouseCode && formData.warehouseName) {
+                          // Filter by warehouse code and warehouse-owner type
+                          warehouseOwnerQuery = query(
+                            collection(db, 'insurance'),
+                            where('insuranceType', '==', 'warehouse-owner'),
+                            where('warehouseCode', '==', formData.warehouseCode)
+                          );
+                          console.log('✅ Using warehouse code filter for Warehouse Owner insurance query');
+                        } else if (formData.warehouseName) {
+                          // Fallback to warehouse name if code not available
+                          warehouseOwnerQuery = query(
+                            collection(db, 'insurance'),
+                            where('insuranceType', '==', 'warehouse-owner'),
+                            where('warehouseName', '==', formData.warehouseName)
+                          );
+                          console.log('✅ Using warehouse name filter for Warehouse Owner insurance query');
                         } else {
-                          console.log('No Warehouse Owner insurance data found');
-                          setWarehouseInsuranceData([]);
+                          // Only filter by type if no warehouse info
+                          warehouseOwnerQuery = query(
+                            collection(db, 'insurance'),
+                            where('insuranceType', '==', 'warehouse-owner')
+                          );
+                          console.log('⚠️ Using only insuranceType filter for Warehouse Owner insurance query');
                         }
+                        
+                        const warehouseOwnerDocs = await getDocs(warehouseOwnerQuery);
+                        console.log('📊 Warehouse Owner Insurance query result:', warehouseOwnerDocs.docs.length, 'documents found');
+                        
+                        const warehouseInsurances = warehouseOwnerDocs.docs.map((doc, index) => {
+                          const data = doc.data();
+                          console.log(`Warehouse Owner Insurance ${index + 1}:`, {
+                            warehouseCode: data.warehouseCode,
+                            warehouseName: data.warehouseName,
+                            commodityName: data.commodityName,
+                            commodity: data.commodity,
+                            firePolicyNumber: data.firePolicyNumber,
+                            burglaryPolicyNumber: data.burglaryPolicyNumber
+                          });
+                          return {
+                            id: doc.id,
+                            ...data,
+                            sourceDocumentId: doc.id,
+                            sourceCollection: 'insurance'
+                          };
+                        });
+                        
+                        console.log('Found Warehouse Owner insurance data:', warehouseInsurances);
+                        setWarehouseInsuranceData(warehouseInsurances);
                       } catch (error) {
                         console.error('Error loading Warehouse Owner insurance data:', error);
                         setWarehouseInsuranceData([]);
@@ -3739,6 +3779,59 @@ export default function WarehouseInspectionForm({
                         }));
                         
                         console.log('Re-filled main form with commodity-specific insurance data');
+                      }
+                    }
+                    
+                    // If warehouse owner is selected, re-filter based on commodity
+                    if (formData.insuranceTakenBy === 'warehouse owner') {
+                      try {
+                        console.log('🔍 Re-fetching Warehouse Owner insurance with commodity filter:', value);
+                        
+                        let warehouseOwnerQuery;
+                        
+                        if (formData.warehouseCode && formData.warehouseName) {
+                          // Filter by warehouse code and warehouse-owner type
+                          warehouseOwnerQuery = query(
+                            collection(db, 'insurance'),
+                            where('insuranceType', '==', 'warehouse-owner'),
+                            where('warehouseCode', '==', formData.warehouseCode)
+                          );
+                          console.log('✅ Using warehouse code filter for Warehouse Owner insurance query');
+                        } else if (formData.warehouseName) {
+                          // Fallback to warehouse name if code not available
+                          warehouseOwnerQuery = query(
+                            collection(db, 'insurance'),
+                            where('insuranceType', '==', 'warehouse-owner'),
+                            where('warehouseName', '==', formData.warehouseName)
+                          );
+                          console.log('✅ Using warehouse name filter for Warehouse Owner insurance query');
+                        } else {
+                          // Only filter by type if no warehouse info
+                          warehouseOwnerQuery = query(
+                            collection(db, 'insurance'),
+                            where('insuranceType', '==', 'warehouse-owner')
+                          );
+                          console.log('⚠️ Using only insuranceType filter for Warehouse Owner insurance query');
+                        }
+                        
+                        const warehouseOwnerDocs = await getDocs(warehouseOwnerQuery);
+                        const allWarehouseInsurances = warehouseOwnerDocs.docs.map(doc => ({
+                          id: doc.id,
+                          ...doc.data(),
+                          sourceDocumentId: doc.id,
+                          sourceCollection: 'insurance'
+                        }));
+                        
+                        // Filter by commodity
+                        const filteredInsurances = allWarehouseInsurances.filter((ins: any) => {
+                          const insuranceCommodity = (ins.commodity || ins.commodityName || '').toLowerCase();
+                          return insuranceCommodity.includes(value.toLowerCase());
+                        });
+                        
+                        console.log('📊 Filtered Warehouse Owner insurances for commodity:', value, filteredInsurances);
+                        setWarehouseInsuranceData(filteredInsurances);
+                      } catch (error) {
+                        console.error('Error re-filtering Warehouse Owner insurance:', error);
                       }
                     }
                   }}
