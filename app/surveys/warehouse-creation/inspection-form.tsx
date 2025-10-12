@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -511,6 +511,12 @@ export default function WarehouseInspectionForm({
   // Insurance popup state
   // Removed insurance popup states - using direct validation instead
   
+  // Ref to track if we're in initial data load phase
+  const isInitialLoadRef = useRef(true);
+  
+  // Ref to store the loaded insuranceCommodity value to prevent it from being cleared
+  const loadedInsuranceCommodityRef = useRef<string>('');
+  
   // Most fields are now editable - only master data fields remain read-only
   const isReadOnly = false; // Remove general read-only restriction
   
@@ -923,10 +929,23 @@ export default function WarehouseInspectionForm({
         }
       });
       
+      // Trim insuranceCommodity to ensure exact match with dropdown options
+      if (processedFormData.insuranceCommodity) {
+        processedFormData.insuranceCommodity = processedFormData.insuranceCommodity.trim();
+        // Store in ref to prevent clearing during re-renders
+        loadedInsuranceCommodityRef.current = processedFormData.insuranceCommodity;
+      } else {
+        // If insuranceCommodity is not saved but we have insurance policy data, try to extract it
+        // This can happen when user selected insurance from checkbox but commodity wasn't set
+        // We should NOT auto-set here - user needs to select commodity manually
+      }
+      
       setFormData(prev => ({
         ...prev,
-        // Use the processed form data with converted dates, BUT exclude insurance amounts (fetch them fresh)
+        // Use the processed form data with converted dates - includes ALL insurance fields
         ...processedFormData,
+        // CRITICAL FIX: If insuranceCommodity is missing but we loaded it, restore it from ref
+        insuranceCommodity: processedFormData.insuranceCommodity || loadedInsuranceCommodityRef.current || prev.insuranceCommodity,
         // Always preserve core inspection fields from top level
         inspectionCode: initialData.inspectionCode || formDataSource.inspectionCode || prev.inspectionCode,
         warehouseCode: initialData.warehouseCode || formDataSource.warehouseCode || prev.warehouseCode,
@@ -942,12 +961,10 @@ export default function WarehouseInspectionForm({
         attachedFiles: formDataSource.attachedFiles || initialData.attachedFiles || prev.attachedFiles || [],
         // Handle insurance entries from existing data with proper date conversion
         insuranceEntries: processedInsuranceEntries,
-        // Reset insurance amounts - will be fetched fresh from insurance master
-        firePolicyAmount: '',
-        burglaryPolicyAmount: '',
-        remainingFirePolicyAmount: '',
-        remainingBurglaryPolicyAmount: '',
       }));
+      
+      // Mark initial load as complete
+      isInitialLoadRef.current = false;
       
       // Restore selected client insurances and additional sections if they exist
       if (formDataSource.selectedClientInsurances && Array.isArray(formDataSource.selectedClientInsurances)) {
@@ -1117,6 +1134,12 @@ export default function WarehouseInspectionForm({
   // Load Agrogreen insurance data when Agrogreen is selected
   useEffect(() => {
     const loadAgrogreenInsuranceData = async () => {
+      // Skip during initial data load to prevent clearing loaded commodity value
+      if (isInitialLoadRef.current) {
+        console.log('⏭️ Skipping Agrogreen insurance load during initial form load');
+        return;
+      }
+      
       if (formData.insuranceTakenBy === 'agrogreen' && (formData.warehouseCode || formData.warehouseName)) {
         try {
           console.log('🔍 Loading Agrogreen insurance data');
@@ -1188,6 +1211,117 @@ export default function WarehouseInspectionForm({
 
     loadAgrogreenInsuranceData();
   }, [formData.insuranceTakenBy, formData.warehouseCode, formData.warehouseName, formData.insuranceCommodity]);
+
+  // Load Warehouse Owner insurance data when Warehouse Owner is selected
+  useEffect(() => {
+    const loadWarehouseOwnerInsuranceData = async () => {
+      // Skip during initial data load to prevent clearing loaded commodity value
+      if (isInitialLoadRef.current) {
+        console.log('⏭️ Skipping warehouse owner insurance load during initial form load');
+        return;
+      }
+      
+      if (formData.insuranceTakenBy === 'warehouse owner' && (formData.warehouseCode || formData.warehouseName)) {
+        try {
+          console.log('🔍 Loading Warehouse Owner insurance data');
+          console.log('Filters:', {
+            warehouseCode: formData.warehouseCode,
+            warehouseName: formData.warehouseName,
+            selectedCommodity: formData.insuranceCommodity
+          });
+
+          let warehouseOwnerQuery;
+          
+          if (formData.warehouseCode) {
+            // Prefer warehouse code for precise filtering
+            warehouseOwnerQuery = query(
+              collection(db, 'insurance'),
+              where('insuranceType', '==', 'warehouse-owner'),
+              where('warehouseCode', '==', formData.warehouseCode)
+            );
+            console.log('✅ Using warehouse code filter for Warehouse Owner insurance');
+          } else if (formData.warehouseName) {
+            // Fallback to warehouse name
+            warehouseOwnerQuery = query(
+              collection(db, 'insurance'),
+              where('insuranceType', '==', 'warehouse-owner'),
+              where('warehouseName', '==', formData.warehouseName)
+            );
+            console.log('✅ Using warehouse name filter for Warehouse Owner insurance');
+          } else {
+            console.log('⚠️ No warehouse filters available');
+            setWarehouseInsuranceData([]);
+            return;
+          }
+
+          const warehouseOwnerDocs = await getDocs(warehouseOwnerQuery);
+          console.log('📊 Warehouse Owner insurance found (before commodity filter):', warehouseOwnerDocs.docs.length, 'documents');
+
+          let insurances = warehouseOwnerDocs.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            sourceDocumentId: doc.id,
+            sourceCollection: 'insurance',
+            // Add remaining amounts fields for compatibility
+            remainingFirePolicyAmount: doc.data().firePolicyRemainingAmount || doc.data().firePolicyAmount || '',
+            remainingBurglaryPolicyAmount: doc.data().burglaryPolicyRemainingAmount || doc.data().burglaryPolicyAmount || '',
+          }));
+
+          // Additional filtering by commodity if selected
+          if (formData.insuranceCommodity) {
+            const selectedCommodity = formData.insuranceCommodity.toLowerCase().trim();
+            insurances = insurances.filter((ins: any) => {
+              const insuranceCommodity = (ins.commodity || ins.commodityName || '').toLowerCase().trim();
+              const matches = insuranceCommodity === selectedCommodity || insuranceCommodity.includes(selectedCommodity);
+              console.log(`Commodity match check: "${insuranceCommodity}" vs "${selectedCommodity}" = ${matches}`);
+              return matches;
+            });
+            console.log('📊 After commodity filtering:', insurances.length, 'documents');
+          }
+
+          console.log('✅ Warehouse Owner insurance data loaded:', insurances);
+          
+          // Log each insurance to see what commodity field exists
+          insurances.forEach((ins: any, idx: number) => {
+            console.log(`Insurance ${idx + 1} commodity fields:`, {
+              commodity: ins.commodity,
+              commodityName: ins.commodityName,
+              allFields: Object.keys(ins)
+            });
+          });
+          
+          setWarehouseInsuranceData(insurances);
+        } catch (error) {
+          console.error('❌ Error loading Warehouse Owner insurance data:', error);
+          setWarehouseInsuranceData([]);
+        }
+      } else if (formData.insuranceTakenBy !== 'warehouse owner') {
+        // Clear Warehouse Owner insurance data if not Warehouse Owner
+        setWarehouseInsuranceData([]);
+      }
+    };
+
+    loadWarehouseOwnerInsuranceData();
+  }, [formData.insuranceTakenBy, formData.warehouseCode, formData.warehouseName, formData.insuranceCommodity]);
+
+  // Debug: Log commodityData and formData.insuranceCommodity changes
+  useEffect(() => {
+    // Debug logging removed - commodity persistence working correctly
+  }, [formData.insuranceCommodity, commoditiesData, formData.insuranceTakenBy]);
+
+  // CRITICAL FIX: Restore insuranceCommodity from ref if it gets cleared
+  useEffect(() => {
+    // Only run once when commoditiesData loads and we have a saved value
+    if (loadedInsuranceCommodityRef.current && 
+        !formData.insuranceCommodity && 
+        commoditiesData.length > 0 &&
+        formData.insuranceTakenBy === 'warehouse owner') {
+      setFormData(prev => ({
+        ...prev,
+        insuranceCommodity: loadedInsuranceCommodityRef.current
+      }));
+    }
+  }, [commoditiesData.length]); // Only depend on commoditiesData.length, not the whole object
 
   // Load insurance data based on selected commodities
   const loadInsuranceForCommodities = useCallback(async (commodities: CommodityData[]) => {
@@ -3747,8 +3881,14 @@ export default function WarehouseInspectionForm({
               <div className="space-y-2">
                 <Label htmlFor="insuranceCommodity">Commodity <span className="text-red-500">*</span></Label>
                 <Select
-                  value={formData.insuranceCommodity}
+                  value={loadedInsuranceCommodityRef.current || formData.insuranceCommodity}
                   onValueChange={async (value) => {
+                    // CRITICAL: Don't clear the ref if value is empty!
+                    if (!value) {
+                      return;
+                    }
+                    // Update both state and ref
+                    loadedInsuranceCommodityRef.current = value;
                     setFormData(prev => ({ ...prev, insuranceCommodity: value }));
                     setSelectedInsurancePolicy(''); // Reset policy selection when commodity changes
                     
@@ -3840,11 +3980,20 @@ export default function WarehouseInspectionForm({
                     <SelectValue placeholder="Select commodity" />
                   </SelectTrigger>
                   <SelectContent>
-                    {commoditiesData.map(commodity => (
-                      <SelectItem key={commodity.id} value={commodity.commodityName}>
-                        {commodity.commodityName}
+                    {/* CRITICAL: Always show loaded value first if it exists */}
+                    {loadedInsuranceCommodityRef.current && (
+                      <SelectItem key={`loaded-${loadedInsuranceCommodityRef.current}`} value={loadedInsuranceCommodityRef.current}>
+                        {loadedInsuranceCommodityRef.current}
                       </SelectItem>
-                    ))}
+                    )}
+                    {/* Then show all commodities from database, excluding the one already shown */}
+                    {commoditiesData
+                      .filter(commodity => commodity.commodityName !== loadedInsuranceCommodityRef.current)
+                      .map(commodity => (
+                        <SelectItem key={commodity.id} value={commodity.commodityName}>
+                          {commodity.commodityName}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -4353,6 +4502,8 @@ export default function WarehouseInspectionForm({
                                     if (selectedWarehouseInsurances.length === 0) {
                                       setFormData(prev => ({
                                         ...prev,
+                                        // Set commodity from insurance data
+                                        insuranceCommodity: (insurance.commodity || insurance.commodityName || '').trim(),
                                         // Fire Policy Details
                                         firePolicyCompanyName: insurance.firePolicyCompanyName || '',
                                         firePolicyNumber: insurance.firePolicyNumber || '',
@@ -6283,6 +6434,11 @@ export default function WarehouseInspectionForm({
                           
                             // Clean the form data to avoid invalid date issues
                             const cleanFormData = { ...formData };
+                            
+                            // Log what's being saved
+                            console.log('💾 SAVING TO DB - insuranceCommodity:', cleanFormData.insuranceCommodity);
+                            console.log('💾 SAVING TO DB - insuranceTakenBy:', cleanFormData.insuranceTakenBy);
+                            console.log('💾 SAVING TO DB - firePolicyNumber:', cleanFormData.firePolicyNumber);
                             
                             // Fix any invalid dates
                             Object.keys(cleanFormData).forEach(key => {
