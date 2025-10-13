@@ -518,7 +518,8 @@ export default function ReservationBillingPage() {
 
   // Handle adding new reservation
   async function handleAddReservation() {
-    if (!validateDates(newReservation.reservationStart!, newReservation.reservationEnd!)) {
+    // Only validate dates for 'reservation' status, skip for 'post-reservation'
+    if (newReservation.reservationStatus === 'reservation' && !validateDates(newReservation.reservationStart!, newReservation.reservationEnd!)) {
       toast({ title: "Invalid Date Range", description: "Reservation start date must be before end date.", variant: "destructive" });
       return;
     }

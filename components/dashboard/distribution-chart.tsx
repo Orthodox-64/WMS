@@ -74,15 +74,30 @@ export function DistributionChart() {
           let date = new Date(dateStr);
           if (isNaN(date.getTime())) return;
           const month = date.toISOString().slice(0, 7); // YYYY-MM
-          if (!monthStatusCount[month]) monthStatusCount[month] = {};
-          // Normalize status
-          if (["active", "activated"].includes(status)) status = "Active";
-          else if (["pending"].includes(status)) status = "Pending";
-          else if (["submitted"].includes(status)) status = "Submitted";
-          else if (["closed"].includes(status)) status = "Closed";
-          else if (["reactivated", "reactive"].includes(status)) status = "Reactive";
-          else status = status.charAt(0).toUpperCase() + status.slice(1);
-          monthStatusCount[month][status] = (monthStatusCount[month][status] || 0) + 1;
+          if (!monthStatusCount[month]) monthStatusCount[month] = {
+            Active: 0,
+            Pending: 0,
+            Closed: 0,
+            Rejected: 0
+          };
+          
+          // Categorize status based on formulas:
+          // Active count = Activate + Reactivate
+          if (["active", "activated", "activate", "reactivate", "reactivated"].includes(status)) {
+            monthStatusCount[month]['Active']++;
+          } 
+          // Pending count = Pending + Submitted + Resubmit
+          else if (["pending", "submitted", "submit", "resubmit", "resubmitted"].includes(status)) {
+            monthStatusCount[month]['Pending']++;
+          } 
+          // Closed count = Closed
+          else if (["closed"].includes(status)) {
+            monthStatusCount[month]['Closed']++;
+          } 
+          // Reject count = Reject
+          else if (["reject", "rejected"].includes(status)) {
+            monthStatusCount[month]['Rejected']++;
+          }
         });
         // Build chart data
         const allStatuses = ["Active", "Pending", "Closed", "Rejected"];
@@ -90,12 +105,7 @@ export function DistributionChart() {
         const chartData = months.map(month => {
           const row: any = { date: format(new Date(month + '-01'), 'MMMM') };
           allStatuses.forEach(status => {
-            if (status === 'Rejected') {
-              // Count all statuses that are exactly 'Rejected' (case-insensitive)
-              row[status] = monthStatusCount[month]['Rejected'] || monthStatusCount[month]['rejected'] || 0;
-            } else {
-              row[status] = monthStatusCount[month][status] || 0;
-            }
+            row[status] = monthStatusCount[month][status] || 0;
           });
           return row;
         });
