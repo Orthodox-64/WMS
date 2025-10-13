@@ -6882,8 +6882,34 @@ export default function InwardPage() {
                   </div>
                 </div>
 
-                {/* Show reservation fields for reservations with 'reservation' status */}
-                {selectedReservation?.reservationStatus === 'reservation' && (
+                {/* Check if reservation has expired but has billing parameters */}
+                {(() => {
+                  const hasExpiredWithBilling = selectedReservation?.reservationStatus === 'reservation' && 
+                    selectedReservation?.reservationEnd && 
+                    new Date(selectedReservation.reservationEnd) < new Date() &&
+                    selectedReservation?.billingCycle && selectedReservation?.billingCycle !== '-' &&
+                    selectedReservation?.billingType && selectedReservation?.billingType !== '-' &&
+                    selectedReservation?.billingRate && selectedReservation?.billingRate !== '-';
+                  
+                  return hasExpiredWithBilling;
+                })() ? (
+                  /* Show billing fields when reservation expired but billing is active */
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="block font-semibold mb-1">Billing Cycle</Label>
+                      <Input value={selectedReservation?.billingCycle || ''} readOnly placeholder="Auto-filled" />
+                    </div>
+                    <div>
+                      <Label className="block font-semibold mb-1">Billing Type</Label>
+                      <Input value={selectedReservation?.billingType || ''} readOnly placeholder="Auto-filled" />
+                    </div>
+                    <div>
+                      <Label className="block font-semibold mb-1">Billing Rate (Rs/MT)</Label>
+                      <Input value={selectedReservation?.billingRate || ''} readOnly placeholder="Auto-filled" />
+                    </div>
+                  </div>
+                ) : selectedReservation?.reservationStatus === 'reservation' ? (
+                  /* Show reservation fields for active reservations */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label className="block font-semibold mb-1">Reservation Rate (Rs/MT) *</Label>
@@ -6902,7 +6928,23 @@ export default function InwardPage() {
                       <Input value={selectedReservation?.reservationEnd || ''} readOnly placeholder="Auto-filled" />
                     </div>
                   </div>
-                )}
+                ) : selectedReservation?.reservationStatus === 'post-reservation' ? (
+                  /* Show billing fields for post-reservation status */
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="block font-semibold mb-1">Billing Cycle</Label>
+                      <Input value={selectedReservation?.billingCycle || ''} readOnly placeholder="Auto-filled" />
+                    </div>
+                    <div>
+                      <Label className="block font-semibold mb-1">Billing Type</Label>
+                      <Input value={selectedReservation?.billingType || ''} readOnly placeholder="Auto-filled" />
+                    </div>
+                    <div>
+                      <Label className="block font-semibold mb-1">Billing Rate (Rs/MT)</Label>
+                      <Input value={selectedReservation?.billingRate || ''} readOnly placeholder="Auto-filled" />
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* Inline rectangular alert: shows reservation/insurance expiry messages */}
                 {inlineAlert && (
@@ -6927,24 +6969,6 @@ export default function InwardPage() {
                           </p>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Show billing fields for post-reservation status */}
-                {selectedReservation?.reservationStatus === 'post-reservation' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label className="block font-semibold mb-1">Billing Cycle</Label>
-                      <Input value={selectedReservation?.billingCycle || ''} readOnly placeholder="Auto-filled" />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Billing Type</Label>
-                      <Input value={selectedReservation?.billingType || ''} readOnly placeholder="Auto-filled" />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Billing Rate (Rs/MT)</Label>
-                      <Input value={selectedReservation?.billingRate || ''} readOnly placeholder="Auto-filled" />
                     </div>
                   </div>
                 )}
