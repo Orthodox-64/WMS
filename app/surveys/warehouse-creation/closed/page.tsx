@@ -244,8 +244,8 @@ export default function ClosedWarehousePage() {
     
     const headers = [
       'Inspection Code', 'Warehouse Code', 'State', 'Branch', 'Location', 
-      'Business Type', 'Warehouse Name', 'Bank State', 'Bank Branch', 
-      'Bank Name', 'IFSC Code', 'Receipt Type', 'Created Date', 'Remarks'
+      'Business Type', 'Warehouse Name', 'Bank State', 'Bank Name', 
+      'Bank Branch', 'IFSC Code', 'Receipt Type', 'Created Date', 'Remarks'
     ];
     
     const csvContent = [
