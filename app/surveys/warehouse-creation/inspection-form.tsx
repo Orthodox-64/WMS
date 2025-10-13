@@ -913,7 +913,7 @@ export default function WarehouseInspectionForm({
       // List of date fields that need conversion
       const dateFields = [
         'dateOfInspection', 'oeDate', 'firePolicyStartDate', 'firePolicyEndDate',
-        'burglaryPolicyStartDate', 'burglaryPolicyEndDate', 'lastClaimDate'
+        'burglaryPolicyStartDate', 'burglaryPolicyEndDate', 'lastClaimDate', 'expiryDate'
       ];
       
       // Convert date fields from strings/objects to Date objects
