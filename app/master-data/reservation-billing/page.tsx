@@ -272,23 +272,23 @@ export default function ReservationBillingPage() {
         );
       }
     },
-    {
-      accessorKey: "billingStatus",
-      header: "Billing Status",
-      cell: ({ row }) => {
-        const status = row.original.billingStatus;
-        const colorMap = {
-          'processing': 'bg-yellow-100 text-yellow-800 border-yellow-300',
-          'unpaid': 'bg-red-100 text-red-800 border-red-300',
-          'complete': 'bg-green-100 text-green-800 border-green-300'
-        };
-        return (
-          <span className={`px-2 py-1 text-xs rounded-full border ${colorMap[status] || 'bg-gray-100 text-gray-800 border-gray-300'}`}>
-            {status}
-          </span>
-        );
-      }
-    },
+    // {
+    //   accessorKey: "billingStatus",
+    //   header: "Billing Status",
+    //   cell: ({ row }) => {
+    //     const status = row.original.billingStatus;
+    //     const colorMap = {
+    //       'processing': 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    //       'unpaid': 'bg-red-100 text-red-800 border-red-300',
+    //       'complete': 'bg-green-100 text-green-800 border-green-300'
+    //     };
+    //     return (
+    //       <span className={`px-2 py-1 text-xs rounded-full border ${colorMap[status] || 'bg-gray-100 text-gray-800 border-gray-300'}`}>
+    //         {status}
+    //       </span>
+    //     );
+    //   }
+    // },
     {
       accessorKey: "reservationRate",
       header: "Reservation Rate",
@@ -524,6 +524,17 @@ export default function ReservationBillingPage() {
       return;
     }
 
+    // Check for duplicate reservation (same warehouse + client)
+    const duplicateCheck = checkDuplicateReservation(newReservation.warehouse!, newReservation.client!);
+    if (duplicateCheck.isDuplicate) {
+      toast({ 
+        title: "Duplicate Reservation", 
+        description: duplicateCheck.message, 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     try {
       const reservationId = generateReservationId();
       const reservationData = {
@@ -604,6 +615,42 @@ export default function ReservationBillingPage() {
     } catch {
       return true;
     }
+  }
+
+  // Check for duplicate reservation (same warehouse + client)
+  function checkDuplicateReservation(warehouse: string, client: string): { isDuplicate: boolean; message: string } {
+    const today = new Date();
+    
+    // Find existing reservations with same warehouse and client
+    const existingReservation = reservations.find(res => 
+      res.warehouse === warehouse && 
+      res.client === client
+    );
+
+    if (!existingReservation) {
+      return { isDuplicate: false, message: '' };
+    }
+
+    // Check if existing reservation is expired
+    if (existingReservation.reservationEnd) {
+      try {
+        const endDate = parseISO(existingReservation.reservationEnd);
+        const isExpired = isBefore(endDate, today);
+        
+        if (isExpired) {
+          // Expired reservation - allow new reservation
+          return { isDuplicate: false, message: '' };
+        }
+      } catch {
+        // If date parsing fails, treat as active reservation
+      }
+    }
+
+    // Active reservation exists - block duplicate
+    return { 
+      isDuplicate: true, 
+      message: `A reservation already exists for warehouse "${warehouse}" and client "${client}". The existing reservation expires on ${existingReservation.reservationEnd || 'N/A'}.` 
+    };
   }
 
   // Get filtered states, branches, locations, warehouses based on selections
