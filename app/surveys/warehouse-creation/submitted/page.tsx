@@ -628,20 +628,20 @@ export default function SubmittedWarehousePage() {
         inspection.bankName,
         inspection.ifscCode,
         inspection.receiptType,
-      // Format date to show only date part with type guards
+      // Format date to ISO format (YYYY-MM-DD) for consistency
       (typeof inspection.createdAt === 'string' || typeof inspection.createdAt === 'number' || inspection.createdAt instanceof Date)
-        ? new Date(inspection.createdAt).toLocaleDateString()
+        ? new Date(inspection.createdAt).toISOString().split('T')[0]
         : '',
       (() => {
         const v = inspection.warehouseInspectionData?.dateOfInspection;
         return (typeof v === 'string' || typeof v === 'number' || v instanceof Date)
-          ? new Date(v).toLocaleDateString()
+          ? new Date(v).toISOString().split('T')[0]
           : '';
       })(),
       (() => {
         const v = inspection.warehouseInspectionData?.oeDate;
         return (typeof v === 'string' || typeof v === 'number' || v instanceof Date)
-          ? new Date(v).toLocaleDateString()
+          ? new Date(v).toISOString().split('T')[0]
           : '';
       })(),
         inspection.warehouseInspectionData?.remarks || ''
