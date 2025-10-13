@@ -6411,8 +6411,8 @@ export default function WarehouseInspectionForm({
               </Button>
             )}
             
-            {/* SUBMITTED state - action buttons from props */}
-            {showSubmittedActions && (
+            {/* SUBMITTED state - action buttons from props - Only for checker and admin */}
+            {showSubmittedActions && (userRole === 'checker' || userRole === 'admin') && (
               <>
                 {onActivate && (
                   <Button 
