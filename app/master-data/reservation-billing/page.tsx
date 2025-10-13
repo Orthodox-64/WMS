@@ -135,7 +135,8 @@ export default function ReservationBillingPage() {
             warehouseCode: data.warehouseCode || 'WH-0001',
             state: data.state || '',
             branch: data.branch || '',
-            location: data.location || ''
+            location: data.location || '',
+            warehouseStatus: data.warehouseStatus || ''
           });
         }
       });
@@ -181,6 +182,18 @@ export default function ReservationBillingPage() {
 
   useEffect(() => {
     fetchData();
+
+    // Listen for warehouse status updates from other modules
+    const handleWarehouseStatusUpdate = () => {
+      console.log('Warehouse status updated, refreshing data...');
+      fetchData();
+    };
+
+    window.addEventListener('warehouseStatusUpdated', handleWarehouseStatusUpdate);
+
+    return () => {
+      window.removeEventListener('warehouseStatusUpdated', handleWarehouseStatusUpdate);
+    };
   }, []);
 
   // Populate extend reservation form when modal opens
@@ -621,10 +634,14 @@ export default function ReservationBillingPage() {
   function checkDuplicateReservation(warehouse: string, client: string): { isDuplicate: boolean; message: string } {
     const today = new Date();
     
-    // Find existing reservations with same warehouse and client
+    // Normalize inputs for case-insensitive comparison
+    const normalizedWarehouse = warehouse?.trim().toLowerCase();
+    const normalizedClient = client?.trim().toLowerCase();
+    
+    // Find existing reservations with same warehouse and client (case-insensitive)
     const existingReservation = reservations.find(res => 
-      res.warehouse === warehouse && 
-      res.client === client
+      res.warehouse?.trim().toLowerCase() === normalizedWarehouse && 
+      res.client?.trim().toLowerCase() === normalizedClient
     );
 
     if (!existingReservation) {
@@ -632,7 +649,7 @@ export default function ReservationBillingPage() {
     }
 
     // Check if existing reservation is expired
-    if (existingReservation.reservationEnd) {
+    if (existingReservation.reservationEnd && existingReservation.reservationEnd !== '-') {
       try {
         const endDate = parseISO(existingReservation.reservationEnd);
         const isExpired = isBefore(endDate, today);
@@ -707,16 +724,27 @@ export default function ReservationBillingPage() {
       return [];
     }
     
-    console.log('Filtering warehouses with:', { state: newReservation.state, branch: newReservation.branch, location: newReservation.location });
+    // First filter: Exclude closed and rejected warehouses, include activated and others
+    const availableWarehouses = warehouses.filter(w => {
+      const status = w.warehouseStatus?.trim().toLowerCase();
+      // Explicitly exclude closed, rejected warehouses
+      // Include activated, pending, submitted, or warehouses without status
+      const excludedStatuses = ['closed', 'rejected'];
+      return !status || !excludedStatuses.includes(status);
+    });
     
-    // If no state/branch/location selected yet, return all warehouses
+    console.log('All warehouses:', warehouses);
+    console.log('Filtering warehouses with:', { state: newReservation.state, branch: newReservation.branch, location: newReservation.location });
+    console.log('Available warehouses (excluding closed/rejected):', availableWarehouses);
+    
+    // If no state/branch/location selected yet, return all available warehouses
     if (!newReservation.state || !newReservation.branch || !newReservation.location) {
-      console.log('Returning all warehouses - incomplete selection');
-      return warehouses;
+      console.log('Returning all available warehouses - incomplete selection');
+      return availableWarehouses;
     }
     
-    // Try exact match first
-    let filtered = warehouses.filter(w => 
+    // Try exact match first (from available warehouses only)
+    let filtered = availableWarehouses.filter(w => 
       w.state === newReservation.state && 
       w.branch === newReservation.branch && 
       w.location === newReservation.location
@@ -726,7 +754,7 @@ export default function ReservationBillingPage() {
     
     // If no exact match, try state and branch only
     if (filtered.length === 0) {
-      filtered = warehouses.filter(w => 
+      filtered = availableWarehouses.filter(w => 
         w.state === newReservation.state && 
         w.branch === newReservation.branch
       );
@@ -735,16 +763,16 @@ export default function ReservationBillingPage() {
     
     // If still no match, try state only
     if (filtered.length === 0) {
-      filtered = warehouses.filter(w => 
+      filtered = availableWarehouses.filter(w => 
         w.state === newReservation.state
       );
       console.log('State only match results:', filtered);
     }
     
-    // If still no match, return all warehouses as fallback
+    // If still no match, return all available warehouses as fallback
     if (filtered.length === 0) {
-      console.log('No matches found, returning all warehouses');
-      return warehouses;
+      console.log('No matches found, returning all available warehouses');
+      return availableWarehouses;
     }
     
     return filtered;
@@ -1010,10 +1038,8 @@ export default function ReservationBillingPage() {
                         console.log('Filtered warehouses for dropdown:', filteredWarehouses);
                         console.log('Current selection:', { state: newReservation.state, branch: newReservation.branch, location: newReservation.location });
                         
-                        // If no filtered warehouses, show all warehouses as fallback
-                        const warehousesToShow = filteredWarehouses.length > 0 ? filteredWarehouses : warehouses;
-                        
-                        return warehousesToShow.map(warehouse => (
+                        // Only show filtered activated warehouses (no fallback to all warehouses)
+                        return filteredWarehouses.map(warehouse => (
                           <SelectItem key={warehouse.id} value={warehouse.warehouseName}>
                             {warehouse.warehouseName} ({warehouse.warehouseCode})
                           </SelectItem>
