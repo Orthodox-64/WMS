@@ -451,7 +451,11 @@ export default function ReservationBillingPage() {
   }
 
   function canAddBilling(row: Reservation) {
-    return (!row.billingCycle || row.billingCycle === '-') && (!row.billingType || row.billingType === '-') && (!row.billingRate || row.billingRate === '-');
+    // Only show plus button for post-reservation status AND when billing fields are empty
+    return row.reservationStatus === 'post-reservation' && 
+           (!row.billingCycle || row.billingCycle === '-') && 
+           (!row.billingType || row.billingType === '-') && 
+           (!row.billingRate || row.billingRate === '-');
   }
 
   // Handler functions

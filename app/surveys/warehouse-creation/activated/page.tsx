@@ -364,7 +364,7 @@ const activatedColumns = [
             </Button>
           )}
           
-          <Button 
+          {/* <Button 
             variant="outline" 
             size="sm"
             onClick={() => {
@@ -375,9 +375,9 @@ const activatedColumns = [
             title="Add Multiple Insurance"
           >
             <Plus className="w-4 h-4" />
-          </Button>
+          </Button> */}
           
-          <Button 
+          {/* <Button 
             variant="outline" 
             size="sm"
             onClick={() => {
@@ -388,7 +388,7 @@ const activatedColumns = [
             title="Close Warehouse"
           >
             <Archive className="w-4 h-4" />
-          </Button>
+          </Button> */}
           
           {insuranceStatus === 'expired' && (
             <div title="Insurance Expired">
