@@ -1088,6 +1088,9 @@ export default function InwardPage() {
     burglaryPolicyBalance: '',
     bankFundedBy: '',
     selectedInsurance: null,
+    // Lab Parameters - Form level (not per entry)
+    dateOfSampling: '',
+    dateOfTesting: '',
   });
 
   // Current entry form (for inward entry details)
@@ -1102,8 +1105,6 @@ export default function InwardPage() {
     averageWeight: '',
     totalBags: '',
     totalQuantity: '',
-    dateOfSampling: '',
-    dateOfTesting: '',
     labResults: [] as Array<{parameterName: string, value: string}>,
     labResultsValidation: [] as boolean[],
     stacks: [
@@ -2224,6 +2225,9 @@ export default function InwardPage() {
     if (!form.marketRate) missingBaseFields.push('Market Rate');
     if (!form.totalBags) missingBaseFields.push('Total Bags (in Commodity Info)');
     if (!form.totalQuantity) missingBaseFields.push('Total Quantity (in Commodity Info)');
+    // Lab Parameters - Check at whole inward form level
+    if (!form.dateOfSampling) missingBaseFields.push('Date of Sampling');
+    if (!form.dateOfTesting) missingBaseFields.push('Date of Testing');
 
     if (missingBaseFields.length > 0) {
       console.log('Missing base fields:', missingBaseFields);
@@ -2471,11 +2475,8 @@ export default function InwardPage() {
       if (!entry.totalBags) missingFields.push('Total Bags (in Inward Entry)');
       if (!entry.totalQuantity) missingFields.push('Total Quantity');
       
-      // Lab Parameters
-      if (!entry.dateOfSampling) missingFields.push('Date of Sampling');
-      if (!entry.dateOfTesting) missingFields.push('Date of Testing');
-      
       // Note: Base Receipt is intentionally not required as per user requirements
+      // Note: Date of Sampling and Date of Testing are now validated at the whole inward form level, not per entry
       
       if (missingFields.length > 0) {
         alert(`Validation Error in Entry #${entry.entryNumber}:\nPlease fill in these required fields: ${missingFields.join(', ')}`);
@@ -2643,8 +2644,8 @@ export default function InwardPage() {
             attachmentUrl: uploadedFileUrl,
             updatedAt: new Date().toISOString(),
             // Lab Parameters - stored at document level
-            dateOfSampling: currentEntryForm.dateOfSampling || '',
-            dateOfTesting: currentEntryForm.dateOfTesting || '',
+            dateOfSampling: baseForm.dateOfSampling || '',
+            dateOfTesting: baseForm.dateOfTesting || '',
             labResults: currentEntryForm.labResults || [],
             // Keep the existing selectedInsurance without changes
             selectedInsurance: editingRow.selectedInsurance || null,
@@ -2753,8 +2754,8 @@ export default function InwardPage() {
               bankFundedBy: baseForm.bankFundedBy,
               
               // Lab Parameters - stored at document level
-              dateOfSampling: currentEntryForm.dateOfSampling || '',
-              dateOfTesting: currentEntryForm.dateOfTesting || '',
+              dateOfSampling: baseForm.dateOfSampling || '',
+              dateOfTesting: baseForm.dateOfTesting || '',
               labResults: currentEntryForm.labResults || [],
               
               // Combined entries data (without lab parameters)
@@ -3501,7 +3502,7 @@ export default function InwardPage() {
     }, 0);
     setHasPendingEntries(true);
     
-    // Reset only the current entry form for new entry (keep lab parameters)
+    // Reset only the current entry form for new entry (lab parameters now in baseForm)
     setCurrentEntryForm({
       vehicleNumber: '',
       getpassNumber: '',
@@ -3513,9 +3514,7 @@ export default function InwardPage() {
       averageWeight: '',
       totalBags: '',
       totalQuantity: '',
-      // Keep lab parameters since they are at document level
-      dateOfSampling: currentEntryForm.dateOfSampling || '',
-      dateOfTesting: currentEntryForm.dateOfTesting || '',
+      // Lab parameters moved to baseForm, only keep labResults per entry
       labResults: currentEntryForm.labResults || [],
       labResultsValidation: currentEntryForm.labResultsValidation || [],
       stacks: [
@@ -4113,7 +4112,7 @@ export default function InwardPage() {
       const selectedEntry = inwardEntries[entryIndex];
       setCurrentEntryIndex(entryIndex);
       
-      // Update current entry form with selected entry data (excluding lab parameters)
+      // Update current entry form with selected entry data (lab parameters now at baseForm level)
       setCurrentEntryForm({
         vehicleNumber: selectedEntry.vehicleNumber || '',
         getpassNumber: selectedEntry.getpassNumber || '',
@@ -4125,9 +4124,7 @@ export default function InwardPage() {
         averageWeight: selectedEntry.averageWeight || '',
         totalBags: selectedEntry.totalBags || '',
         totalQuantity: selectedEntry.totalQuantity || '',
-        // Lab parameters are at document level, so keep current values
-        dateOfSampling: currentEntryForm.dateOfSampling || '',
-        dateOfTesting: currentEntryForm.dateOfTesting || '',
+        // Lab results are still per entry, but dates are now at document level
         labResults: currentEntryForm.labResults || [],
         labResultsValidation: currentEntryForm.labResultsValidation || [],
         stacks: selectedEntry.stacks || [{ stackNumber: '', numberOfBags: '' }],
@@ -4346,6 +4343,9 @@ export default function InwardPage() {
       firePolicyBalance: row.firePolicyBalance || row.firePolicyBalance === 0 ? String(row.firePolicyBalance) : '',
       burglaryPolicyBalance: row.burglaryPolicyBalance || row.burglaryPolicyBalance === 0 ? String(row.burglaryPolicyBalance) : '',
       bankFundedBy: row.bankFundedBy || '',
+      // Lab Parameters - moved to form level
+      dateOfSampling: row.dateOfSampling || '',
+      dateOfTesting: row.dateOfTesting || '',
     });
 
     // Handle multiple inward entries for edit mode
@@ -7868,18 +7868,18 @@ export default function InwardPage() {
                     <Label className="block font-semibold mb-2">Date of Sampling <span className="text-red-500">*</span></Label>
                     <Input 
                       type="date"
-                      value={currentEntryForm.dateOfSampling}
-                      onChange={e => setCurrentEntryForm(f => ({ ...f, dateOfSampling: e.target.value }))}
+                      value={baseForm.dateOfSampling}
+                      onChange={e => setBaseForm(f => ({ ...f, dateOfSampling: e.target.value }))}
                     />
                   </div>
                   <div>
                     <Label className="block font-semibold mb-2">Date of Testing <span className="text-red-500">*</span></Label>
                     <Input 
                       type="date"
-                      value={currentEntryForm.dateOfTesting}
-                      onChange={e => setCurrentEntryForm(f => ({ ...f, dateOfTesting: e.target.value }))}
-                      disabled={!currentEntryForm.dateOfSampling}
-                      min={currentEntryForm.dateOfSampling}
+                      value={baseForm.dateOfTesting}
+                      onChange={e => setBaseForm(f => ({ ...f, dateOfTesting: e.target.value }))}
+                      disabled={!baseForm.dateOfSampling}
+                      min={baseForm.dateOfSampling}
                     />
                   </div>
                 </div>
@@ -7953,8 +7953,8 @@ export default function InwardPage() {
                     <Label className="block font-semibold mb-2">Date of Sampling <span className="text-red-500">*</span></Label>
                     <Input 
                       type="date"
-                      value={currentEntryForm.dateOfSampling}
-                      onChange={e => setCurrentEntryForm(f => ({ ...f, dateOfSampling: e.target.value }))}
+                      value={baseForm.dateOfSampling}
+                      onChange={e => setBaseForm(f => ({ ...f, dateOfSampling: e.target.value }))}
                       className="bg-white border-green-300"
                     />
                   </div>
@@ -7962,10 +7962,10 @@ export default function InwardPage() {
                     <Label className="block font-semibold mb-2">Date of Testing <span className="text-red-500">*</span></Label>
                     <Input 
                       type="date"
-                      value={currentEntryForm.dateOfTesting}
-                      onChange={e => setCurrentEntryForm(f => ({ ...f, dateOfTesting: e.target.value }))}
-                      disabled={!currentEntryForm.dateOfSampling}
-                      min={currentEntryForm.dateOfSampling}
+                      value={baseForm.dateOfTesting}
+                      onChange={e => setBaseForm(f => ({ ...f, dateOfTesting: e.target.value }))}
+                      disabled={!baseForm.dateOfSampling}
+                      min={baseForm.dateOfSampling}
                       className="bg-white border-green-300"
                     />
                   </div>
