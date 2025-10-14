@@ -541,15 +541,37 @@ export default function ReservationBillingPage() {
       return;
     }
 
-    // Check for duplicate reservation (same warehouse + client)
-    const duplicateCheck = checkDuplicateReservation(newReservation.warehouse!, newReservation.client!);
-    if (duplicateCheck.isDuplicate) {
-      toast({ 
-        title: "Duplicate Reservation", 
-        description: duplicateCheck.message, 
-        variant: "destructive" 
-      });
-      return;
+    // Check for duplicate reservation (same warehouse + client) ONLY for 'reservation' status
+    // Allow multiple entries for 'post-reservation' status
+    if (newReservation.reservationStatus === 'reservation') {
+      const duplicateCheck = checkDuplicateReservation(newReservation.warehouse!, newReservation.client!);
+      if (duplicateCheck.isDuplicate) {
+        toast({ 
+          title: "Duplicate Reservation", 
+          description: duplicateCheck.message, 
+          variant: "destructive" 
+        });
+        return;
+      }
+    }
+
+    // For post-reservation, check if billing cycle + billing type combination already exists
+    if (newReservation.reservationStatus === 'post-reservation') {
+      const duplicateBilling = reservations.find(res => 
+        res.warehouse?.trim().toLowerCase() === newReservation.warehouse?.trim().toLowerCase() &&
+        res.client?.trim().toLowerCase() === newReservation.client?.trim().toLowerCase() &&
+        res.billingCycle === newReservation.billingCycle &&
+        res.billingType === newReservation.billingType
+      );
+
+      if (duplicateBilling) {
+        toast({ 
+          title: "Duplicate Billing Entry", 
+          description: `A post-reservation entry with Billing Cycle "${newReservation.billingCycle}" and Billing Type "${newReservation.billingType}" already exists for this warehouse and client. Please select a different combination.`, 
+          variant: "destructive" 
+        });
+        return;
+      }
     }
 
     try {
