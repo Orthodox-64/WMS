@@ -449,7 +449,7 @@ export default function ReleaseOrderPage() {
   React.useEffect(() => {
     const fetchInwards = async () => {
       const inwardCol = collection(db, 'inward');
-      const q = query(inwardCol, where('status', '==', 'approve'));
+      const q = query(inwardCol, where('status', '==', 'approved'));
       const snap = await getDocs(q);
       const inwardData: any[] = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 

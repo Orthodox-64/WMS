@@ -104,12 +104,21 @@ export default function AdminDashboardPage() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-orange-600 flex items-center">
-              <Shield className="mr-3 h-8 w-8" />
-              Admin Dashboard
-            </h1>
-            <p className="text-gray-600 mt-2">System overview and user management</p>
+          <div className="flex items-center gap-4">
+            <Button
+              onClick={() => router.push('/dashboard')}
+              variant="outline"
+              className="border-orange-300 text-orange-600 hover:bg-orange-50"
+            >
+              ← Dashboard
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-orange-600 flex items-center">
+                <Shield className="mr-3 h-8 w-8" />
+                Admin Dashboard
+              </h1>
+              <p className="text-gray-600 mt-2">System overview and user management</p>
+            </div>
           </div>
         </div>
 
