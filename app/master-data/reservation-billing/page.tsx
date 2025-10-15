@@ -121,14 +121,16 @@ export default function ReservationBillingPage() {
       const fetchedBranches = branchSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Branch[];
       const fetchedClients = clientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // Extract unique warehouses from inspections - ONLY ACTIVATED WAREHOUSES
+      // Extract unique warehouses from inspections - ONLY ACTIVATED WAREHOUSES (excluding CM type)
       const warehouseSet = new Set<string>();
       const fetchedWarehouses: any[] = [];
       
       inspectionSnapshot.docs.forEach(doc => {
         const data = doc.data();
-        // Only include warehouses with status 'activated'
-        if (data.warehouseName && !warehouseSet.has(data.warehouseName) && data.status === 'activated') {
+        // Only include warehouses with status 'activated' and exclude CM (Collateral Management) business type warehouses
+        const isCMType = data.businessType?.toUpperCase() === 'CM';
+        
+        if (data.warehouseName && !warehouseSet.has(data.warehouseName) && data.status === 'activated' && !isCMType) {
           warehouseSet.add(data.warehouseName);
           fetchedWarehouses.push({
             id: doc.id,
@@ -137,7 +139,8 @@ export default function ReservationBillingPage() {
             state: data.state || '',
             branch: data.branch || '',
             location: data.location || '',
-            warehouseStatus: data.status || ''
+            warehouseStatus: data.status || '',
+            businessType: data.businessType || ''
           });
         }
       });
