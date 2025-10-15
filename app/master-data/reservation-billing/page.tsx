@@ -121,13 +121,14 @@ export default function ReservationBillingPage() {
       const fetchedBranches = branchSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Branch[];
       const fetchedClients = clientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // Extract unique warehouses from inspections
+      // Extract unique warehouses from inspections - ONLY ACTIVATED WAREHOUSES
       const warehouseSet = new Set<string>();
       const fetchedWarehouses: any[] = [];
       
       inspectionSnapshot.docs.forEach(doc => {
         const data = doc.data();
-        if (data.warehouseName && !warehouseSet.has(data.warehouseName)) {
+        // Only include warehouses with status 'activated'
+        if (data.warehouseName && !warehouseSet.has(data.warehouseName) && data.status === 'activated') {
           warehouseSet.add(data.warehouseName);
           fetchedWarehouses.push({
             id: doc.id,
@@ -136,7 +137,7 @@ export default function ReservationBillingPage() {
             state: data.state || '',
             branch: data.branch || '',
             location: data.location || '',
-            warehouseStatus: data.warehouseStatus || ''
+            warehouseStatus: data.status || ''
           });
         }
       });
