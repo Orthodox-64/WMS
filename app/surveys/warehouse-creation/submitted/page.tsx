@@ -72,6 +72,49 @@ function getInsuranceAlertStatus(inspection: InspectionData): 'none' | 'expiring
   return hasExpired ? 'expired' : 'none';
 }
 
+// Robust date parser: handles Date, ISO strings, numeric timestamps (s or ms),
+// and Firestore Timestamp objects (with toDate() or seconds).
+function parseToDate(value: any): Date | null {
+  if (!value && value !== 0) return null;
+  // Firestore Timestamp with toDate()
+  if (typeof value?.toDate === 'function') {
+    try {
+      return value.toDate();
+    } catch {
+      return null;
+    }
+  }
+
+  // Firestore-like object with seconds
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000);
+  }
+
+  // Date instance
+  if (value instanceof Date) return value;
+
+  // Numeric timestamp (seconds or milliseconds)
+  if (typeof value === 'number') {
+    // If value looks like seconds (<= 1e12), convert to ms
+    const asMs = value > 1e12 ? value : value * 1000;
+    const d = new Date(asMs);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // String - try Date parsing
+  if (typeof value === 'string') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
+}
+
+function formatDateValue(value: any): string {
+  const d = parseToDate(value);
+  return d ? d.toLocaleDateString() : '';
+}
+
 // Define columns for DataTable
 const submittedColumns = [
   {
@@ -202,9 +245,7 @@ const submittedColumns = [
     header: "Created Date",
     cell: ({ row }: { row: Row<any> }) => {
       const date = row.getValue("createdAt");
-      const formattedDate = (typeof date === 'string' || typeof date === 'number' || date instanceof Date)
-        ? new Date(date).toLocaleDateString()
-        : '';
+      const formattedDate = formatDateValue(date);
       return (
         <span className="text-green-700 w-full flex justify-center">
           {formattedDate}
@@ -219,7 +260,7 @@ const submittedColumns = [
     cell: ({ row }: { row: Row<any> }) => {
       const inspection = row.original;
       const inspectionDate = inspection.warehouseInspectionData?.dateOfInspection;
-      const formattedDate = inspectionDate ? new Date(inspectionDate).toLocaleDateString() : '';
+      const formattedDate = formatDateValue(inspectionDate);
       return (
         <span className="text-green-700 w-full flex justify-center">
           {formattedDate || '-'}
@@ -234,7 +275,7 @@ const submittedColumns = [
     cell: ({ row }: { row: Row<any> }) => {
       const inspection = row.original;
       const oeDate = inspection.warehouseInspectionData?.oeDate;
-      const formattedDate = oeDate ? new Date(oeDate).toLocaleDateString() : '';
+      const formattedDate = formatDateValue(oeDate);
       return (
         <span className="text-green-700 w-full flex justify-center">
           {formattedDate || '-'}
@@ -615,37 +656,33 @@ export default function SubmittedWarehousePage() {
     // Sort by inspection code in ascending order
     const sortedData = [...dataToExport].sort((a, b) => a.inspectionCode.localeCompare(b.inspectionCode));
     
-    const csvData = sortedData.map(inspection => [
-        inspection.inspectionCode,
-        inspection.warehouseCode,
-        inspection.state,
-        inspection.branch,
-        inspection.location,
-        (typeof inspection.businessType === 'string' ? inspection.businessType.toUpperCase() : ''),
-        inspection.warehouseName || '',
-        inspection.bankState,
-        inspection.bankBranch,
-        inspection.bankName,
-        inspection.ifscCode,
-        inspection.receiptType,
-      // Format date to ISO format (YYYY-MM-DD) for consistency
-      (typeof inspection.createdAt === 'string' || typeof inspection.createdAt === 'number' || inspection.createdAt instanceof Date)
-        ? new Date(inspection.createdAt).toISOString().split('T')[0]
-        : '',
-      (() => {
-        const v = inspection.warehouseInspectionData?.dateOfInspection;
-        return (typeof v === 'string' || typeof v === 'number' || v instanceof Date)
-          ? new Date(v).toISOString().split('T')[0]
-          : '';
-      })(),
-      (() => {
-        const v = inspection.warehouseInspectionData?.oeDate;
-        return (typeof v === 'string' || typeof v === 'number' || v instanceof Date)
-          ? new Date(v).toISOString().split('T')[0]
-          : '';
-      })(),
-        inspection.warehouseInspectionData?.remarks || ''
-    ]);
+    const csvData = sortedData.map(inspection => {
+        const createdD = parseToDate(inspection.createdAt);
+        const doiD = parseToDate(inspection.warehouseInspectionData?.dateOfInspection);
+        const oeD = parseToDate(inspection.warehouseInspectionData?.oeDate);
+
+        return [
+          inspection.inspectionCode,
+          inspection.warehouseCode,
+          inspection.state,
+          inspection.branch,
+          inspection.location,
+          (typeof inspection.businessType === 'string' ? inspection.businessType.toUpperCase() : ''),
+          inspection.warehouseName || '',
+          inspection.bankState,
+          inspection.bankBranch,
+          inspection.bankName,
+          inspection.ifscCode,
+          inspection.receiptType,
+          // createdAt in ISO YYYY-MM-DD
+          createdD ? createdD.toISOString().split('T')[0] : '',
+          // Date of Inspection
+          doiD ? doiD.toISOString().split('T')[0] : '',
+          // OE Date
+          oeD ? oeD.toISOString().split('T')[0] : '',
+          inspection.warehouseInspectionData?.remarks || ''
+        ];
+    });
 
     // Create CSV content without extra blank rows
     const csvContent = [headers, ...csvData]

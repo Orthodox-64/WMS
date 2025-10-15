@@ -252,7 +252,7 @@ const resubmittedColumns = [
           >
             <Eye className="w-4 h-4" />
           </Button>
-          <Button 
+          {/* <Button 
             variant="outline" 
             size="sm"
             onClick={() => {
@@ -263,19 +263,8 @@ const resubmittedColumns = [
             title="View Checker Remarks"
           >
             <AlertCircle className="w-4 h-4" />
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => {
-              const event = new CustomEvent('submitWarehouse', { detail: inspection });
-              document.dispatchEvent(event);
-            }}
-            className="border-green-300 text-green-600 hover:bg-green-50"
-            title="Submit to Approval Process"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
+          </Button> */}
+          {/* Submit button moved to the inspection form dialog (end of form) */}
           {insuranceStatus === 'expired' && (
             <div title="Insurance Expired">
               <BlinkingSirenIcon color="red" size={20} />
@@ -705,14 +694,14 @@ export default function ResubmittedWarehousePage() {
           <div className="flex space-x-2">
             {filteredAndSortedInspections.length > 0 && (
               <>
-                <Button 
+                {/* <Button 
                   onClick={handleBulkSubmit}
                   className="bg-green-500 hover:bg-green-600 text-white"
                   title="Submit all valid warehouses to approval process"
                 >
                   <Send className="mr-2 h-4 w-4" />
                   Submit All
-                </Button>
+                </Button> */}
                 <Button 
                   onClick={exportToCSV}
                   className="bg-blue-500 hover:bg-blue-600 text-white"
@@ -907,6 +896,35 @@ export default function ResubmittedWarehousePage() {
                 mode={getSurveyTabMode('resubmitted')}
                 onStatusChange={handleStatusChange}
               />
+            )}
+            {selectedInspection && (
+              <div className="mt-4 flex justify-end space-x-2">
+                {/* <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Close the form without submitting
+                    setShowInspectionForm(false);
+                    setSelectedInspection(null);
+                  }}
+                >
+                  Close
+                </Button> */}
+                <Button
+                  className="bg-green-600 text-white"
+                  onClick={async () => {
+                    if (!selectedInspection) return;
+                    const ok = window.confirm(`Are you sure you want to submit warehouse ${selectedInspection.warehouseCode} (${selectedInspection.inspectionCode})? This will move it to the Submitted tab.`);
+                    if (!ok) return;
+                    // call the existing handler
+                    await handleSubmitWarehouse(selectedInspection);
+                    // close the dialog
+                    setShowInspectionForm(false);
+                    setSelectedInspection(null);
+                  }}
+                >
+                  Submit
+                </Button>
+              </div>
             )}
           </DialogContent>
         </Dialog>

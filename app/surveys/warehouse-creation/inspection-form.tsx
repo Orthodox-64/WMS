@@ -162,6 +162,34 @@ function getInsuranceAlertStatus(insurance: any): 'none' | 'expiring' | 'expired
   return 'none';
 }
 
+// Helper function to serialize data for Firestore (convert Date objects to ISO strings)
+function serializeForFirestore(data: any): any {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  
+  if (data instanceof Date) {
+    // Convert valid dates to ISO string, invalid dates to null
+    return isNaN(data.getTime()) ? null : data.toISOString();
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(item => serializeForFirestore(item));
+  }
+  
+  if (typeof data === 'object') {
+    const serialized: any = {};
+    for (const key in data) {
+      if (data.hasOwnProperty(key)) {
+        serialized[key] = serializeForFirestore(data[key]);
+      }
+    }
+    return serialized;
+  }
+  
+  return data;
+}
+
 // CommodityMultiSelect Component
 function CommodityMultiSelect({ selectedCommodities, onSelectionChange, className }: CommodityMultiSelectProps) {
   const [commodities, setCommodities] = useState<CommodityData[]>([]);
@@ -661,7 +689,7 @@ export default function WarehouseInspectionForm({
     }
   }, []);
 
-  const fetchClientInsurances = useCallback(async (clientName: string) => {
+  const fetchClientInsurances = useCallback(async (clientName: string, selectedCommodity?: string) => {
     console.log('🔍 WAREHOUSE CREATION: Fetching insurances from Insurance Master');
     console.log('Filters:', {
       clientName,
@@ -778,8 +806,20 @@ export default function WarehouseInspectionForm({
       console.error('❌ Error fetching insurances:', error);
     }
 
+    // If a commodity is provided (param) or present in formData, filter the combined insurances to that commodity
+    const commodityToFilter = (selectedCommodity || formData.insuranceCommodity || '').toLowerCase().trim();
+    let effectiveInsurances = combinedInsurances;
+    if (commodityToFilter) {
+      effectiveInsurances = effectiveInsurances.filter((ins: any) => {
+        const insuranceCommodity = (ins.commodity || ins.commodityName || ins.insuranceCommodity || '').toLowerCase().trim();
+        // match exact or substring (keeps existing behaviour used elsewhere)
+        return insuranceCommodity === commodityToFilter || insuranceCommodity.includes(commodityToFilter);
+      });
+      console.log('🔎 Filtered client insurances by commodity:', commodityToFilter, '->', effectiveInsurances.length, 'matches');
+    }
+
     const uniqueMap = new Map<string, any>();
-    combinedInsurances.forEach((insurance, index) => {
+    effectiveInsurances.forEach((insurance, index) => {
       const key =
         insurance.insuranceCode ||
         insurance.firePolicyNumber ||
@@ -991,7 +1031,7 @@ export default function WarehouseInspectionForm({
           (formData.firePolicyNumber || formData.burglaryPolicyNumber)) {
         console.log('🔄 Refreshing insurance amounts for initialized form...');
         try {
-          const freshInsuranceData = await fetchClientInsurances(formData.clientName);
+          const freshInsuranceData = await fetchClientInsurances(formData.clientName, formData.insuranceCommodity);
           
           // Find matching insurance based on policy numbers
           const matchingInsurance = freshInsuranceData.find(ins => 
@@ -1115,7 +1155,7 @@ export default function WarehouseInspectionForm({
       if (formData.clientName && formData.insuranceTakenBy === 'client') {
         try {
           console.log('Loading insurance data for client:', formData.clientName);
-          const combinedInsurances = await fetchClientInsurances(formData.clientName);
+          const combinedInsurances = await fetchClientInsurances(formData.clientName, formData.insuranceCommodity);
           
           console.log('Combined insurance data found:', combinedInsurances);
           setClientInsuranceData(combinedInsurances);
@@ -1428,7 +1468,7 @@ export default function WarehouseInspectionForm({
           console.log('🔄 Loading initial insurance data for client:', initialData.clientName);
           
           // Use the fetchClientInsurances function which prioritizes insurance master collection
-          const insuranceData = await fetchClientInsurances(initialData.clientName);
+          const insuranceData = await fetchClientInsurances(initialData.clientName, formData.insuranceCommodity);
           console.log('✅ Initial insurance data loaded:', insuranceData.length, 'policies');
           
           if (insuranceData.length > 0) {
@@ -2219,6 +2259,9 @@ export default function WarehouseInspectionForm({
         additionalInsuranceSections: additionalInsuranceSections
       };
 
+      // Serialize all dates to ISO strings for Firestore
+      const serializedData = serializeForFirestore(submissionData);
+
       // Update the existing inspection record in the inspections collection
       if (formData.inspectionCode) {
         // Find the inspection document by inspectionCode
@@ -2235,7 +2278,7 @@ export default function WarehouseInspectionForm({
             warehouseCode: formData.warehouseCode,
             warehouseName: formData.warehouseName,
             status: 'submitted',
-            warehouseInspectionData: submissionData,
+            warehouseInspectionData: serializedData,
             submittedAt: new Date().toISOString(),
             lastUpdated: new Date().toISOString()
           });
@@ -2243,7 +2286,7 @@ export default function WarehouseInspectionForm({
       } else {
         // Create new inspection record if no inspectionCode exists
         await addDoc(collection(db, 'inspections'), {
-          ...submissionData,
+          ...serializedData,
           inspectionCode: `INS-${Date.now()}`,
           createdAt: new Date().toISOString()
         });
@@ -2376,36 +2419,8 @@ export default function WarehouseInspectionForm({
                   if (!querySnapshot.empty) {
             const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
           
-                  // Clean the form data to avoid invalid date issues
-        const cleanFormData = { ...formData };
-        
-        // Fix any invalid dates
-        Object.keys(cleanFormData).forEach(key => {
-          if (cleanFormData[key] instanceof Date) {
-            if (isNaN(cleanFormData[key].getTime())) {
-              cleanFormData[key] = null; // Replace invalid dates with null
-            } else {
-              cleanFormData[key] = cleanFormData[key].toISOString(); // Convert valid dates to ISO string
-            }
-          }
-        });
-
-        // Also fix dates in insurance entries
-        if (cleanFormData.insuranceEntries && Array.isArray(cleanFormData.insuranceEntries)) {
-          cleanFormData.insuranceEntries = cleanFormData.insuranceEntries.map(entry => {
-            const cleanEntry = { ...entry };
-            Object.keys(cleanEntry).forEach(key => {
-              if (cleanEntry[key] instanceof Date) {
-                if (isNaN(cleanEntry[key].getTime())) {
-                  cleanEntry[key] = null;
-                } else {
-                  cleanEntry[key] = cleanEntry[key].toISOString();
-                }
-              }
-            });
-            return cleanEntry;
-          });
-        }
+                  // Serialize the form data to convert all Date objects to ISO strings
+        const cleanFormData = serializeForFirestore(formData);
 
           await updateDoc(docRef, {
             // Update core inspection fields that might have changed
@@ -2435,36 +2450,8 @@ export default function WarehouseInspectionForm({
                   if (!querySnapshot.empty) {
             const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
           
-                  // Clean the form data to avoid invalid date issues
-        const cleanFormData2 = { ...formData };
-        
-        // Fix any invalid dates
-        Object.keys(cleanFormData2).forEach(key => {
-          if (cleanFormData2[key] instanceof Date) {
-            if (isNaN(cleanFormData2[key].getTime())) {
-              cleanFormData2[key] = null; // Replace invalid dates with null
-            } else {
-              cleanFormData2[key] = cleanFormData2[key].toISOString(); // Convert valid dates to ISO string
-            }
-          }
-        });
-
-        // Also fix dates in insurance entries
-        if (cleanFormData2.insuranceEntries && Array.isArray(cleanFormData2.insuranceEntries)) {
-          cleanFormData2.insuranceEntries = cleanFormData2.insuranceEntries.map(entry => {
-            const cleanEntry = { ...entry };
-            Object.keys(cleanEntry).forEach(key => {
-              if (cleanEntry[key] instanceof Date) {
-                if (isNaN(cleanEntry[key].getTime())) {
-                  cleanEntry[key] = null;
-                } else {
-                  cleanEntry[key] = cleanEntry[key].toISOString();
-                }
-              }
-            });
-            return cleanEntry;
-          });
-        }
+                  // Serialize the form data to convert all Date objects to ISO strings
+        const cleanFormData2 = serializeForFirestore(formData);
 
           await updateDoc(docRef, {
             // Update core inspection fields that might have changed
@@ -2618,12 +2605,14 @@ export default function WarehouseInspectionForm({
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
+        // Serialize the insurance entries to convert Date objects to ISO strings
+        const serializedEntries = formData.insuranceEntries.map((entry: InsuranceEntry) =>
+          entry.id === insuranceToEdit.id
+            ? serializeForFirestore({ ...entry, ...updatedFields })
+            : serializeForFirestore(entry)
+        );
         await updateDoc(docRef, {
-          insuranceEntries: formData.insuranceEntries.map((entry: InsuranceEntry) =>
-            entry.id === insuranceToEdit.id
-              ? { ...entry, ...updatedFields }
-              : entry
-          )
+          insuranceEntries: serializedEntries
         });
       }
     }
@@ -2636,19 +2625,21 @@ export default function WarehouseInspectionForm({
     const snapshot = await getDocs(inwardQuery);
     for (const docSnap of snapshot.docs) {
       const inwardRef = doc(db, 'inward', docSnap.id);
+      // Serialize the updated fields to convert Date objects to ISO strings
+      const serializedUpdates = serializeForFirestore(updatedFields);
       await updateDoc(inwardRef, {
-        'selectedInsurance.insuranceTakenBy': updatedFields.insuranceTakenBy,
-        'selectedInsurance.insuranceCommodity': updatedFields.insuranceCommodity,
-        'selectedInsurance.firePolicyStartDate': updatedFields.firePolicyStartDate,
-        'selectedInsurance.firePolicyEndDate': updatedFields.firePolicyEndDate,
-        'selectedInsurance.firePolicyAmount': updatedFields.firePolicyAmount,
-        'selectedInsurance.firePolicyCompanyName': updatedFields.firePolicyCompanyName,
-        'selectedInsurance.firePolicyNumber': updatedFields.firePolicyNumber,
-        'selectedInsurance.burglaryPolicyStartDate': updatedFields.burglaryPolicyStartDate,
-        'selectedInsurance.burglaryPolicyEndDate': updatedFields.burglaryPolicyEndDate,
-        'selectedInsurance.burglaryPolicyAmount': updatedFields.burglaryPolicyAmount,
-        'selectedInsurance.burglaryPolicyCompanyName': updatedFields.burglaryPolicyCompanyName,
-        'selectedInsurance.burglaryPolicyNumber': updatedFields.burglaryPolicyNumber,
+        'selectedInsurance.insuranceTakenBy': serializedUpdates.insuranceTakenBy,
+        'selectedInsurance.insuranceCommodity': serializedUpdates.insuranceCommodity,
+        'selectedInsurance.firePolicyStartDate': serializedUpdates.firePolicyStartDate,
+        'selectedInsurance.firePolicyEndDate': serializedUpdates.firePolicyEndDate,
+        'selectedInsurance.firePolicyAmount': serializedUpdates.firePolicyAmount,
+        'selectedInsurance.firePolicyCompanyName': serializedUpdates.firePolicyCompanyName,
+        'selectedInsurance.firePolicyNumber': serializedUpdates.firePolicyNumber,
+        'selectedInsurance.burglaryPolicyStartDate': serializedUpdates.burglaryPolicyStartDate,
+        'selectedInsurance.burglaryPolicyEndDate': serializedUpdates.burglaryPolicyEndDate,
+        'selectedInsurance.burglaryPolicyAmount': serializedUpdates.burglaryPolicyAmount,
+        'selectedInsurance.burglaryPolicyCompanyName': serializedUpdates.burglaryPolicyCompanyName,
+        'selectedInsurance.burglaryPolicyNumber': serializedUpdates.burglaryPolicyNumber,
       });
     }
     setShowEditInsuranceModal(false);
@@ -4074,7 +4065,7 @@ export default function WarehouseInspectionForm({
                         if (selectedClient) {
                           try {
                             console.log('Loading insurance data for client:', value);
-                            const combinedInsurances = await fetchClientInsurances(value);
+                            const combinedInsurances = await fetchClientInsurances(value, formData.insuranceCommodity);
                           
                             console.log('Combined insurance data found:', combinedInsurances);
                             setClientInsuranceData(combinedInsurances);
@@ -5104,7 +5095,7 @@ export default function WarehouseInspectionForm({
                         // If client is already selected, re-filter insurance data based on new commodity
                         if (insurance.clientName) {
                           try {
-                            const combinedInsurances = await fetchClientInsurances(insurance.clientName);
+                            const combinedInsurances = await fetchClientInsurances(insurance.clientName, value);
                             
                             const filteredInsurances = combinedInsurances.filter((ins: any) =>
                               ins.insuranceCommodity && ins.insuranceCommodity.toLowerCase() === value.toLowerCase()
@@ -5184,7 +5175,7 @@ export default function WarehouseInspectionForm({
                             if (selectedClient) {
                               try {
                                 console.log('Loading insurance data for client in Additional Insurance:', value);
-                                const combinedInsurances = await fetchClientInsurances(value);
+                                const combinedInsurances = await fetchClientInsurances(value, insurance.insuranceCommodity);
                                 console.log('Combined insurance data for Additional Insurance:', combinedInsurances);
                                 
                                 // Filter insurances based on selected commodity if available
@@ -6432,26 +6423,17 @@ export default function WarehouseInspectionForm({
                           if (!querySnapshot.empty) {
                             const docRef = doc(db, 'inspections', querySnapshot.docs[0].id);
                           
-                            // Clean the form data to avoid invalid date issues
-                            const cleanFormData = { ...formData };
+                            // Serialize the form data to convert all Date objects to ISO strings
+                            const serializedFormData = serializeForFirestore(formData);
                             
                             // Log what's being saved
-                            console.log('💾 SAVING TO DB - insuranceCommodity:', cleanFormData.insuranceCommodity);
-                            console.log('💾 SAVING TO DB - insuranceTakenBy:', cleanFormData.insuranceTakenBy);
-                            console.log('💾 SAVING TO DB - firePolicyNumber:', cleanFormData.firePolicyNumber);
-                            
-                            // Fix any invalid dates
-                            Object.keys(cleanFormData).forEach(key => {
-                              if (cleanFormData[key] instanceof Date) {
-                                if (isNaN(cleanFormData[key].getTime())) {
-                                  cleanFormData[key] = null;
-                                }
-                              }
-                            });
+                            console.log('💾 SAVING TO DB - insuranceCommodity:', serializedFormData.insuranceCommodity);
+                            console.log('💾 SAVING TO DB - insuranceTakenBy:', serializedFormData.insuranceTakenBy);
+                            console.log('💾 SAVING TO DB - firePolicyNumber:', serializedFormData.firePolicyNumber);
 
                             // Update the document with the latest form data
                             await updateDoc(docRef, {
-                              warehouseInspectionData: cleanFormData,
+                              warehouseInspectionData: serializedFormData,
                               updatedAt: new Date().toISOString()
                             });
                             

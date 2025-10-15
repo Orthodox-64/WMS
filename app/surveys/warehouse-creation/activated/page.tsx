@@ -628,7 +628,6 @@ export default function ActivatedWarehousePage() {
       'Date of Inspection',
       'OE Date',
       'Insurance Status',
-      'Days Until Expiry',
       'Remarks'
     ];
 
