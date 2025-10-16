@@ -6,7 +6,6 @@ import { passwordResetEmailService } from '@/lib/password-reset-email';
 import { validatePassword } from '@/lib/password-validator';
 import { doc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import bcrypt from 'bcryptjs';
 
 interface PasswordResetState {
   step: 'email' | 'otp' | 'new-password' | 'success';
@@ -202,26 +201,19 @@ export function usePasswordReset() {
       const userDoc = userSnapshot.docs[0];
       const userData = userDoc.data();
       
-      // Check if new password matches current password using bcrypt
-      if (userData.password) {
-        const isSamePassword = await bcrypt.compare(newPassword, userData.password);
-        if (isSamePassword) {
-          setState(prev => ({ 
-            ...prev, 
-            isLoading: false, 
-            error: 'New password must be different from your current password' 
-          }));
-          return false;
-        }
+      // Check if new password matches current password
+      if (userData.password && userData.password === newPassword) {
+        setState(prev => ({ 
+          ...prev, 
+          isLoading: false, 
+          error: 'Password already exists' 
+        }));
+        return false;
       }
-
-      // Hash the new password before storing
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
       // Update password in database
       await updateDoc(doc(db, 'users', userDoc.id), {
-        password: hashedPassword, // Store hashed password
+        password: newPassword, // In production, hash this password
         updatedAt: new Date().toISOString()
       });
 
