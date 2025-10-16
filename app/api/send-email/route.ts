@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
+// Ensure this route runs on the Node.js runtime (Nodemailer won't work on the edge runtime)
+export const runtime = 'nodejs';
+
 interface EmailRequest {
   to: string;
   subject: string;
@@ -29,13 +32,16 @@ export async function POST(request: NextRequest) {
       secure: config.secure,
       auth: {
         user: config.auth.user,
-        pass: config.auth.pass,
+        // Gmail app passwords are displayed with spaces; remove spaces just in case
+        pass: (config.auth.pass || '').replace(/\s+/g, ''),
       },
     });
 
     // Send email
     const info = await transporter.sendMail({
-      from: config.from,
+      // For Gmail SMTP, the "from" should match the authenticated user
+      from: config.auth.user,
+      replyTo: config.from || config.auth.user,
       to: to,
       subject: subject,
       text: text,
@@ -53,7 +59,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         success: false, 
-        error: 'Failed to send email' 
+        error: error instanceof Error ? error.message : 'Failed to send email' 
       },
       { status: 500 }
     );

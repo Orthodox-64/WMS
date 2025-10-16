@@ -55,7 +55,7 @@ class ClientEmailService {
         user: 'agrogreensoftware@gmail.com',
         pass: 'lsln qkyd qvml whgk'
       },
-      from: 'QuickCourt <noreply@quickcourt.com>'
+      from: 'Agrogreen <noreply@agrogreen.com>'
     };
   }
 
