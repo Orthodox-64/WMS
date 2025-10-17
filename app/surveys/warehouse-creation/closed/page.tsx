@@ -589,8 +589,8 @@ export default function ClosedWarehousePage() {
                       <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">Business Type</TableHead>
                       <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">Warehouse Name</TableHead>
                       <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">Bank State</TableHead>
-                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">Bank Branch</TableHead>
                       <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">Bank Name</TableHead>
+                      <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">Bank Branch</TableHead>
                       <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">IFSC Code</TableHead>
                       <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">Receipt Type</TableHead>
                       <TableHead className="text-orange-700 font-semibold border-r border-orange-300 text-center p-2 whitespace-nowrap sticky top-0 bg-orange-50">Created</TableHead>

@@ -161,7 +161,7 @@ const resubmittedColumns = [
   },
   {
     accessorKey: "bankBranch",
-    header: "Bank Branch",
+    header: "Bank Name",
     cell: ({ row }: { row: Row<any> }) => (
       <span className="text-green-700 w-full flex justify-center">
         {row.getValue("bankBranch")}
@@ -171,7 +171,7 @@ const resubmittedColumns = [
   },
   {
     accessorKey: "bankName",
-    header: "Bank Name",
+    header: "Bank Branch",
     cell: ({ row }: { row: Row<any> }) => (
       <span className="text-green-700 w-full flex justify-center">
         {row.getValue("bankName")}
