@@ -1,14 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  eslint: { ignoreDuringBuilds: true },
   images: { unoptimized: true },
-  webpack: (config, { isServer }) => {
-    // Always avoid bundling undici
-    config.resolve.alias['undici'] = false;
+  reactStrictMode: true,
+  output: "standalone", // Important for Render or Docker
+  webpack: (config) => {
+    config.resolve.alias["undici"] = false;
     return config;
-  }
+  },
 };
 
 module.exports = nextConfig;
