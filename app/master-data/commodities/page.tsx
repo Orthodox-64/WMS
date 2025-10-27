@@ -1433,14 +1433,14 @@ export default function CommodityModulePage() {
 
                 {/* Location Selection */}
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="location" className="text-green-600 font-medium">Branch <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="location" className="text-green-600 font-medium">Location <span className="text-red-500">*</span></Label>
                   <Select
                     value={varietyFormData.locationId}
                     onValueChange={handleLocationSelect}
                     required
                   >
                     <SelectTrigger className="border-blue-300 focus:border-blue-500 text-blue-700 [&>span]:text-blue-700">
-                      <SelectValue placeholder="Select branch" className="text-blue-700" />
+                      <SelectValue placeholder="Select Location" className="text-blue-700" />
                     </SelectTrigger>
                     <SelectContent className="bg-white max-h-60">
                       {branchLocations.map(location => (

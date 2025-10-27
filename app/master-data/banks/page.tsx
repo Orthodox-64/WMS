@@ -645,7 +645,7 @@ export default function BankModulePage() {
 
     // Fixed headers - removed File Count and Location Created Date columns (requirements #4 & #5)
     const headers = [
-      'Bank Code', 'Bank/Branch Name', 'State', 'Branch', 'Location ID', 'Location Name', 'Branch Name', 'IFSC Code', 'Authorize Person 1', 'Authorize Person 2', 'Address', 'Bank Created Date'
+      'Bank Code', 'Bank Name', 'State', 'Bank Branch', 'Location ID', 'IFSC Code', 'Authorize Person 1', 'Authorize Person 2', 'Address', 'Bank Created Date'
     ];
 
     const csvData = [headers];
@@ -683,8 +683,6 @@ export default function BankModulePage() {
             bank.state || '',
             bank.branch || '',
             location.locationId || '',
-            location.locationName || '',
-            location.branchName || '',
             location.ifscCode || '',
             location.authorizePerson1 || '',
             location.authorizePerson2 || '',
@@ -1226,51 +1224,10 @@ export default function BankModulePage() {
           
           <div className="flex gap-2">
             {/* Debug Button - Only show in development */}
-            {process.env.NODE_ENV === 'development' && (
-              <Button
-                onClick={async () => {
-                  console.log('🔍 Debug: Checking Firebase connection...');
-                  console.log('🔍 Current banks state:', banks);
-                  console.log('🔍 Is loading:', isLoading);
-                  console.log('🔍 User:', user);
-                  
-                  try {
-                    const testQuery = await getDocs(collection(db, 'banks'));
-                    console.log('🔍 Direct Firebase query result:', testQuery.size, 'documents');
-                    testQuery.forEach(doc => {
-                      console.log('🔍 Document:', doc.id, doc.data());
-                    });
-                    
-                    if (testQuery.size > 0 && banks.length === 0) {
-                      console.log('🚨 ISSUE FOUND: Firebase has banks but state is empty!');
-                      console.log('🔄 Forcing state update...');
-                      const banksData = testQuery.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data(),
-                        locations: doc.data().locations || []
-                      })) as BankData[];
-                      setBanks(banksData);
-                      toast({
-                        title: "🔧 Fixed Data Issue",
-                        description: `Found ${testQuery.size} banks and updated the display.`,
-                        variant: "default",
-                        duration: 3000,
-                      });
-                    }
-                  } catch (error) {
-                    console.error('🔍 Direct Firebase query failed:', error);
-                  }
-                }}
-                variant="outline"
-                className="border-purple-300 text-purple-600 hover:bg-purple-50 px-3 py-3"
-                size="sm"
-              >
-                🔍 Debug
-              </Button>
-            )}
+            {}
             
             {/* Refresh Button */}
-            <Button
+            {/* <Button
               onClick={() => {
                 console.log('🔄 Manual refresh triggered');
                 loadBanks();
@@ -1280,7 +1237,7 @@ export default function BankModulePage() {
               disabled={isLoading}
             >
               {isLoading ? '⏳' : '🔄'} Refresh
-            </Button>
+            </Button> */}
             
             {/* Add Bank Button */}
             <Button
@@ -1645,7 +1602,7 @@ export default function BankModulePage() {
               </div>
 
               {/* Bank Info Display */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              {/* <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <h4 className="text-green-800 font-semibold mb-2">🏦 Bank Information (Inherited):</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
@@ -1660,7 +1617,7 @@ export default function BankModulePage() {
                 <div className="mt-3 text-xs text-blue-600">
                   The branch name you enter will be displayed in the Branch column of the table.
                 </div>
-              </div>
+              </div> */}
 
               {/* Modal Footer with Buttons */}
               <div className="flex justify-end space-x-4 pt-4 border-t">

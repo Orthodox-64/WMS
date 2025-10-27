@@ -377,13 +377,7 @@ export function useRoleAccess() {
 
   const canEditSurvey = (status: string): boolean => {
     if (userRole === 'admin') return true;
-    if (userRole === 'checker') {
-      // Checker can only edit in ACTIVATE, REACTIVATE, and CLOSED status
-      const statusLower = status?.toLowerCase();
-      return statusLower === 'activate' || statusLower === 'activated' || 
-             statusLower === 'reactivate' || statusLower === 'reactivated' ||
-             statusLower === 'close' || statusLower === 'closed';
-    }
+    if (userRole === 'checker') return true;
     if (userRole === 'maker') {
       // Maker can only edit in PENDING and RESUBMIT status
       return status?.toLowerCase() === 'pending' || status?.toLowerCase() === 'resubmit' || status?.toLowerCase() === 'resubmitted';
@@ -393,13 +387,7 @@ export function useRoleAccess() {
 
   const canApproveSurvey = (status: string): boolean => {
     if (userRole === 'admin') return true;
-    if (userRole === 'checker') {
-      // Checker can approve/reject/resubmit in ACTIVATE, REACTIVATE, and CLOSED tabs
-      const statusLower = status?.toLowerCase();
-      return statusLower === 'activate' || statusLower === 'activated' || 
-             statusLower === 'reactivate' || statusLower === 'reactivated' ||
-             statusLower === 'close' || statusLower === 'closed';
-    }
+    if (userRole === 'checker') return true;
     return false;
   };
 
@@ -431,16 +419,17 @@ export function useRoleAccess() {
 
   const getSurveyTabMode = (tabStatus: string): 'edit' | 'view' => {
     if (userRole === 'admin') return 'edit';
-    if (userRole === 'checker') {
-      // Checker can edit only in ACTIVATE, REACTIVATE, and CLOSED tabs
-      const status = tabStatus?.toLowerCase();
-      if (status === 'activate' || status === 'activated' || 
-          status === 'reactivate' || status === 'reactivated' ||
-          status === 'close' || status === 'closed') {
-        return 'edit';
-      }
-      return 'view'; // PENDING, REJECT, RESUBMIT tabs are read-only for checker
-    }
+    if (userRole === 'checker') return 'edit';
+      // {
+      // // Checker can edit only in ACTIVATE, REACTIVATE, and CLOSED tabs
+      // const status = tabStatus?.toLowerCase();
+      // if (status === 'activate' || status === 'activated' || 
+      //     status === 'reactivate' || status === 'reactivated' ||
+      //     status === 'close' || status === 'closed') {
+      //   return 'edit';
+      // }
+      // return 'view'; // PENDING, REJECT, RESUBMIT tabs are read-only for checker
+  // }
     if (userRole === 'maker') {
       // Maker can only edit in PENDING and RESUBMIT tabs
       const status = tabStatus?.toLowerCase();
