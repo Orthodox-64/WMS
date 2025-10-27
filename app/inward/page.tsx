@@ -288,6 +288,9 @@ export default function InwardPage() {
   // In the InwardPage component, add state for 'your insurance' data
   const [yourInsurance, setYourInsurance] = useState<any>(null);
   const [hasPendingEntries, setHasPendingEntries] = useState(false);
+  
+  // Total Value validation state
+  const [totalValueExceedsInsurance, setTotalValueExceedsInsurance] = useState(false);
 
   // Filter and sort inward data
   const filteredData = useMemo(() => {
@@ -1116,7 +1119,14 @@ export default function InwardPage() {
   });
 
   // Combined form for display
-  const form = { ...baseForm, ...currentEntryForm, totalValue: baseForm.totalValue };
+  const form = { 
+    ...baseForm, 
+    ...currentEntryForm, 
+    totalValue: baseForm.totalValue,
+    // Ensure lab parameters always come from baseForm (not overwritten by currentEntryForm)
+    dateOfSampling: baseForm.dateOfSampling,
+    dateOfTesting: baseForm.dateOfTesting
+  };
 
   // Filter insurance entries based on selected type and commodity
   const filteredInsuranceEntries = useMemo(() => {
@@ -2189,6 +2199,21 @@ export default function InwardPage() {
       });
       return;
     }
+    
+    // Prevent submit if Total Value exceeds insurance coverage
+    if (totalValueExceedsInsurance) {
+      const totalValue = parseFloat(baseForm.totalValue) || 0;
+      const fireRemaining = parseFloat(initialRemainingFire) || 0;
+      const burglaryRemaining = parseFloat(initialRemainingBurglary) || 0;
+      
+      toast({
+        title: "❌ Cannot Submit - Insurance Coverage Exceeded",
+        description: `Total Value (₹${totalValue.toLocaleString()}) exceeds the available insurance coverage. Fire Policy: ₹${fireRemaining.toLocaleString()} remaining, Burglary Policy: ₹${burglaryRemaining.toLocaleString()} remaining. Please reduce the quantity or market rate before submitting.`,
+        variant: 'destructive'
+      });
+      return;
+    }
+    
     if (!fileAttachment && !isEditMode) {
       alert('Please attach a file.');
       return;
@@ -2877,6 +2902,114 @@ export default function InwardPage() {
         });
         await updateDoc(docRef, { insuranceEntries: updatedList });
       }
+      
+      // ✅ UPDATE INSURANCE MASTER COLLECTION (for selectedInsuranceIndex path)
+      try {
+        console.log('🔧 UPDATING INSURANCE MASTER COLLECTION (selectedInsuranceIndex path)');
+        console.log('🔍 Search criteria:', {
+          warehouseName: form.warehouseName,
+          commodity: form.commodity,
+          varietyName: form.varietyName
+        });
+        
+        const insuranceMasterCollection = collection(db, 'insurance');
+        
+        // First, try to find by warehouse name only, then filter
+        const insuranceMasterQuery = query(
+          insuranceMasterCollection,
+          where('warehouseName', '==', form.warehouseName)
+        );
+        
+        const insuranceMasterSnapshot = await getDocs(insuranceMasterQuery);
+        
+        console.log('📊 Found insurance records for warehouse:', insuranceMasterSnapshot.size);
+        
+        if (!insuranceMasterSnapshot.empty) {
+          // Log all found records to see what we have
+          insuranceMasterSnapshot.docs.forEach((doc, index) => {
+            console.log(`Insurance record ${index + 1}:`, {
+              id: doc.id,
+              warehouseName: doc.data().warehouseName,
+              commodityName: doc.data().commodityName,
+              varietyName: doc.data().varietyName,
+              firePolicyAmount: doc.data().firePolicyAmount,
+              burglaryPolicyAmount: doc.data().burglaryPolicyAmount
+            });
+          });
+          
+          // Find the matching record by commodity and variety
+          const matchingDoc = insuranceMasterSnapshot.docs.find(doc => {
+            const data = doc.data();
+            const commodityMatch = data.commodityName?.toLowerCase().trim() === form.commodity?.toLowerCase().trim();
+            const varietyMatch = data.varietyName?.toLowerCase().trim() === form.varietyName?.toLowerCase().trim();
+            console.log(`Checking doc ${doc.id}:`, { commodityMatch, varietyMatch });
+            return commodityMatch && varietyMatch;
+          });
+          
+          if (matchingDoc) {
+            const insuranceMasterData = matchingDoc.data();
+            
+            // Get current used amounts (add to existing used amounts)
+            const currentFireUsed = parseFloat(insuranceMasterData.firePolicyUsedAmount || '0');
+            const currentBurglaryUsed = parseFloat(insuranceMasterData.burglaryPolicyUsedAmount || '0');
+            
+            const newFireUsed = currentFireUsed + currentTotalValue;
+            const newBurglaryUsed = currentBurglaryUsed + currentTotalValue;
+            
+            // Calculate remaining amounts
+            const totalFireAmount = parseFloat(insuranceMasterData.firePolicyAmount || '0');
+            const totalBurglaryAmount = parseFloat(insuranceMasterData.burglaryPolicyAmount || '0');
+            
+            const newFireRemaining = Math.max(0, totalFireAmount - newFireUsed);
+            const newBurglaryRemaining = Math.max(0, totalBurglaryAmount - newBurglaryUsed);
+            
+            console.log('💰 INSURANCE MASTER DEDUCTION (selectedInsuranceIndex):', {
+              warehouseName: form.warehouseName,
+              commodity: form.commodity,
+              variety: form.varietyName,
+              totalValueToDeduct: currentTotalValue,
+              fire: {
+                totalAmount: totalFireAmount,
+                previousUsed: currentFireUsed,
+                newUsed: newFireUsed,
+                newRemaining: newFireRemaining
+              },
+              burglary: {
+                totalAmount: totalBurglaryAmount,
+                previousUsed: currentBurglaryUsed,
+                newUsed: newBurglaryUsed,
+                newRemaining: newBurglaryRemaining
+              }
+            });
+            
+            // Update the insurance master document
+            await updateDoc(doc(db, 'insurance', matchingDoc.id), {
+              firePolicyUsedAmount: newFireUsed.toFixed(2),
+              firePolicyRemainingAmount: newFireRemaining.toFixed(2),
+              burglaryPolicyUsedAmount: newBurglaryUsed.toFixed(2),
+              burglaryPolicyRemainingAmount: newBurglaryRemaining.toFixed(2),
+              lastUpdated: new Date().toISOString()
+            });
+            
+            console.log('✅ Insurance master collection updated successfully (selectedInsuranceIndex)');
+          } else {
+            console.log('⚠️ No matching insurance master record found for commodity/variety:', {
+              warehouseName: form.warehouseName,
+              commodity: form.commodity,
+              variety: form.varietyName,
+              availableRecords: insuranceMasterSnapshot.docs.map(doc => ({
+                commodityName: doc.data().commodityName,
+                varietyName: doc.data().varietyName
+              }))
+            });
+          }
+        } else {
+          console.log('⚠️ No insurance records found for warehouse:', form.warehouseName);
+        }
+      } catch (insuranceMasterError: any) {
+        console.error('❌ Error updating insurance master collection:', insuranceMasterError);
+        // Don't throw - continue with the rest of the flow
+      }
     }
 
     // Also update if insurance is selected in information section
@@ -3005,74 +3138,109 @@ export default function InwardPage() {
       // ✅ UPDATE INSURANCE MASTER COLLECTION
       // Update the insurance master collection with deducted amounts
       try {
-        console.log('🔧 UPDATING INSURANCE MASTER COLLECTION');
+        console.log('🔧 UPDATING INSURANCE MASTER COLLECTION (selectedInsuranceInfoIndex path)');
+        console.log('🔍 Search criteria:', {
+          warehouseName: form.warehouseName,
+          commodity: form.commodity,
+          varietyName: form.varietyName
+        });
+        
         const insuranceMasterCollection = collection(db, 'insurance');
+        
+        // First, try to find by warehouse name only, then filter
         const insuranceMasterQuery = query(
           insuranceMasterCollection,
-          where('warehouseName', '==', form.warehouseName),
-          where('commodityName', '==', form.commodity),
-          where('varietyName', '==', form.varietyName)
+          where('warehouseName', '==', form.warehouseName)
         );
         
         const insuranceMasterSnapshot = await getDocs(insuranceMasterQuery);
         
+        console.log('📊 Found insurance records for warehouse:', insuranceMasterSnapshot.size);
+        
         if (!insuranceMasterSnapshot.empty) {
-          const insuranceMasterDoc = insuranceMasterSnapshot.docs[0];
-          const insuranceMasterData = insuranceMasterDoc.data();
-          
-          // Get current total value to deduct
-          const totalValueToDeduct = parseFloat(baseForm.totalValue) || 0;
-          
-          // Calculate current used amounts (add to existing used amounts)
-          const currentFireUsed = parseFloat(insuranceMasterData.firePolicyUsedAmount || '0');
-          const currentBurglaryUsed = parseFloat(insuranceMasterData.burglaryPolicyUsedAmount || '0');
-          
-          const newFireUsed = currentFireUsed + totalValueToDeduct;
-          const newBurglaryUsed = currentBurglaryUsed + totalValueToDeduct;
-          
-          // Calculate remaining amounts
-          const totalFireAmount = parseFloat(insuranceMasterData.firePolicyAmount || '0');
-          const totalBurglaryAmount = parseFloat(insuranceMasterData.burglaryPolicyAmount || '0');
-          
-          const newFireRemaining = Math.max(0, totalFireAmount - newFireUsed);
-          const newBurglaryRemaining = Math.max(0, totalBurglaryAmount - newBurglaryUsed);
-          
-          console.log('💰 INSURANCE MASTER DEDUCTION:', {
-            warehouseName: form.warehouseName,
-            commodity: form.commodity,
-            variety: form.varietyName,
-            totalValueToDeduct,
-            fire: {
-              totalAmount: totalFireAmount,
-              previousUsed: currentFireUsed,
-              newUsed: newFireUsed,
-              newRemaining: newFireRemaining
-            },
-            burglary: {
-              totalAmount: totalBurglaryAmount,
-              previousUsed: currentBurglaryUsed,
-              newUsed: newBurglaryUsed,
-              newRemaining: newBurglaryRemaining
-            }
+          // Log all found records to see what we have
+          insuranceMasterSnapshot.docs.forEach((doc, index) => {
+            console.log(`Insurance record ${index + 1}:`, {
+              id: doc.id,
+              warehouseName: doc.data().warehouseName,
+              commodityName: doc.data().commodityName,
+              varietyName: doc.data().varietyName,
+              firePolicyAmount: doc.data().firePolicyAmount,
+              burglaryPolicyAmount: doc.data().burglaryPolicyAmount
+            });
           });
           
-          // Update the insurance master document
-          await updateDoc(doc(db, 'insurance', insuranceMasterDoc.id), {
-            firePolicyUsedAmount: newFireUsed.toFixed(2),
-            firePolicyRemainingAmount: newFireRemaining.toFixed(2),
-            burglaryPolicyUsedAmount: newBurglaryUsed.toFixed(2),
-            burglaryPolicyRemainingAmount: newBurglaryRemaining.toFixed(2),
-            lastUpdated: new Date().toISOString()
+          // Find the matching record by commodity and variety
+          const matchingDoc = insuranceMasterSnapshot.docs.find(doc => {
+            const data = doc.data();
+            const commodityMatch = data.commodityName?.toLowerCase().trim() === form.commodity?.toLowerCase().trim();
+            const varietyMatch = data.varietyName?.toLowerCase().trim() === form.varietyName?.toLowerCase().trim();
+            console.log(`Checking doc ${doc.id}:`, { commodityMatch, varietyMatch });
+            return commodityMatch && varietyMatch;
           });
           
-          console.log('✅ Insurance master collection updated successfully');
-          
+          if (matchingDoc) {
+            const insuranceMasterData = matchingDoc.data();
+            
+            // Get current total value to deduct
+            const totalValueToDeduct = parseFloat(baseForm.totalValue) || 0;
+            
+            // Calculate current used amounts (add to existing used amounts)
+            const currentFireUsed = parseFloat(insuranceMasterData.firePolicyUsedAmount || '0');
+            const currentBurglaryUsed = parseFloat(insuranceMasterData.burglaryPolicyUsedAmount || '0');
+            
+            const newFireUsed = currentFireUsed + totalValueToDeduct;
+            const newBurglaryUsed = currentBurglaryUsed + totalValueToDeduct;
+            
+            // Calculate remaining amounts
+            const totalFireAmount = parseFloat(insuranceMasterData.firePolicyAmount || '0');
+            const totalBurglaryAmount = parseFloat(insuranceMasterData.burglaryPolicyAmount || '0');
+            
+            const newFireRemaining = Math.max(0, totalFireAmount - newFireUsed);
+            const newBurglaryRemaining = Math.max(0, totalBurglaryAmount - newBurglaryUsed);
+            
+            console.log('💰 INSURANCE MASTER DEDUCTION (selectedInsuranceInfoIndex):', {
+              warehouseName: form.warehouseName,
+              commodity: form.commodity,
+              variety: form.varietyName,
+              totalValueToDeduct,
+              fire: {
+                totalAmount: totalFireAmount,
+                previousUsed: currentFireUsed,
+                newUsed: newFireUsed,
+                newRemaining: newFireRemaining
+              },
+              burglary: {
+                totalAmount: totalBurglaryAmount,
+                previousUsed: currentBurglaryUsed,
+                newUsed: newBurglaryUsed,
+                newRemaining: newBurglaryRemaining
+              }
+            });
+            
+            // Update the insurance master document
+            await updateDoc(doc(db, 'insurance', matchingDoc.id), {
+              firePolicyUsedAmount: newFireUsed.toFixed(2),
+              firePolicyRemainingAmount: newFireRemaining.toFixed(2),
+              burglaryPolicyUsedAmount: newBurglaryUsed.toFixed(2),
+              burglaryPolicyRemainingAmount: newBurglaryRemaining.toFixed(2),
+              lastUpdated: new Date().toISOString()
+            });
+            
+            console.log('✅ Insurance master collection updated successfully (selectedInsuranceInfoIndex)');
+          } else {
+            console.log('⚠️ No matching insurance master record found for commodity/variety:', {
+              warehouseName: form.warehouseName,
+              commodity: form.commodity,
+              variety: form.varietyName,
+              availableRecords: insuranceMasterSnapshot.docs.map(doc => ({
+                commodityName: doc.data().commodityName,
+                varietyName: doc.data().varietyName
+              }))
+            });
+          }
         } else {
-          console.log('⚠️ No matching insurance master record found for:', {
-            warehouseName: form.warehouseName,
-            commodity: form.commodity,
-            variety: form.varietyName
-          });
+          console.log('⚠️ No insurance records found for warehouse:', form.warehouseName);
         }
         
       } catch (insuranceMasterError) {
@@ -3088,6 +3256,94 @@ export default function InwardPage() {
           description: "Inward entry saved successfully, but there was an issue updating insurance data.",
           variant: "default",
         });
+      }
+      
+      // ✅ ALWAYS UPDATE INSURANCE MASTER COLLECTION (regardless of selection path)
+      try {
+        const totalValueToDeduct = parseFloat(baseForm.totalValue) || 0;
+        
+        if (totalValueToDeduct <= 0) {
+          console.log('⚠️ No total value to deduct, skipping insurance master update');
+        } else {
+          console.log('🔧 UPDATING INSURANCE MASTER COLLECTION - Total Value:', totalValueToDeduct);
+          console.log('🔍 Warehouse:', baseForm.warehouseName);
+          
+          const insuranceMasterCollection = collection(db, 'insurance');
+          const insuranceMasterQuery = query(
+            insuranceMasterCollection,
+            where('warehouseName', '==', baseForm.warehouseName)
+          );
+          
+          const insuranceMasterSnapshot = await getDocs(insuranceMasterQuery);
+          
+          if (!insuranceMasterSnapshot.empty) {
+            console.log('📊 Found', insuranceMasterSnapshot.size, 'insurance record(s) for warehouse');
+            
+            // Update ALL insurance records for this warehouse
+            for (const insuranceDoc of insuranceMasterSnapshot.docs) {
+              const insuranceMasterData = insuranceDoc.data();
+              
+              console.log('💾 Updating insurance record:', insuranceDoc.id);
+              console.log('Current data:', {
+                commodityName: insuranceMasterData.commodityName,
+                varietyName: insuranceMasterData.varietyName,
+                firePolicyAmount: insuranceMasterData.firePolicyAmount,
+                firePolicyUsedAmount: insuranceMasterData.firePolicyUsedAmount,
+                firePolicyRemainingAmount: insuranceMasterData.firePolicyRemainingAmount,
+                burglaryPolicyAmount: insuranceMasterData.burglaryPolicyAmount,
+                burglaryPolicyUsedAmount: insuranceMasterData.burglaryPolicyUsedAmount,
+                burglaryPolicyRemainingAmount: insuranceMasterData.burglaryPolicyRemainingAmount
+              });
+              
+              // Get current used amounts
+              const currentFireUsed = parseFloat(insuranceMasterData.firePolicyUsedAmount || '0');
+              const currentBurglaryUsed = parseFloat(insuranceMasterData.burglaryPolicyUsedAmount || '0');
+              
+              const newFireUsed = currentFireUsed + totalValueToDeduct;
+              const newBurglaryUsed = currentBurglaryUsed + totalValueToDeduct;
+              
+              // Calculate remaining amounts
+              const totalFireAmount = parseFloat(insuranceMasterData.firePolicyAmount || '0');
+              const totalBurglaryAmount = parseFloat(insuranceMasterData.burglaryPolicyAmount || '0');
+              
+              const newFireRemaining = Math.max(0, totalFireAmount - newFireUsed);
+              const newBurglaryRemaining = Math.max(0, totalBurglaryAmount - newBurglaryUsed);
+              
+              console.log('💰 DEDUCTION CALCULATION:', {
+                totalValueToDeduct,
+                fire: {
+                  total: totalFireAmount,
+                  previousUsed: currentFireUsed,
+                  newUsed: newFireUsed,
+                  newRemaining: newFireRemaining
+                },
+                burglary: {
+                  total: totalBurglaryAmount,
+                  previousUsed: currentBurglaryUsed,
+                  newUsed: newBurglaryUsed,
+                  newRemaining: newBurglaryRemaining
+                }
+              });
+              
+              // Update the insurance master document
+              await updateDoc(doc(db, 'insurance', insuranceDoc.id), {
+                firePolicyUsedAmount: newFireUsed.toFixed(2),
+                firePolicyRemainingAmount: newFireRemaining.toFixed(2),
+                burglaryPolicyUsedAmount: newBurglaryUsed.toFixed(2),
+                burglaryPolicyRemainingAmount: newBurglaryRemaining.toFixed(2),
+                lastUpdated: new Date().toISOString()
+              });
+              
+              console.log('✅ Updated insurance master record:', insuranceDoc.id);
+            }
+            
+            console.log('✅ All insurance master records updated successfully');
+          } else {
+            console.log('⚠️ No insurance records found for warehouse:', baseForm.warehouseName);
+          }
+        }
+      } catch (insuranceMasterError: any) {
+        console.error('❌ Error updating insurance master collection:', insuranceMasterError);
       }
       
       handleModalClose();
@@ -3541,6 +3797,41 @@ export default function InwardPage() {
       setBaseForm(f => ({ ...f, totalValue: '' }));
     }
   }, [baseForm.totalQuantity, baseForm.marketRate]);
+
+  // Validate Total Value against insurance remaining amounts (real-time)
+  useEffect(() => {
+    const totalValue = parseFloat(baseForm.totalValue) || 0;
+    
+    // Only validate if total value exists and insurance is selected
+    if (totalValue > 0 && (initialRemainingFire || initialRemainingBurglary)) {
+      const fireRemaining = parseFloat(initialRemainingFire) || 0;
+      const burglaryRemaining = parseFloat(initialRemainingBurglary) || 0;
+      
+      // Check if total value exceeds either policy's remaining amount
+      if (totalValue > fireRemaining || totalValue > burglaryRemaining) {
+        setTotalValueExceedsInsurance(true);
+        
+        // Show toast error
+        const exceededPolicies = [];
+        if (totalValue > fireRemaining) {
+          exceededPolicies.push(`Fire Policy (₹${fireRemaining.toLocaleString()} remaining)`);
+        }
+        if (totalValue > burglaryRemaining) {
+          exceededPolicies.push(`Burglary Policy (₹${burglaryRemaining.toLocaleString()} remaining)`);
+        }
+        
+        toast({
+          title: "⚠️ Total Value Exceeds Insurance Coverage",
+          description: `Total Value (₹${totalValue.toLocaleString()}) exceeds the remaining amount in: ${exceededPolicies.join(' and ')}. Please reduce the quantity or market rate.`,
+          variant: "destructive",
+        });
+      } else {
+        setTotalValueExceedsInsurance(false);
+      }
+    } else {
+      setTotalValueExceedsInsurance(false);
+    }
+  }, [baseForm.totalValue, initialRemainingFire, initialRemainingBurglary]);
 
   const calculateAverageWeight = (netWeight: string, totalBags: string) => {
     const net = parseFloat(netWeight) || 0;
@@ -6789,10 +7080,25 @@ export default function InwardPage() {
                     value={baseForm.totalValue}
                   readOnly 
                     placeholder="Auto-calculated"
-                    className="bg-gray-50"
+                    className={totalValueExceedsInsurance ? "bg-red-50 border-red-500" : "bg-gray-50"}
                 />
+                  {/* Insurance Validation Error */}
+                  {totalValueExceedsInsurance && (
+                    <div className="mt-2 p-3 bg-red-50 border border-red-500 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                        <span className="text-sm font-semibold text-red-800">⚠️ Exceeds Insurance Coverage!</span>
+                      </div>
+                      <div className="text-xs text-red-700 space-y-1">
+                        <div>💰 Total Value: <span className="font-semibold">₹{parseFloat(baseForm.totalValue).toLocaleString()}</span></div>
+                        <div>🔥 Fire Policy Remaining: <span className="font-semibold">₹{parseFloat(initialRemainingFire || '0').toLocaleString()}</span></div>
+                        <div>🛡️ Burglary Policy Remaining: <span className="font-semibold">₹{parseFloat(initialRemainingBurglary || '0').toLocaleString()}</span></div>
+                        <div className="text-red-600 font-semibold italic mt-2">❌ Cannot submit - Please reduce quantity or market rate!</div>
+                      </div>
+                    </div>
+                  )}
                   {/* Insurance Deduction Preview */}
-                  {baseForm.totalValue && parseFloat(baseForm.totalValue) > 0 && insuranceEntries.length > 0 && (
+                  {baseForm.totalValue && parseFloat(baseForm.totalValue) > 0 && insuranceEntries.length > 0 && !totalValueExceedsInsurance && (
                     <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <AlertTriangle className="h-4 w-4 text-blue-600" />
