@@ -398,13 +398,13 @@ export default function InspectionCreationPage() {
     },
     {
       accessorKey: "bankBranch",
-      header: "Bank Branch",
+      header: "Bank Name",
       cell: ({ row }: { row: any }) => <span className="text-green-700 w-full flex justify-center">{row.getValue("bankBranch")}</span>,
       meta: { align: 'center' },
     },
     {
       accessorKey: "bankName",
-      header: "Bank Name",
+      header: "Bank Branch",
       cell: ({ row }: { row: any }) => <span className="text-green-700 w-full flex justify-center">{row.getValue("bankName")}</span>,
       meta: { align: 'center' },
     },
@@ -1603,11 +1603,11 @@ export default function InspectionCreationPage() {
                         <p className="text-gray-700">{selectedWarehouseInspection.bankState}</p>
                       </div>
                       <div>
-                        <Label className="font-medium">Bank Branch:</Label>
+                        <Label className="font-medium">Bank Name :</Label>
                         <p className="text-gray-700">{selectedWarehouseInspection.bankBranch}</p>
                       </div>
                       <div>
-                        <Label className="font-medium">Bank Name:</Label>
+                        <Label className="font-medium">Bank Branch:</Label>
                         <p className="text-gray-700">{selectedWarehouseInspection.bankName}</p>
                       </div>
                       <div>

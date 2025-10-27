@@ -689,7 +689,7 @@ export default function CommodityModulePage() {
     const sortedData = [...dataToExport].sort((a, b) => a.commodityId.localeCompare(b.commodityId));
 
     const headers = [
-      'Commodity ID', 'Commodity Name', 'Variety ID', 'Variety Name', 'Location', 'Rate (Rs.)', 'Particulars', 'Commodity Created Date', 'Variety Created Date'
+      'Commodity ID', 'Commodity Name', 'Variety ID', 'Variety Name', 'Location', 'Branch', 'Rate (Rs.)', 'Particulars', 'Created Date'
     ];
 
     const csvData = [headers];
@@ -700,14 +700,13 @@ export default function CommodityModulePage() {
         csvData.push([
           commodity.commodityId,
           commodity.commodityName,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : '',
-          ''
+          '-',
+          '-',
+          '-',
+          '-',
+          '-',
+          '-',
+          commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : ''
         ]);
       } else {
         // Sort varieties by variety ID for consistent export
@@ -718,14 +717,13 @@ export default function CommodityModulePage() {
           csvData.push([
             commodity.commodityId,
             commodity.commodityName,
-            variety.varietyId,
-            variety.varietyName,
-            variety.locationName || '',
-            variety.branchName || '', // Ensure branch name is properly included
-            variety.rate ? `Rs. ${variety.rate}` : '', // Fixed - Rs. format
-            variety.particulars?.map(p => `${p.name}: ${p.minPercentage}%-${p.maxPercentage}%`).join('; ') || '',
-            commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : '',
-            variety.createdAt ? new Date(variety.createdAt).toLocaleDateString() : ''
+            variety.varietyId || '-',
+            variety.varietyName || '-',
+            variety.locationName || '-',
+            variety.branchName || '-',
+            variety.rate ? `Rs.${variety.rate.toLocaleString()}` : '-',
+            variety.particulars?.map(p => `${p.name}: ${p.minPercentage}%-${p.maxPercentage}%`).join('; ') || '-',
+            commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : ''
           ]);
         });
       }
