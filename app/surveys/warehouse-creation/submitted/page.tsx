@@ -734,12 +734,20 @@ export default function SubmittedWarehousePage() {
 
     try {
       // Update the warehouse status to 'resubmitted' and add checker remarks
+      // CRITICAL: Preserve all existing inspection data including insurance
       const inspectionRef = doc(db, 'inspections', resubmissionInspection.id);
       await updateDoc(inspectionRef, {
         status: 'resubmitted',
         checkerRemarks: resubmissionRemarks.trim(),
         resubmissionRequestedAt: new Date().toISOString(),
-        resubmissionRequestedBy: 'checker' // You might want to add actual user info here
+        resubmissionRequestedBy: 'checker', // You might want to add actual user info here
+        // CRITICAL FIX: Preserve all existing warehouse inspection data
+        // This ensures insurance data and all other form data is not lost
+        warehouseInspectionData: {
+          ...resubmissionInspection.warehouseInspectionData,
+          status: 'resubmitted',
+          lastUpdated: new Date().toISOString()
+        }
       });
 
       toast({

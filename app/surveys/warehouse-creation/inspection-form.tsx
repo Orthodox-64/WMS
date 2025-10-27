@@ -2244,8 +2244,30 @@ export default function WarehouseInspectionForm({
       // Only insurance entries that were explicitly added via "Add Insurance" button should be saved
       // This prevents automatic addition of insurance data when user hasn't selected anything
 
+      // CRITICAL: Preserve all insurance-related fields from main insurance section
+      const insuranceFields = {
+        insuranceTakenBy: cleanFormData.insuranceTakenBy || '',
+        insuranceCommodity: cleanFormData.insuranceCommodity || '',
+        clientName: cleanFormData.clientName || '',
+        clientAddress: cleanFormData.clientAddress || '',
+        selectedBankName: cleanFormData.selectedBankName || '',
+        firePolicyCompanyName: cleanFormData.firePolicyCompanyName || '',
+        firePolicyNumber: cleanFormData.firePolicyNumber || '',
+        firePolicyAmount: cleanFormData.firePolicyAmount || '',
+        firePolicyStartDate: cleanFormData.firePolicyStartDate || null,
+        firePolicyEndDate: cleanFormData.firePolicyEndDate || null,
+        burglaryPolicyCompanyName: cleanFormData.burglaryPolicyCompanyName || '',
+        burglaryPolicyNumber: cleanFormData.burglaryPolicyNumber || '',
+        burglaryPolicyAmount: cleanFormData.burglaryPolicyAmount || '',
+        burglaryPolicyStartDate: cleanFormData.burglaryPolicyStartDate || null,
+        burglaryPolicyEndDate: cleanFormData.burglaryPolicyEndDate || null,
+        remainingFirePolicyAmount: cleanFormData.remainingFirePolicyAmount || '',
+        remainingBurglaryPolicyAmount: cleanFormData.remainingBurglaryPolicyAmount || ''
+      };
+
       const updateData = {
         ...cleanFormData,
+        ...insuranceFields, // Explicitly include all insurance fields
         status: newStatus,
         lastUpdated: new Date().toISOString(),
         insuranceEntries: allInsuranceEntries,
