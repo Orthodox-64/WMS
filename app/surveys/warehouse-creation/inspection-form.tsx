@@ -520,6 +520,7 @@ export default function WarehouseInspectionForm({
   const [banksData, setBanksData] = useState<BankData[]>([]);
   const [clientsData, setClientsData] = useState<ClientData[]>([]);
   const [commoditiesData, setCommoditiesData] = useState<CommodityData[]>([]);
+  const [filteredCommodities, setFilteredCommodities] = useState<CommodityData[]>([]); // For warehouse-specific filtering
   const [availableBankStates, setAvailableBankStates] = useState<string[]>([]);
   const [availableBankBranches, setAvailableBankBranches] = useState<string[]>([]);
   const [availableBanks, setAvailableBanks] = useState<{name: string, ifsc: string}[]>([]);
@@ -1129,25 +1130,92 @@ export default function WarehouseInspectionForm({
     }
   }, [formData.warehouseLength, formData.warehouseBreadth, formData.divisionFactor]);
 
-  // Load insurance banks when needed
+  // Load insurance banks when needed - filtered by warehouse
   useEffect(() => {
-    if (formData.insuranceTakenBy === 'bank') {
-      const banksInBranch: {name: string, ifsc: string}[] = [];
-      
-      banksData.forEach(bank => {
-        bank.locations.forEach(location => {
-          if (location.branchName && location.ifscCode && location.locationName) {
-            banksInBranch.push({
-              name: `${location.locationName} - ${location.branchName}`,
-              ifsc: location.ifscCode
-            });
-          }
-        });
-      });
-      
-      setInsuranceBanks(banksInBranch);
-    }
-  }, [formData.insuranceTakenBy, banksData]);
+    const loadWarehouseBanks = async () => {
+      if (formData.insuranceTakenBy === 'bank' && formData.warehouseName) {
+        try {
+          // Fetch insurance records for this warehouse to get associated banks
+          const insuranceSnapshot = await getDocs(collection(db, 'insurance'));
+          const warehouseInsurances = insuranceSnapshot.docs
+            .map(doc => doc.data())
+            .filter(ins => ins.warehouseName === formData.warehouseName);
+          
+          // Extract unique bank names from insurance records
+          const warehouseBankNames = new Set<string>();
+          warehouseInsurances.forEach(ins => {
+            if (ins.bankFundedBy) {
+              warehouseBankNames.add(ins.bankFundedBy);
+            }
+          });
+          
+          console.log('🏦 Banks associated with warehouse:', Array.from(warehouseBankNames));
+          
+          const banksInBranch: {name: string, ifsc: string}[] = [];
+          
+          banksData.forEach(bank => {
+            // Only include banks that are associated with this warehouse
+            if (warehouseBankNames.has(bank.bankName)) {
+              bank.locations.forEach(location => {
+                if (location.branchName && location.ifscCode && location.locationName) {
+                  banksInBranch.push({
+                    name: `${location.locationName} - ${location.branchName}`,
+                    ifsc: location.ifscCode
+                  });
+                }
+              });
+            }
+          });
+          
+          setInsuranceBanks(banksInBranch);
+        } catch (error) {
+          console.error('Error loading banks:', error);
+        }
+      }
+    };
+
+    loadWarehouseBanks();
+  }, [formData.insuranceTakenBy, formData.warehouseName, banksData]);
+
+  // Filter commodities when insurance type is 'bank' - show only warehouse-associated commodities
+  useEffect(() => {
+    const filterWarehouseCommodities = async () => {
+      if (formData.insuranceTakenBy === 'bank' && formData.warehouseName) {
+        try {
+          // Fetch insurance records for this warehouse to get associated commodities
+          const insuranceSnapshot = await getDocs(collection(db, 'insurance'));
+          const warehouseInsurances = insuranceSnapshot.docs
+            .map(doc => doc.data())
+            .filter(ins => ins.warehouseName === formData.warehouseName);
+          
+          // Extract unique commodity names from insurance records
+          const warehouseCommodityNames = new Set<string>();
+          warehouseInsurances.forEach(ins => {
+            if (ins.commodityName) {
+              warehouseCommodityNames.add(ins.commodityName);
+            }
+          });
+          
+          console.log('🌾 Commodities associated with warehouse:', Array.from(warehouseCommodityNames));
+          
+          // Filter commoditiesData to only show warehouse-associated commodities
+          const filtered = commoditiesData.filter(commodity => 
+            warehouseCommodityNames.has(commodity.commodityName)
+          );
+          
+          setFilteredCommodities(filtered);
+        } catch (error) {
+          console.error('Error filtering commodities:', error);
+          setFilteredCommodities(commoditiesData); // Fallback to all commodities
+        }
+      } else {
+        // For other insurance types, show all commodities
+        setFilteredCommodities(commoditiesData);
+      }
+    };
+
+    filterWarehouseCommodities();
+  }, [formData.insuranceTakenBy, formData.warehouseName, commoditiesData]);
 
   // Load client insurance data when client is selected or form is initialized
   useEffect(() => {
@@ -3977,8 +4045,8 @@ export default function WarehouseInspectionForm({
                         {loadedInsuranceCommodityRef.current}
                       </SelectItem>
                     )}
-                    {/* Then show all commodities from database, excluding the one already shown */}
-                    {commoditiesData
+                    {/* Then show filtered commodities (warehouse-specific for bank insurance, all for others) */}
+                    {filteredCommodities
                       .filter(commodity => commodity.commodityName !== loadedInsuranceCommodityRef.current)
                       .map(commodity => (
                         <SelectItem key={commodity.id} value={commodity.commodityName}>
@@ -5140,7 +5208,7 @@ export default function WarehouseInspectionForm({
                         <SelectValue placeholder="Select commodity" />
                       </SelectTrigger>
                       <SelectContent>
-                        {commoditiesData.map(commodity => (
+                        {filteredCommodities.map(commodity => (
                           <SelectItem key={commodity.id} value={commodity.commodityName}>
                             {commodity.commodityName}
                           </SelectItem>
@@ -6861,7 +6929,7 @@ export default function WarehouseInspectionForm({
                       <SelectValue placeholder="Select commodity" />
                     </SelectTrigger>
                     <SelectContent>
-                      {commoditiesData.map(commodity => (
+                      {filteredCommodities.map(commodity => (
                         <SelectItem key={commodity.id} value={commodity.commodityName}>
                           {commodity.commodityName}
                         </SelectItem>
