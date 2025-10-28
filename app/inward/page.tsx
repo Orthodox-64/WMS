@@ -2668,6 +2668,8 @@ export default function InwardPage() {
             // Document-level fields
             attachmentUrl: uploadedFileUrl,
             updatedAt: new Date().toISOString(),
+            // When updating an inward entry, reset CIR status to Pending so it follows the normal approval flow
+            cirStatus: 'Pending',
             // Lab Parameters - stored at document level
             dateOfSampling: baseForm.dateOfSampling || '',
             dateOfTesting: baseForm.dateOfTesting || '',
