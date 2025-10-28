@@ -5936,7 +5936,27 @@ export default function InwardPage() {
     console.log('Full modalData:', modalData);
     
     setCIRModalData(modalData);
-    setCIRRemarks(row.remarks || ''); // <-- Set remarks from row if present
+    // Auto-fetch last saved remarks from collection so it appears next time automatically
+    try {
+      if (row?.inwardId) {
+        const inwardCollection = collection(db, 'inward');
+        const q = query(inwardCollection, where('inwardId', '==', row.inwardId));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const data = querySnapshot.docs[0].data() as any;
+          // Prefer explicit remarks field if present, fallback to any older key variants
+          const savedRemarks = data?.remarks || data?.cirRemarks || '';
+          setCIRRemarks(savedRemarks || row.remarks || '');
+        } else {
+          setCIRRemarks(row.remarks || '');
+        }
+      } else {
+        setCIRRemarks(row.remarks || '');
+      }
+    } catch (e) {
+      // In case of any read issue, keep existing (row) remarks
+      setCIRRemarks(row.remarks || '');
+    }
   };
 
   const handleCIRApprove = async () => {
