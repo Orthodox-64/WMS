@@ -85,12 +85,12 @@ const commodityColumns = [
     cell: ({ row }: { row: Row<any> }) => <span className="text-green-700 w-full flex justify-center">{row.getValue("locationName") || '-'}</span>,
     meta: { align: 'center' },
   },
-  {
-    accessorKey: "branchName",
-    header: "Branch",
-    cell: ({ row }: { row: Row<any> }) => <span className="text-green-700 w-full flex justify-center">{row.getValue("branchName") || '-'}</span>,
-    meta: { align: 'center' },
-  },
+  // {
+  //   accessorKey: "branchName",
+  //   header: "Branch",
+  //   cell: ({ row }: { row: Row<any> }) => <span className="text-green-700 w-full flex justify-center">{row.getValue("branchName") || '-'}</span>,
+  //   meta: { align: 'center' },
+  // },
   {
     accessorKey: "rate",
     header: "Rate (Rs.)", 
@@ -689,7 +689,7 @@ export default function CommodityModulePage() {
     const sortedData = [...dataToExport].sort((a, b) => a.commodityId.localeCompare(b.commodityId));
 
     const headers = [
-      'Commodity ID', 'Commodity Name', 'Variety ID', 'Variety Name', 'Location', 'Branch', 'Rate (Rs.)', 'Particulars', 'Created Date'
+      'Commodity ID', 'Commodity Name', 'Variety ID', 'Variety Name', 'Location', 'Rate (Rs.)', 'Particulars', 'Commodity Created Date', 'Variety Created Date'
     ];
 
     const csvData = [headers];
@@ -700,13 +700,14 @@ export default function CommodityModulePage() {
         csvData.push([
           commodity.commodityId,
           commodity.commodityName,
-          '-',
-          '-',
-          '-',
-          '-',
-          '-',
-          '-',
-          commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : ''
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : '',
+          ''
         ]);
       } else {
         // Sort varieties by variety ID for consistent export
@@ -717,13 +718,14 @@ export default function CommodityModulePage() {
           csvData.push([
             commodity.commodityId,
             commodity.commodityName,
-            variety.varietyId || '-',
-            variety.varietyName || '-',
-            variety.locationName || '-',
-            variety.branchName || '-',
-            variety.rate ? `Rs.${variety.rate.toLocaleString()}` : '-',
-            variety.particulars?.map(p => `${p.name}: ${p.minPercentage}%-${p.maxPercentage}%`).join('; ') || '-',
-            commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : ''
+            variety.varietyId,
+            variety.varietyName,
+            variety.locationName || '',
+            variety.branchName || '', // Ensure branch name is properly included
+            variety.rate ? `Rs. ${variety.rate}` : '', // Fixed - Rs. format
+            variety.particulars?.map(p => `${p.name}: ${p.minPercentage}%-${p.maxPercentage}%`).join('; ') || '',
+            commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : '',
+            variety.createdAt ? new Date(variety.createdAt).toLocaleDateString() : ''
           ]);
         });
       }
@@ -1433,14 +1435,14 @@ export default function CommodityModulePage() {
 
                 {/* Location Selection */}
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="location" className="text-green-600 font-medium">Location <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="location" className="text-green-600 font-medium">Branch <span className="text-red-500">*</span></Label>
                   <Select
                     value={varietyFormData.locationId}
                     onValueChange={handleLocationSelect}
                     required
                   >
                     <SelectTrigger className="border-blue-300 focus:border-blue-500 text-blue-700 [&>span]:text-blue-700">
-                      <SelectValue placeholder="Select Location" className="text-blue-700" />
+                      <SelectValue placeholder="Select branch" className="text-blue-700" />
                     </SelectTrigger>
                     <SelectContent className="bg-white max-h-60">
                       {branchLocations.map(location => (
