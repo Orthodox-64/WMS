@@ -295,8 +295,58 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>IFSC Code</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.ifscCode || '-'}</td>
           </tr>
+          <tr>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Bank Receipt</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }} colSpan={3}>{data.bankReceipt || '-'}</td>
+          </tr>
         </tbody>
       </table>
+
+      {/* Reservation & Billing Details - Only show if billingStatus exists */}
+      {data.billingStatus && data.billingStatus !== '-' && (
+        <>
+          <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+            {data.billingStatus === 'Reservation' ? 'RESERVATION DETAILS' : 'BILLING DETAILS'}
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+            <tbody>
+              {/* Show Reservation fields if billingStatus is "Reservation" */}
+              {data.billingStatus === 'Reservation' && (
+                <>
+                  <tr>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation Rate (Rs/MT)</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.reservationRate || '-'}</td>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation Quantity (MT)</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.reservationQty || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation Start Date</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.reservationStart || '-'}</td>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation End Date</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.reservationEnd || '-'}</td>
+                  </tr>
+                </>
+              )}
+              
+              {/* Show Billing fields if billingStatus is "Post Reservation" */}
+              {data.billingStatus === 'Post Reservation' && (
+                <>
+                  <tr>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Billing Cycle</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.billingCycle || '-'}</td>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Billing Type</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.billingType || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Billing Rate (Rs/MT)</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }} colSpan={3}>{data.billingRate || '-'}</td>
+                  </tr>
+                </>
+              )}
+            </tbody>
+          </table>
+        </>
+      )}
 
       {/* Insurance Details */}
       {data.insuranceEntries && data.insuranceEntries.length > 0 && (

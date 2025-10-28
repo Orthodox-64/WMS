@@ -451,6 +451,111 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
           QR Sticker Space
         </div>
 
+        {/* Reservation & Billing Details Section */}
+        {selectedRowForSR?.billingStatus && selectedRowForSR.billingStatus !== '-' && (
+          <div style={{ marginTop: '30px' }}>
+            <h3 style={{ color: '#ea580c', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
+              {selectedRowForSR.billingStatus === 'Reservation' ? 'Reservation Details' : 'Billing Details'}
+            </h3>
+            
+            {/* Show Reservation fields if billingStatus is "Reservation" */}
+            {selectedRowForSR.billingStatus === 'Reservation' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Reservation Rate (Rs/MT)</Label>
+                  <Input 
+                    value={selectedRowForSR.reservationRate || '-'} 
+                    readOnly
+                    style={{ 
+                      backgroundColor: '#f9f9f9',
+                      border: '1px solid #d1d5db',
+                      padding: '8px 12px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Reservation Quantity (MT)</Label>
+                  <Input 
+                    value={selectedRowForSR.reservationQty || '-'} 
+                    readOnly
+                    style={{ 
+                      backgroundColor: '#f9f9f9',
+                      border: '1px solid #d1d5db',
+                      padding: '8px 12px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Reservation Start Date</Label>
+                  <Input 
+                    value={selectedRowForSR.reservationStart || '-'} 
+                    readOnly
+                    style={{ 
+                      backgroundColor: '#f9f9f9',
+                      border: '1px solid #d1d5db',
+                      padding: '8px 12px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Reservation End Date</Label>
+                  <Input 
+                    value={selectedRowForSR.reservationEnd || '-'} 
+                    readOnly
+                    style={{ 
+                      backgroundColor: '#f9f9f9',
+                      border: '1px solid #d1d5db',
+                      padding: '8px 12px'
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {/* Show Billing fields if billingStatus is "Post Reservation" */}
+            {selectedRowForSR.billingStatus === 'Post Reservation' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Billing Cycle</Label>
+                  <Input 
+                    value={selectedRowForSR.billingCycle || '-'} 
+                    readOnly
+                    style={{ 
+                      backgroundColor: '#f9f9f9',
+                      border: '1px solid #d1d5db',
+                      padding: '8px 12px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Billing Type</Label>
+                  <Input 
+                    value={selectedRowForSR.billingType || '-'} 
+                    readOnly
+                    style={{ 
+                      backgroundColor: '#f9f9f9',
+                      border: '1px solid #d1d5db',
+                      padding: '8px 12px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Billing Rate (Rs/MT)</Label>
+                  <Input 
+                    value={selectedRowForSR.billingRate || '-'} 
+                    readOnly
+                    style={{ 
+                      backgroundColor: '#f9f9f9',
+                      border: '1px solid #d1d5db',
+                      padding: '8px 12px'
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Insurance Details Section */}
         <div style={{ marginTop: '30px' }}>
           <h3 style={{ color: '#ea580c', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>

@@ -4776,13 +4776,20 @@ export default function InwardPage() {
             insuranceTakenBy: data.insuranceType || 'client',
             firePolicyEndDate: data.firePolicyEndDate,
             burglaryPolicyEndDate: data.burglaryPolicyEndDate,
+            // These are the CURRENT remaining amounts - use these for display
+            remainingFirePolicyAmount: data.firePolicyRemainingAmount,
+            remainingBurglaryPolicyAmount: data.burglaryPolicyRemainingAmount,
             firePolicyRemainingAmount: data.firePolicyRemainingAmount,
             burglaryPolicyRemainingAmount: data.burglaryPolicyRemainingAmount,
             commodityName: data.commodityName,
             clientName: data.clientName,
             selectedCommodities: data.selectedCommodities,
-            firePolicyAmount: data.firePolicyAmount,
-            burglaryPolicyAmount: data.burglaryPolicyAmount,
+            // Use remaining amounts for display (these are the current available amounts)
+            firePolicyAmount: data.firePolicyRemainingAmount || data.firePolicyAmount,
+            burglaryPolicyAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount,
+            // Store original total amounts separately
+            firePolicyTotalAmount: data.firePolicyAmount,
+            burglaryPolicyTotalAmount: data.burglaryPolicyAmount,
             firePolicyStartDate: data.firePolicyStartDate,
             burglaryPolicyStartDate: data.burglaryPolicyStartDate,
             firePolicyNumber: data.firePolicyNumber,
@@ -5895,16 +5902,38 @@ export default function InwardPage() {
     patchFields.dateOfSampling = row.dateOfSampling || '';
     patchFields.dateOfTesting = row.dateOfTesting || '';
     patchFields.labResults = row.labResults || [];
+    
+    // Include reservation/billing fields from row
+    patchFields.reservationStatus = row.reservationStatus || '';
+    patchFields.billingStatus = row.billingStatus || '';
+    patchFields.reservationRate = row.reservationRate || '';
+    patchFields.reservationQty = row.reservationQty || '';
+    patchFields.reservationStart = row.reservationStart || '';
+    patchFields.reservationEnd = row.reservationEnd || '';
+    patchFields.billingCycle = row.billingCycle || '';
+    patchFields.billingType = row.billingType || '';
+    patchFields.billingRate = row.billingRate || '';
 
     // Set CIR modal data with ONLY the selected insurance entry
-    setCIRModalData({
+    const modalData = {
       ...row,
       ...patchFields,
       yourInsurance,
       inwardEntries,
       labParameterNames,
       insuranceEntries: selectedInsuranceEntries, // Only show the selected insurance
-    });
+    };
+    
+    console.log('=== CIR Modal Data Debug ===');
+    console.log('reservationStatus:', modalData.reservationStatus);
+    console.log('reservationRate:', modalData.reservationRate);
+    console.log('reservationQty:', modalData.reservationQty);
+    console.log('billingCycle:', modalData.billingCycle);
+    console.log('billingStatus:', modalData.billingStatus);
+    console.log('businessType:', modalData.businessType);
+    console.log('Full modalData:', modalData);
+    
+    setCIRModalData(modalData);
     setCIRRemarks(row.remarks || ''); // <-- Set remarks from row if present
   };
 
@@ -6135,39 +6164,34 @@ export default function InwardPage() {
             </div>
           </div>
           {/* Reservation/Billing Information */}
-          {cirModalData?.businessType !== 'cm' && cirModalData?.billingStatus && (
+          {cirModalData?.businessType !== 'cm' && (cirModalData?.reservationRate || cirModalData?.billingCycle) && (
             <div className="border-t pt-4">
               <h3 className="text-lg font-semibold mb-4 text-orange-700">Reservation & Billing Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <Label className="block font-semibold mb-1">Billing Status</Label>
-                  <Input value={cirModalData?.billingStatus || ''} readOnly disabled />
-                </div>
-              </div>
-              {/* Show reservation fields for reservations with 'reservation' status */}
-              {cirModalData?.reservationStatus === 'reservation' && (
+              
+              {/* Show reservation fields if reservationStatus is 'reservation' OR if reservation data exists and billing doesn't */}
+              {(cirModalData?.reservationStatus === 'reservation' || (cirModalData?.reservationRate && (!cirModalData?.billingCycle || cirModalData?.billingCycle === '-'))) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label className="block font-semibold mb-1">Reservation Rate (Rs/MT) *</Label>
+                    <Label className="block font-semibold mb-1">Reservation Rate (Rs/MT)</Label>
                     <Input value={cirModalData?.reservationRate || ''} readOnly disabled />
                   </div>
                   <div>
-                    <Label className="block font-semibold mb-1">Reservation Quantity (MT) *</Label>
+                    <Label className="block font-semibold mb-1">Reservation Quantity (MT)</Label>
                     <Input value={cirModalData?.reservationQty || ''} readOnly disabled />
                   </div>
                   <div>
-                    <Label className="block font-semibold mb-1">Reservation Start Date *</Label>
+                    <Label className="block font-semibold mb-1">Reservation Start Date</Label>
                     <Input value={cirModalData?.reservationStart || ''} readOnly disabled />
                   </div>
                   <div>
-                    <Label className="block font-semibold mb-1">Reservation End Date *</Label>
+                    <Label className="block font-semibold mb-1">Reservation End Date</Label>
                     <Input value={cirModalData?.reservationEnd || ''} readOnly disabled />
                   </div>
                 </div>
               )}
 
               {/* Expired Reservation Alert in CIR Modal */}
-              {cirModalData?.billingStatus === 'reservation' && isReservationExpired(cirModalData?.reservationEnd || '') && (
+              {(cirModalData?.reservationStatus === 'reservation' || cirModalData?.reservationRate) && isReservationExpired(cirModalData?.reservationEnd || '') && (
                 <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
                   <div className="flex items-start">
                     <div className="flex-shrink-0">
@@ -6184,8 +6208,8 @@ export default function InwardPage() {
                   </div>
                 </div>
               )}
-              {/* Show billing fields for post-reservation status */}
-              {cirModalData?.reservationStatus === 'post-reservation' && (
+              {/* Show billing fields if reservationStatus is 'post-reservation' OR if billing data exists and it's meaningful */}
+              {(cirModalData?.reservationStatus === 'post-reservation' || (cirModalData?.billingCycle && cirModalData?.billingCycle !== '-' && !cirModalData?.reservationRate)) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="block font-semibold mb-1">Billing Cycle</Label>
@@ -7370,7 +7394,7 @@ export default function InwardPage() {
                       <SelectContent>
                         {filteredInsuranceInfoEntries.map((ins: any, idx: number) => (
                           <SelectItem key={ins.id || idx} value={String(idx)}>
-                            {ins.insuranceId || 'N/A'} - {ins.firePolicyNumber} / {ins.burglaryPolicyNumber} (Fire: {formatAmount(ins.firePolicyAmount)}, Burglary: {formatAmount(ins.burglaryPolicyAmount)})
+                            {ins.insuranceId || 'N/A'} - {ins.firePolicyNumber} / {ins.burglaryPolicyNumber} (Available - Fire: ₹{parseFloat(ins.remainingFirePolicyAmount || ins.firePolicyAmount || '0').toLocaleString()}, Burglary: ₹{parseFloat(ins.remainingBurglaryPolicyAmount || ins.burglaryPolicyAmount || '0').toLocaleString()})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -7436,8 +7460,8 @@ export default function InwardPage() {
                                   <Input value={insurance.firePolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
                                 </div>
                                 <div>
-                                  <Label className="block font-semibold mb-1">Fire Policy Amount</Label>
-                                  <Input value={formatAmount(insurance.firePolicyAmount)} readOnly placeholder="Auto-filled from inspection" />
+                                  <Label className="block font-semibold mb-1">Fire Policy Amount (Remaining)</Label>
+                                  <Input value={`₹${parseFloat(insurance.remainingFirePolicyAmount || insurance.firePolicyAmount || '0').toLocaleString()}`} readOnly placeholder="Auto-filled from inspection" className="bg-green-50 font-semibold" />
                                 </div>
                                 <div>
                                   <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
@@ -7472,8 +7496,8 @@ export default function InwardPage() {
                                   <Input value={insurance.burglaryPolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
                                 </div>
                                 <div>
-                                  <Label className="block font-semibold mb-1">Burglary Policy Amount</Label>
-                                  <Input value={formatAmount(insurance.burglaryPolicyAmount)} readOnly placeholder="Auto-filled from inspection" />
+                                  <Label className="block font-semibold mb-1">Burglary Policy Amount (Remaining)</Label>
+                                  <Input value={`₹${parseFloat(insurance.remainingBurglaryPolicyAmount || insurance.burglaryPolicyAmount || '0').toLocaleString()}`} readOnly placeholder="Auto-filled from inspection" className="bg-green-50 font-semibold" />
                                 </div>
                                 <div>
                                   <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
@@ -9239,39 +9263,34 @@ export default function InwardPage() {
                 </div>
               </div>
               {/* Reservation/Billing Information */}
-              {cirModalData?.businessType !== 'cm' && cirModalData?.billingStatus && (
+              {cirModalData?.businessType !== 'cm' && (cirModalData?.reservationRate || cirModalData?.billingCycle) && (
                 <div className="border-t pt-4">
                   <h3 className="text-lg font-semibold mb-4 text-orange-700">Reservation & Billing Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <Label className="block font-semibold mb-1">Billing Status</Label>
-                      <Input value={cirModalData?.billingStatus || ''} readOnly disabled />
-                    </div>
-                  </div>
-                  {/* Show reservation fields for reservations with 'reservation' status */}
-                  {cirModalData?.reservationStatus === 'reservation' && (
+                  
+                  {/* Show reservation fields if reservationStatus is 'reservation' OR if reservation data exists and billing doesn't */}
+                  {(cirModalData?.reservationStatus === 'reservation' || (cirModalData?.reservationRate && (!cirModalData?.billingCycle || cirModalData?.billingCycle === '-'))) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label className="block font-semibold mb-1">Reservation Rate (Rs/MT) *</Label>
+                        <Label className="block font-semibold mb-1">Reservation Rate (Rs/MT)</Label>
                         <Input value={cirModalData?.reservationRate || ''} readOnly disabled />
                       </div>
                       <div>
-                        <Label className="block font-semibold mb-1">Reservation Quantity (MT) *</Label>
+                        <Label className="block font-semibold mb-1">Reservation Quantity (MT)</Label>
                         <Input value={cirModalData?.reservationQty || ''} readOnly disabled />
                       </div>
                       <div>
-                        <Label className="block font-semibold mb-1">Reservation Start Date *</Label>
+                        <Label className="block font-semibold mb-1">Reservation Start Date</Label>
                         <Input value={cirModalData?.reservationStart || ''} readOnly disabled />
                       </div>
                       <div>
-                        <Label className="block font-semibold mb-1">Reservation End Date *</Label>
+                        <Label className="block font-semibold mb-1">Reservation End Date</Label>
                         <Input value={cirModalData?.reservationEnd || ''} readOnly disabled />
                       </div>
                     </div>
                   )}
 
                   {/* Expired Reservation Alert in Second CIR Modal */}
-                  {cirModalData?.billingStatus === 'reservation' && isReservationExpired(cirModalData?.reservationEnd || '') && (
+                  {(cirModalData?.reservationStatus === 'reservation' || cirModalData?.reservationRate) && isReservationExpired(cirModalData?.reservationEnd || '') && (
                     <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
                       <div className="flex items-start">
                         <div className="flex-shrink-0">
@@ -9288,8 +9307,8 @@ export default function InwardPage() {
                       </div>
                     </div>
                   )}
-                  {/* Show billing fields for post-reservation status */}
-                  {cirModalData?.reservationStatus === 'post-reservation' && (
+                  {/* Show billing fields if reservationStatus is 'post-reservation' OR if billing data exists and it's meaningful */}
+                  {(cirModalData?.reservationStatus === 'post-reservation' || (cirModalData?.billingCycle && cirModalData?.billingCycle !== '-' && !cirModalData?.reservationRate)) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label className="block font-semibold mb-1">Billing Cycle</Label>
