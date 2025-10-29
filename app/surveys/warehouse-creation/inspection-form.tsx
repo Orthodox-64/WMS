@@ -536,6 +536,7 @@ export default function WarehouseInspectionForm({
   const [selectedWarehouseInsurances, setSelectedWarehouseInsurances] = useState<any[]>([]);
   const [additionalInsuranceClientData, setAdditionalInsuranceClientData] = useState<{[key: string]: any[]}>({});
   const [commodityInsuranceData, setCommodityInsuranceData] = useState<any[]>([]);
+  const [allAvailableInsurances, setAllAvailableInsurances] = useState<any[]>([]); // New state for all insurances
 
   // Insurance popup state
   // Removed insurance popup states - using direct validation instead
@@ -1129,6 +1130,41 @@ export default function WarehouseInspectionForm({
       }
     }
   }, [formData.warehouseLength, formData.warehouseBreadth, formData.divisionFactor]);
+
+  // Load ALL available insurances for the current warehouse (for summary display)
+  useEffect(() => {
+    const loadAllWarehouseInsurances = async () => {
+      // Only load if warehouse code exists (unique identifier)
+      if (!formData.warehouseCode) {
+        setAllAvailableInsurances([]);
+        return;
+      }
+
+      try {
+        console.log('🔍 Loading all insurances for warehouse code:', formData.warehouseCode);
+
+        // Query insurance collection ONLY by warehouse code (unique identifier)
+        const insuranceQuery = query(
+          collection(db, 'insurance'),
+          where('warehouseCode', '==', formData.warehouseCode)
+        );
+
+        const insuranceDocs = await getDocs(insuranceQuery);
+        const insurances = insuranceDocs.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        console.log('✅ Found insurances for warehouse code', formData.warehouseCode, ':', insurances);
+        setAllAvailableInsurances(insurances);
+      } catch (error) {
+        console.error('❌ Error loading warehouse insurances:', error);
+        setAllAvailableInsurances([]);
+      }
+    };
+
+    loadAllWarehouseInsurances();
+  }, [formData.warehouseCode]); // Only depend on warehouseCode (unique)
 
   // Load insurance banks when needed - filtered by warehouse
   useEffect(() => {
@@ -3835,6 +3871,169 @@ export default function WarehouseInspectionForm({
           />
           {!collapsedSections.insuranceDetails && (
             <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
+            
+            {/* Available Insurance Summary Box */}
+            <div className="mb-6 p-4 border-2 border-blue-300 rounded-lg bg-blue-50">
+              <h3 className="text-lg font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Available Insurance Summary
+              </h3>
+              <div className="text-sm space-y-2">
+                <div className="grid grid-cols-2 gap-2 mb-3 p-2 bg-white rounded border border-blue-200">
+                  <div><span className="font-medium text-blue-700">Warehouse Code:</span> <span className="text-orange-600">{formData.warehouseCode || 'N/A'}</span></div>
+                  <div><span className="font-medium text-blue-700">Warehouse Name:</span> <span className="text-orange-600">{formData.warehouseName || 'N/A'}</span></div>
+                </div>
+                
+                {/* Show available insurances based on allAvailableInsurances */}
+                {(() => {
+                  if (allAvailableInsurances.length === 0) {
+                    return (
+                      <div className="text-center py-4 text-gray-500">
+                        <p className="font-medium">ℹ️ No insurance data available for this warehouse</p>
+                        <p className="text-xs mt-1">Insurance records will appear here once they are created in the Insurance Master module</p>
+                      </div>
+                    );
+                  }
+                  
+                  // Group insurances by type
+                  const groupedInsurances: {[key: string]: any[]} = {
+                    'client': [],
+                    'agrogreen': [],
+                    'warehouse-owner': [],
+                    'bank': [],
+                    'bank-funded': []
+                  };
+                  
+                  allAvailableInsurances.forEach(ins => {
+                    const type = ins.insuranceType?.toLowerCase() || 'unknown';
+                    if (groupedInsurances[type]) {
+                      groupedInsurances[type].push(ins);
+                    } else {
+                      // Handle any other insurance types
+                      if (!groupedInsurances['other']) {
+                        groupedInsurances['other'] = [];
+                      }
+                      groupedInsurances['other'].push(ins);
+                    }
+                  });
+                  
+                  // Filter by selected commodity if available
+                  const filterByCommodity = (insurances: any[]) => {
+                    if (!formData.insuranceCommodity) return insurances;
+                    return insurances.filter(ins => {
+                      const commodity = ins.commodityName || ins.commodity || ins.commodities || '';
+                      return commodity.toLowerCase() === formData.insuranceCommodity.toLowerCase();
+                    });
+                  };
+                  
+                  const availableTypes = Object.entries(groupedInsurances)
+                    .filter(([type, insurances]) => insurances.length > 0)
+                    .map(([type, insurances]) => ({
+                      type: type === 'warehouse-owner' ? 'Warehouse Owner' : 
+                            type === 'agrogreen' ? 'Agrogreen' : 
+                            type === 'client' ? 'Client' : 
+                            type === 'bank' ? 'Bank' :
+                            type === 'bank-funded' ? 'Bank Funded' :
+                            type === 'other' ? 'Other' : type.charAt(0).toUpperCase() + type.slice(1),
+                      typeKey: type,
+                      count: insurances.length,
+                      filteredCount: filterByCommodity(insurances).length,
+                      color: type === 'client' ? 'text-green-700 bg-green-100' : 
+                             type === 'agrogreen' ? 'text-purple-700 bg-purple-100' : 
+                             type === 'warehouse-owner' ? 'text-orange-700 bg-orange-100' :
+                             type === 'bank-funded' ? 'text-indigo-700 bg-indigo-100' :
+                             'text-blue-700 bg-blue-100',
+                      allData: insurances,
+                      filteredData: filterByCommodity(insurances)
+                    }));
+                  
+                  if (availableTypes.length === 0) {
+                    return (
+                      <div className="text-center py-4 text-yellow-600 bg-yellow-50 rounded border border-yellow-200">
+                        <p className="font-medium">⚠️ No insurances found for this warehouse</p>
+                        <p className="text-xs mt-1">Insurance records will appear here once they are created</p>
+                      </div>
+                    );
+                  }
+                  
+                  // Check if commodity filter is active and has no matches
+                  const hasFilteredMatches = availableTypes.some(t => t.filteredCount > 0);
+                  
+                  return (
+                    <div className="space-y-3">
+                      <div className="text-xs text-gray-600 mb-2">
+                        <strong>Total: {allAvailableInsurances.length} insurance(s) found for this warehouse</strong>
+                        {formData.insuranceCommodity && (
+                          <span className="ml-2 text-blue-600">
+                            | Filtering by: <strong>{formData.insuranceCommodity}</strong>
+                            {!hasFilteredMatches && <span className="text-red-600 font-semibold"> (No matches - showing all)</span>}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {availableTypes.map((insurance, idx) => {
+                        // Show insurance type if it has any data (filtered or not)
+                        const dataToShow = formData.insuranceCommodity && insurance.filteredCount > 0 
+                          ? insurance.filteredData 
+                          : insurance.allData;
+                        
+                        const isFiltered = formData.insuranceCommodity && insurance.filteredCount === 0;
+                        
+                        return (
+                          <div key={idx} className={`p-3 rounded-lg border ${insurance.color} border-opacity-50 ${isFiltered ? 'opacity-60' : ''}`}>
+                            <div className="font-semibold mb-2 flex items-center justify-between flex-wrap gap-2">
+                              <span>
+                                📋 {insurance.type} Insurance 
+                                ({formData.insuranceCommodity && insurance.filteredCount > 0 
+                                  ? `${insurance.filteredCount} matching` 
+                                  : `${insurance.count} total`})
+                              </span>
+                              <div className="flex gap-2">
+                                {isFiltered && (
+                                  <span className="text-xs bg-gray-400 text-white px-2 py-1 rounded">
+                                    No matches for "{formData.insuranceCommodity}"
+                                  </span>
+                                )}
+                                {formData.insuranceTakenBy?.toLowerCase().replace(' ', '-') === insurance.typeKey && (
+                                  <span className="text-xs bg-green-500 text-white px-2 py-1 rounded">Currently Selected</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                              {dataToShow.slice(0, 2).map((ins: any, insIdx: number) => (
+                                <div key={insIdx} className="bg-white p-2 rounded border border-gray-200">
+                                  <div className="font-semibold text-blue-600 mb-1">📄 {ins.insuranceCode || 'N/A'}</div>
+                                  <div><strong>Commodity:</strong> {ins.commodityName || ins.commodity || ins.commodities || 'N/A'}</div>
+                                  {ins.bankFundedBy && (
+                                    <div className="text-indigo-600"><strong>Bank:</strong> {ins.bankFundedBy}</div>
+                                  )}
+                                  <div className="mt-1 pt-1 border-t border-gray-200">
+                                    <div><strong>Fire Policy:</strong> {ins.firePolicyNumber || 'N/A'}</div>
+                                    <div><strong>Fire Amount:</strong> Rs. {ins.firePolicyAmount || ins.firePolicyRemainingAmount || '0'}</div>
+                                  </div>
+                                  <div className="mt-1 pt-1 border-t border-gray-200">
+                                    <div><strong>Burglary Policy:</strong> {ins.burglaryPolicyNumber || 'N/A'}</div>
+                                    <div><strong>Burglary Amount:</strong> Rs. {ins.burglaryPolicyAmount || ins.burglaryPolicyRemainingAmount || '0'}</div>
+                                  </div>
+                                </div>
+                              ))}
+                              {dataToShow.length > 2 && (
+                                <div className="col-span-2 text-center text-xs text-gray-600 italic bg-white py-2 rounded">
+                                  +{dataToShow.length - 2} more {insurance.type.toLowerCase()} insurance(s) available
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="insuranceTakenBy">Insurance Taken By</Label>

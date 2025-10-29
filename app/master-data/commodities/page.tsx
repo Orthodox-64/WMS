@@ -705,7 +705,6 @@ export default function CommodityModulePage() {
           '',
           '',
           '',
-          '',
           commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : '',
           ''
         ]);
@@ -721,8 +720,7 @@ export default function CommodityModulePage() {
             variety.varietyId,
             variety.varietyName,
             variety.locationName || '',
-            variety.branchName || '', // Ensure branch name is properly included
-            variety.rate ? `Rs. ${variety.rate}` : '', // Fixed - Rs. format
+            variety.rate ? `Rs. ${variety.rate}` : '',
             variety.particulars?.map(p => `${p.name}: ${p.minPercentage}%-${p.maxPercentage}%`).join('; ') || '',
             commodity.createdAt ? new Date(commodity.createdAt).toLocaleDateString() : '',
             variety.createdAt ? new Date(variety.createdAt).toLocaleDateString() : ''
