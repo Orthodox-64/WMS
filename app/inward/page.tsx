@@ -1725,6 +1725,72 @@ export default function InwardPage() {
     fetchData();
   }, [dataVersion, fetchData]);
 
+  // Listen for reservation data updates from reservation-billing module
+  useEffect(() => {
+    const handleReservationUpdate = async (event: any) => {
+      console.log('📢 Reservation data updated event received in inward module');
+      const updatedReservations = event.detail;
+      
+      if (Array.isArray(updatedReservations)) {
+        setReservations(updatedReservations);
+        console.log('✅ Inward module: Reservations state updated with latest data');
+        
+        // If we have a currently selected reservation, update it with the latest data
+        if (selectedReservation?.reservationId) {
+          const updatedSelected = updatedReservations.find((r: any) => 
+            r.reservationId === selectedReservation.reservationId
+          );
+          if (updatedSelected) {
+            setSelectedReservation(updatedSelected);
+            console.log('✅ Selected reservation updated with latest data');
+          }
+        }
+        
+        // Update CIR modal data if it exists (using functional update to access current state)
+        setCIRModalData((prevModalData: any) => {
+          // Check if modal is showing data
+          if (!prevModalData) return prevModalData;
+          
+          console.log('🔄 Updating CIR modal data with latest reservation info');
+          
+          // Find matching reservation for this inward entry
+          const matchingReservation = updatedReservations.find((r: any) => 
+            r.warehouseCode === prevModalData.warehouseCode && 
+            r.client === prevModalData.client &&
+            r.commodity === prevModalData.commodity
+          );
+          
+          if (matchingReservation) {
+            console.log('✅ Found matching reservation, updating CIR modal data');
+            return {
+              ...prevModalData,
+              reservationStatus: matchingReservation.reservationStatus || '',
+              billingStatus: matchingReservation.billingStatus || '',
+              reservationRate: matchingReservation.reservationRate || '',
+              reservationQty: matchingReservation.reservationQty || '',
+              reservationStart: matchingReservation.reservationStart || '',
+              reservationEnd: matchingReservation.reservationEnd || '',
+              billingCycle: matchingReservation.billingCycle || '',
+              billingType: matchingReservation.billingType || '',
+              billingRate: matchingReservation.billingRate || '',
+            };
+          }
+          
+          return prevModalData;
+        });
+        
+        // Refresh the inward data to ensure future CIR modals show updated reservation info
+        fetchData();
+      }
+    };
+
+    window.addEventListener('reservationDataUpdated', handleReservationUpdate);
+    
+    return () => {
+      window.removeEventListener('reservationDataUpdated', handleReservationUpdate);
+    };
+  }, [selectedReservation, fetchData]);
+
   // Filter branches by state
   const filteredBranches = branches.filter((b: any) => b.state === form.state);
   // Filter locations by branch
@@ -1754,13 +1820,30 @@ export default function InwardPage() {
         
         // Fetch reservation data for this warehouse only if it's not CM type
         if (wh.businessType !== 'cm') {
-          // Filter reservations for this specific warehouse
-          const warehouseReservations = reservations.filter((r: any) => 
-            r.warehouse === form.warehouseName && 
-            r.state === form.state && 
-            r.branch === form.branch && 
-            r.location === form.location
-          );
+          // Filter reservations using 3-factor combination: warehouseCode + client + commodity
+          // This ensures we get the exact matching reservation for this inward entry
+          const warehouseReservations = reservations.filter((r: any) => {
+            const warehouseMatch = r.warehouseCode === wh.warehouseCode;
+            const clientMatch = form.client ? r.client === form.client : true;
+            const commodityMatch = form.commodity ? r.commodity === form.commodity : true;
+            
+            console.log('🔍 Filtering reservation:', {
+              reservationId: r.reservationId,
+              warehouseMatch,
+              clientMatch,
+              commodityMatch,
+              rWarehouse: r.warehouseCode,
+              rClient: r.client,
+              rCommodity: r.commodity,
+              formWarehouse: wh.warehouseCode,
+              formClient: form.client,
+              formCommodity: form.commodity
+            });
+            
+            return warehouseMatch && clientMatch && commodityMatch;
+          });
+          
+          console.log('📊 Found matching reservations:', warehouseReservations.length);
           
           if (warehouseReservations.length > 0) {
             setAvailableReservations(warehouseReservations);
@@ -1769,6 +1852,12 @@ export default function InwardPage() {
             if (warehouseReservations.length === 1) {
               const reservation = warehouseReservations[0];
               setSelectedReservation(reservation);
+              
+              console.log('✅ Auto-selected reservation:', {
+                reservationId: reservation.reservationId,
+                reservationEnd: reservation.reservationEnd,
+                billingCycle: reservation.billingCycle
+              });
               
               setBaseForm(f => ({
                 ...f,
@@ -1784,6 +1873,7 @@ export default function InwardPage() {
               }));
             } else {
               // Multiple reservations available - user needs to select
+              console.log('⚠️ Multiple reservations found, user must select');
               setSelectedReservation(null);
             }
           } else {
@@ -1854,7 +1944,7 @@ export default function InwardPage() {
       }));
     }
     // eslint-disable-next-line
-  }, [form.warehouseName, reservations]);
+  }, [form.warehouseName, form.client, form.commodity, reservations, filteredWarehouses]);
 
   // Auto-fill client ID and address
   useEffect(() => {

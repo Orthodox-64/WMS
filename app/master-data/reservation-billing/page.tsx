@@ -57,8 +57,11 @@ type Reservation = {
   branch: string;
   location: string;
   warehouse: string;
+  warehouseCode?: string; // Unique warehouse identifier
   client: string;
   clientId: string;
+  commodity?: string; // Commodity name (third unique factor)
+  commodityId?: string; // Commodity ID
   reservationStatus: 'reservation' | 'post-reservation';
   billingStatus: 'processing' | 'unpaid' | 'complete';
   reservationRate: string;
@@ -83,6 +86,7 @@ export default function ReservationBillingPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [commodities, setCommodities] = useState<any[]>([]);
   const [showCustomError, setShowCustomError] = useState(false);
   
   // Dialog states
@@ -94,7 +98,8 @@ export default function ReservationBillingPage() {
   
   // Form states
   const [newReservation, setNewReservation] = useState<Partial<Reservation>>({
-    state: '', branch: '', location: '', warehouse: '', client: '', clientId: '', 
+    state: '', branch: '', location: '', warehouse: '', warehouseCode: '', client: '', clientId: '', 
+    commodity: '', commodityId: '',
     reservationStatus: 'reservation', billingStatus: 'processing',
     reservationRate: '', reservationQty: '', reservationStart: '', reservationEnd: '',
     billingCycle: '-', billingType: '-', billingRate: '-'
@@ -110,16 +115,18 @@ export default function ReservationBillingPage() {
       setLoading(true);
       setError(null);
       
-      const [reservationSnapshot, branchSnapshot, clientSnapshot, inspectionSnapshot] = await Promise.all([
+      const [reservationSnapshot, branchSnapshot, clientSnapshot, inspectionSnapshot, commoditySnapshot] = await Promise.all([
         getDocs(collection(db, 'reservation')),
         getDocs(collection(db, 'branches')),
         getDocs(collection(db, 'clients')),
-        getDocs(collection(db, 'inspections'))
+        getDocs(collection(db, 'inspections')),
+        getDocs(collection(db, 'commodities'))
       ]);
 
       const fetchedReservations = reservationSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Reservation[];
       const fetchedBranches = branchSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Branch[];
       const fetchedClients = clientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const fetchedCommodities = commoditySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       // Extract unique warehouses from inspections - ONLY ACTIVATED WAREHOUSES (excluding CM type)
       const warehouseSet = new Set<string>();
@@ -174,6 +181,7 @@ export default function ReservationBillingPage() {
       setBranches(fetchedBranches);
       setClients(fetchedClients);
       setWarehouses(fetchedWarehouses);
+      setCommodities(fetchedCommodities);
       
       // Cross-module reflection (requirement: reflect changes across modules)
       window.dispatchEvent(new CustomEvent('reservationDataUpdated', { detail: fetchedReservations }));
@@ -272,6 +280,11 @@ export default function ReservationBillingPage() {
     {
       accessorKey: "clientId",
       header: "Client ID",
+    },
+    {
+      accessorKey: "commodity",
+      header: "Commodity",
+      cell: ({ row }) => <span className="font-medium">{row.original.commodity || '-'}</span>
     },
     {
       accessorKey: "reservationStatus",
@@ -462,6 +475,79 @@ export default function ReservationBillingPage() {
            (!row.billingRate || row.billingRate === '-');
   }
 
+  // Function to update related inward entries when reservation data changes
+  async function updateRelatedInwardEntries(updatedReservation: Reservation) {
+    try {
+      console.log('🔄 Updating related inward entries for reservation:', updatedReservation.reservationId);
+      console.log('Looking for: warehouse=' + updatedReservation.warehouseCode + ', client=' + updatedReservation.client + ', commodity=' + updatedReservation.commodity);
+      
+      const inwardCollection = collection(db, 'inward');
+      const inwardSnapshot = await getDocs(inwardCollection);
+      
+      console.log(`📊 Total inward documents to check: ${inwardSnapshot.size}`);
+      
+      let updatedCount = 0;
+      const updatePromises: Promise<void>[] = [];
+      
+      inwardSnapshot.forEach((inwardDoc) => {
+        const inwardData = inwardDoc.data();
+        
+        // Check if this inward entry matches the updated reservation
+        // Using 3-factor match: warehouseCode + client + commodity
+        if (
+          inwardData.warehouseCode === updatedReservation.warehouseCode &&
+          inwardData.client === updatedReservation.client &&
+          inwardData.commodity === updatedReservation.commodity
+        ) {
+          console.log(`✅ Found matching inward entry: ${inwardData.inwardId}`);
+          
+          // Prepare the reservation data update
+          const reservationUpdateData = {
+            reservationStatus: updatedReservation.reservationStatus || '',
+            billingStatus: updatedReservation.billingStatus || '',
+            reservationRate: updatedReservation.reservationRate || '',
+            reservationQty: updatedReservation.reservationQty || '',
+            reservationStart: updatedReservation.reservationStart || '',
+            reservationEnd: updatedReservation.reservationEnd || '',
+            billingCycle: updatedReservation.billingCycle || '',
+            billingType: updatedReservation.billingType || '',
+            billingRate: updatedReservation.billingRate || '',
+          };
+          
+          // Also update the nested inwardEntries array if it exists
+          let updatedInwardEntries = inwardData.inwardEntries;
+          if (Array.isArray(inwardData.inwardEntries)) {
+            updatedInwardEntries = inwardData.inwardEntries.map((entry: any) => ({
+              ...entry,
+              ...reservationUpdateData
+            }));
+          }
+          
+          // Update the reservation fields in this inward entry (both root level and nested array)
+          const updatePromise = updateDoc(doc(db, 'inward', inwardDoc.id), {
+            ...reservationUpdateData,
+            inwardEntries: updatedInwardEntries,
+            updatedAt: new Date().toISOString()
+          });
+          
+          updatePromises.push(updatePromise);
+          updatedCount++;
+        }
+      });
+      
+      // Wait for all updates to complete
+      await Promise.all(updatePromises);
+      
+      console.log(`✅ Successfully updated ${updatedCount} inward entries with latest reservation data`);
+      
+      if (updatedCount === 0) {
+        console.warn('⚠️ No matching inward entries found for this reservation');
+      }
+    } catch (error) {
+      console.error('❌ Error updating related inward entries:', error);
+    }
+  }
+
   // Handler functions
   async function handleDeleteReservation(row: Reservation) {
     if (!row.id) {
@@ -470,7 +556,12 @@ export default function ReservationBillingPage() {
     }
     try {
       await deleteDoc(doc(db, 'reservation', row.id));
-      setReservations(prev => prev.filter(r => r.id !== row.id));
+      const updatedReservations = reservations.filter(r => r.id !== row.id);
+      setReservations(updatedReservations);
+      
+      // Dispatch event to notify other modules of reservation data change
+      window.dispatchEvent(new CustomEvent('reservationDataUpdated', { detail: updatedReservations }));
+      
       toast({ title: 'Reservation deleted successfully!', variant: 'default' });
     } catch (err) {
       toast({ title: 'Delete Failed', description: String(err), variant: 'destructive' });
@@ -482,7 +573,18 @@ export default function ReservationBillingPage() {
     if (!editDialog.row?.id) return;
     try {
       await updateDoc(doc(db, 'reservation', editDialog.row.id), editBillingForm);
-      setReservations(prev => prev.map(r => r.id === editDialog.row?.id ? { ...r, ...editBillingForm } : r));
+      const updatedReservations = reservations.map(r => r.id === editDialog.row?.id ? { ...r, ...editBillingForm } : r);
+      setReservations(updatedReservations);
+      
+      // Update related inward entries with new reservation data
+      const updatedReservation = updatedReservations.find(r => r.id === editDialog.row?.id);
+      if (updatedReservation) {
+        await updateRelatedInwardEntries(updatedReservation);
+      }
+      
+      // Dispatch event to notify other modules of reservation data change
+      window.dispatchEvent(new CustomEvent('reservationDataUpdated', { detail: updatedReservations }));
+      
       toast({ title: 'Billing details updated!', variant: 'default' });
       setEditDialog({ open: false, row: null });
     } catch (err) {
@@ -497,11 +599,22 @@ export default function ReservationBillingPage() {
       await updateDoc(doc(db, 'reservation', alertModal.row.id), {
         reservationEnd: extendReservationForm.reservationEnd
       });
-      setReservations(prev => prev.map(r => 
+      const updatedReservations = reservations.map(r => 
         r.id === alertModal.row?.id 
           ? { ...r, reservationEnd: extendReservationForm.reservationEnd } 
           : r
-      ));
+      );
+      setReservations(updatedReservations);
+      
+      // Update related inward entries with new reservation data
+      const updatedReservation = updatedReservations.find(r => r.id === alertModal.row?.id);
+      if (updatedReservation) {
+        await updateRelatedInwardEntries(updatedReservation);
+      }
+      
+      // Dispatch event to notify other modules of reservation data change
+      window.dispatchEvent(new CustomEvent('reservationDataUpdated', { detail: updatedReservations }));
+      
       toast({ title: 'Reservation Extended!', description: 'Reservation end date has been updated.', variant: 'default' });
       setAlertModal({ open: false, type: 'alert', row: null });
       setExtendReservationForm({ reservationEnd: '' });
@@ -524,11 +637,22 @@ export default function ReservationBillingPage() {
         reservationEnd: '-'
       };
       await updateDoc(doc(db, 'reservation', alertModal.row.id), updateData);
-      setReservations(prev => prev.map(r => 
+      const updatedReservations = reservations.map(r => 
         r.id === alertModal.row?.id 
           ? { ...r, ...updateData }
           : r
-      ));
+      );
+      setReservations(updatedReservations);
+      
+      // Update related inward entries with new billing data
+      const updatedReservation = updatedReservations.find(r => r.id === alertModal.row?.id);
+      if (updatedReservation) {
+        await updateRelatedInwardEntries(updatedReservation);
+      }
+      
+      // Dispatch event to notify other modules of reservation data change
+      window.dispatchEvent(new CustomEvent('reservationDataUpdated', { detail: updatedReservations }));
+      
       toast({ title: 'Billing Updated!', description: 'Billing details updated, reservation fields set to "-", and status set to complete.', variant: 'default' });
       setAlertModal({ open: false, type: 'update', row: null });
       setUpdateBillingForm({ billingCycle: '', billingType: '', billingRate: '' });
@@ -545,10 +669,10 @@ export default function ReservationBillingPage() {
       return;
     }
 
-    // Check for duplicate reservation (same warehouse + client) ONLY for 'reservation' status
+    // Check for duplicate reservation (same warehouse code + client + commodity) ONLY for 'reservation' status
     // Allow multiple entries for 'post-reservation' status
     if (newReservation.reservationStatus === 'reservation') {
-      const duplicateCheck = checkDuplicateReservation(newReservation.warehouse!, newReservation.client!);
+      const duplicateCheck = checkDuplicateReservation(newReservation.warehouseCode!, newReservation.client!, newReservation.commodity!);
       if (duplicateCheck.isDuplicate) {
         toast({ 
           title: "Duplicate Reservation", 
@@ -562,8 +686,9 @@ export default function ReservationBillingPage() {
     // For post-reservation, check if billing cycle + billing type combination already exists
     if (newReservation.reservationStatus === 'post-reservation') {
       const duplicateBilling = reservations.find(res => 
-        res.warehouse?.trim().toLowerCase() === newReservation.warehouse?.trim().toLowerCase() &&
+        res.warehouseCode?.trim().toLowerCase() === newReservation.warehouseCode?.trim().toLowerCase() &&
         res.client?.trim().toLowerCase() === newReservation.client?.trim().toLowerCase() &&
+        res.commodity?.trim().toLowerCase() === newReservation.commodity?.trim().toLowerCase() &&
         res.billingCycle === newReservation.billingCycle &&
         res.billingType === newReservation.billingType
       );
@@ -571,7 +696,7 @@ export default function ReservationBillingPage() {
       if (duplicateBilling) {
         toast({ 
           title: "Duplicate Billing Entry", 
-          description: `A post-reservation entry with Billing Cycle "${newReservation.billingCycle}" and Billing Type "${newReservation.billingType}" already exists for this warehouse and client. Please select a different combination.`, 
+          description: `A post-reservation entry with Billing Cycle "${newReservation.billingCycle}" and Billing Type "${newReservation.billingType}" already exists for this warehouse, client, and commodity combination. Please select a different combination.`, 
           variant: "destructive" 
         });
         return;
@@ -590,7 +715,8 @@ export default function ReservationBillingPage() {
       setReservations(prev => [...prev, { ...reservationData, id: reservationId } as Reservation]);
       setAddReservationDialog(false);
       setNewReservation({
-        state: '', branch: '', location: '', warehouse: '', client: '', clientId: '', 
+        state: '', branch: '', location: '', warehouse: '', warehouseCode: '', client: '', clientId: '', 
+        commodity: '', commodityId: '',
         reservationStatus: 'reservation', billingStatus: 'processing',
         reservationRate: '', reservationQty: '', reservationStart: '', reservationEnd: '',
         billingCycle: '-', billingType: '-', billingRate: '-'
@@ -623,13 +749,14 @@ export default function ReservationBillingPage() {
   async function handleAddBillingSubmit() {
     if (!addDialog.row?.id) return;
     
-    // Validate that billing cycle and type are not the same as previous entry
+    // Validate that billing cycle and type are not the same as previous entry for same warehouse + client + commodity
     const hasDuplicate = reservations.some(r => 
       r.id !== addDialog.row?.id && 
       r.billingCycle === addBillingForm.billingCycle && 
       r.billingType === addBillingForm.billingType &&
       r.warehouse === addDialog.row?.warehouse &&
-      r.client === addDialog.row?.client
+      r.client === addDialog.row?.client &&
+      r.commodity === addDialog.row?.commodity
     );
     
     if (hasDuplicate) {
@@ -640,7 +767,18 @@ export default function ReservationBillingPage() {
 
     try {
       await updateDoc(doc(db, 'reservation', addDialog.row.id), addBillingForm);
-      setReservations(prev => prev.map(r => r.id === addDialog.row?.id ? { ...r, ...addBillingForm } : r));
+      const updatedReservations = reservations.map(r => r.id === addDialog.row?.id ? { ...r, ...addBillingForm } : r);
+      setReservations(updatedReservations);
+      
+      // Update related inward entries with new billing data
+      const updatedReservation = updatedReservations.find(r => r.id === addDialog.row?.id);
+      if (updatedReservation) {
+        await updateRelatedInwardEntries(updatedReservation);
+      }
+      
+      // Dispatch event to notify other modules of reservation data change
+      window.dispatchEvent(new CustomEvent('reservationDataUpdated', { detail: updatedReservations }));
+      
       toast({ title: 'Billing details added!', variant: 'default' });
       setAddDialog({ open: false, row: null });
     } catch (err) {
@@ -661,17 +799,19 @@ export default function ReservationBillingPage() {
   }
 
   // Check for duplicate reservation (same warehouse + client)
-  function checkDuplicateReservation(warehouse: string, client: string): { isDuplicate: boolean; message: string } {
+  function checkDuplicateReservation(warehouseCode: string, client: string, commodity: string): { isDuplicate: boolean; message: string } {
     const today = new Date();
     
     // Normalize inputs for case-insensitive comparison
-    const normalizedWarehouse = warehouse?.trim().toLowerCase();
+    const normalizedWarehouseCode = warehouseCode?.trim().toLowerCase();
     const normalizedClient = client?.trim().toLowerCase();
+    const normalizedCommodity = commodity?.trim().toLowerCase();
     
-    // Find existing reservations with same warehouse and client (case-insensitive)
+    // Find existing reservations with same warehouse code, client AND commodity (case-insensitive)
     const existingReservation = reservations.find(res => 
-      res.warehouse?.trim().toLowerCase() === normalizedWarehouse && 
-      res.client?.trim().toLowerCase() === normalizedClient
+      res.warehouseCode?.trim().toLowerCase() === normalizedWarehouseCode && 
+      res.client?.trim().toLowerCase() === normalizedClient &&
+      res.commodity?.trim().toLowerCase() === normalizedCommodity
     );
 
     if (!existingReservation) {
@@ -696,7 +836,7 @@ export default function ReservationBillingPage() {
     // Active reservation exists - block duplicate
     return { 
       isDuplicate: true, 
-      message: `A reservation already exists for warehouse "${warehouse}" and client "${client}". The existing reservation expires on ${existingReservation.reservationEnd || 'N/A'}.` 
+      message: `A reservation already exists for warehouse code "${warehouseCode}", client "${client}", and commodity "${commodity}". The existing reservation expires on ${existingReservation.reservationEnd || 'N/A'}.` 
     };
   }
 
@@ -1057,7 +1197,10 @@ export default function ReservationBillingPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-green-600 font-medium">Warehouse <span className="text-red-500">*</span></Label>
-                  <Select value={newReservation.warehouse} onValueChange={v => setNewReservation(f => ({ ...f, warehouse: v }))} required>
+                  <Select value={newReservation.warehouse} onValueChange={v => {
+                    const selectedWarehouse = getFilteredWarehouses().find(w => w.warehouseName === v);
+                    setNewReservation(f => ({ ...f, warehouse: v, warehouseCode: selectedWarehouse?.warehouseCode || '' }));
+                  }} required>
                     <SelectTrigger className="border-orange-300 focus:border-orange-500">
                       <SelectValue placeholder="Select warehouse" />
                     </SelectTrigger>
@@ -1091,6 +1234,28 @@ export default function ReservationBillingPage() {
                     <SelectContent>
                       {clients.map(client => (
                         <SelectItem key={client.id} value={client.firmName}>{client.firmName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Commodity Selection */}
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-green-600 font-medium">Commodity <span className="text-red-500">*</span></Label>
+                  <Select value={newReservation.commodity} onValueChange={v => {
+                    const selectedCommodity = commodities.find(c => c.commodityName === v);
+                    setNewReservation(f => ({ ...f, commodity: v, commodityId: selectedCommodity?.commodityId || '' }));
+                  }} required>
+                    <SelectTrigger className="border-orange-300 focus:border-orange-500">
+                      <SelectValue placeholder="Select commodity" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {commodities.map(commodity => (
+                        <SelectItem key={commodity.id} value={commodity.commodityName}>
+                          {commodity.commodityName} ({commodity.commodityId})
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
