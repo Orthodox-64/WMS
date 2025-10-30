@@ -277,6 +277,9 @@ export default function InwardPage() {
   // Add state for initial remaining values from Firestore
   const [initialRemainingFire, setInitialRemainingFire] = useState('');
   const [initialRemainingBurglary, setInitialRemainingBurglary] = useState('');
+  // Track whether the initial values came from REMAINING fields (true) vs ORIGINAL policy amounts (false)
+  const [isFireRemainingSource, setIsFireRemainingSource] = useState(false);
+  const [isBurglaryRemainingSource, setIsBurglaryRemainingSource] = useState(false);
   // Add state for selected insurance type
   const [selectedInsuranceType, setSelectedInsuranceType] = useState<string>('all');
 
@@ -3896,8 +3899,11 @@ export default function InwardPage() {
     
     // Only validate if total value exists and insurance is selected
     if (totalValue > 0 && (initialRemainingFire || initialRemainingBurglary)) {
-      const fireRemaining = parseFloat(initialRemainingFire) || 0;
-      const burglaryRemaining = parseFloat(initialRemainingBurglary) || 0;
+      const fireRemainingBase = parseFloat(initialRemainingFire) || 0;
+      const burglaryRemainingBase = parseFloat(initialRemainingBurglary) || 0;
+      // For validation, only subtract from remaining when we truly have remaining sources.
+      const fireRemaining = isFireRemainingSource ? (fireRemainingBase - totalValue) : fireRemainingBase;
+      const burglaryRemaining = isBurglaryRemainingSource ? (burglaryRemainingBase - totalValue) : burglaryRemainingBase;
       
       // Check if total value exceeds either policy's remaining amount
       if (totalValue > fireRemaining || totalValue > burglaryRemaining) {
@@ -3923,7 +3929,7 @@ export default function InwardPage() {
     } else {
       setTotalValueExceedsInsurance(false);
     }
-  }, [baseForm.totalValue, initialRemainingFire, initialRemainingBurglary]);
+  }, [baseForm.totalValue, initialRemainingFire, initialRemainingBurglary, isFireRemainingSource, isBurglaryRemainingSource]);
 
   const calculateAverageWeight = (netWeight: string, totalBags: string) => {
     const net = parseFloat(netWeight) || 0;
@@ -5452,11 +5458,61 @@ export default function InwardPage() {
         insuranceList = inspectionData.warehouseInspectionData.insuranceEntries;
       }
       const firestoreIns = insuranceList.find((i: any) => i.firePolicyNumber === ins.firePolicyNumber && i.burglaryPolicyNumber === ins.burglaryPolicyNumber);
-      setInitialRemainingFire(firestoreIns?.remainingFirePolicyAmount || ins.firePolicyAmount || '');
-      setInitialRemainingBurglary(firestoreIns?.remainingBurglaryPolicyAmount || ins.burglaryPolicyAmount || '');
+      // Set original policy amounts from Firestore if available (fallback to entry values)
+      const originalFire = firestoreIns?.firePolicyAmount ?? ins.firePolicyAmount ?? '';
+      const originalBurglary = firestoreIns?.burglaryPolicyAmount ?? ins.burglaryPolicyAmount ?? '';
+      setBaseForm(f => ({
+        ...f,
+        firePolicyAmount: originalFire !== undefined && originalFire !== null ? String(originalFire) : '',
+        burglaryPolicyAmount: originalBurglary !== undefined && originalBurglary !== null ? String(originalBurglary) : '',
+      }));
+      // Normalize possible field names for remaining values
+      const fireRemain = firestoreIns?.remainingFirePolicyAmount ?? firestoreIns?.firePolicyRemainingAmount;
+      const burgRemain = firestoreIns?.remainingBurglaryPolicyAmount ?? firestoreIns?.burglaryPolicyRemainingAmount;
+      if (fireRemain != null || burgRemain != null) {
+        setInitialRemainingFire((fireRemain ?? '').toString());
+        setInitialRemainingBurglary((burgRemain ?? '').toString());
+        setIsFireRemainingSource(true);
+        setIsBurglaryRemainingSource(true);
+      } else {
+        // Fallback to provided entry's remaining fields if present
+        const entryFireRemain = ins.firePolicyRemainingAmount ?? ins.remainingFirePolicyAmount;
+        const entryBurgRemain = ins.burglaryPolicyRemainingAmount ?? ins.remainingBurglaryPolicyAmount;
+        if (entryFireRemain != null || entryBurgRemain != null) {
+          setInitialRemainingFire((entryFireRemain ?? '').toString());
+          setInitialRemainingBurglary((entryBurgRemain ?? '').toString());
+          setIsFireRemainingSource(true);
+          setIsBurglaryRemainingSource(true);
+        } else {
+          // As a last resort, use original amounts but mark as NOT remaining source
+          setInitialRemainingFire(ins.firePolicyAmount || '');
+          setInitialRemainingBurglary(ins.burglaryPolicyAmount || '');
+          setIsFireRemainingSource(false);
+          setIsBurglaryRemainingSource(false);
+        }
+      }
     } else {
-      setInitialRemainingFire(ins.firePolicyAmount || '');
-      setInitialRemainingBurglary(ins.burglaryPolicyAmount || '');
+      // Fallback to entry's remaining fields if present
+      const entryFireRemain = ins.firePolicyRemainingAmount ?? ins.remainingFirePolicyAmount;
+      const entryBurgRemain = ins.burglaryPolicyRemainingAmount ?? ins.remainingBurglaryPolicyAmount;
+      // Ensure base form has original amounts from selected entry
+      setBaseForm(f => ({
+        ...f,
+        firePolicyAmount: ins.firePolicyAmount ? String(ins.firePolicyAmount) : '',
+        burglaryPolicyAmount: ins.burglaryPolicyAmount ? String(ins.burglaryPolicyAmount) : '',
+      }));
+      if (entryFireRemain != null || entryBurgRemain != null) {
+        setInitialRemainingFire((entryFireRemain ?? '').toString());
+        setInitialRemainingBurglary((entryBurgRemain ?? '').toString());
+        setIsFireRemainingSource(true);
+        setIsBurglaryRemainingSource(true);
+      } else {
+        // As a last resort, use original amounts but mark as NOT remaining source
+        setInitialRemainingFire(ins.firePolicyAmount || '');
+        setInitialRemainingBurglary(ins.burglaryPolicyAmount || '');
+        setIsFireRemainingSource(false);
+        setIsBurglaryRemainingSource(false);
+      }
     }
   };
 
@@ -5509,14 +5565,29 @@ export default function InwardPage() {
               if (foundInsurance) {
                 console.log('Found client insurance:', foundInsurance);
                 // Use remaining amounts from client insurance if available, otherwise use policy amounts
-                const initialFire = foundInsurance.remainingFirePolicyAmount || foundInsurance.firePolicyAmount || ins.firePolicyAmount || '';
-                const initialBurglary = foundInsurance.remainingBurglaryPolicyAmount || foundInsurance.burglaryPolicyAmount || ins.burglaryPolicyAmount || '';
+                const initialFire = (foundInsurance.remainingFirePolicyAmount ?? foundInsurance.firePolicyRemainingAmount);
+                const initialBurglary = (foundInsurance.remainingBurglaryPolicyAmount ?? foundInsurance.burglaryPolicyRemainingAmount);
                 
                 console.log('Client insurance - Initial Fire:', initialFire, 'Type:', typeof initialFire);
                 console.log('Client insurance - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
-                
-                setInitialRemainingFire(initialFire);
-                setInitialRemainingBurglary(initialBurglary);
+                // Set base form original amounts from client insurance if present
+                setBaseForm(f => ({
+                  ...f,
+                  firePolicyAmount: foundInsurance.firePolicyAmount ? String(foundInsurance.firePolicyAmount) : (ins.firePolicyAmount ? String(ins.firePolicyAmount) : ''),
+                  burglaryPolicyAmount: foundInsurance.burglaryPolicyAmount ? String(foundInsurance.burglaryPolicyAmount) : (ins.burglaryPolicyAmount ? String(ins.burglaryPolicyAmount) : ''),
+                }));
+                if (initialFire != null || initialBurglary != null) {
+                  setInitialRemainingFire((initialFire ?? '').toString());
+                  setInitialRemainingBurglary((initialBurglary ?? '').toString());
+                  setIsFireRemainingSource(true);
+                  setIsBurglaryRemainingSource(true);
+                } else {
+                  // fallback to original if remaining not available
+                  setInitialRemainingFire(foundInsurance.firePolicyAmount || '');
+                  setInitialRemainingBurglary(foundInsurance.burglaryPolicyAmount || '');
+                  setIsFireRemainingSource(false);
+                  setIsBurglaryRemainingSource(false);
+                }
               } else {
                 console.log('Insurance not found in client data');
               }
@@ -5538,14 +5609,29 @@ export default function InwardPage() {
               if (foundInsurance) {
                 console.log('Found Agrogreen insurance:', foundInsurance);
                 // Use remaining amounts from Agrogreen insurance if available, otherwise use policy amounts
-                const initialFire = foundInsurance.remainingFirePolicyAmount || foundInsurance.firePolicyAmount || ins.firePolicyAmount || '';
-                const initialBurglary = foundInsurance.remainingBurglaryPolicyAmount || foundInsurance.burglaryPolicyAmount || ins.burglaryPolicyAmount || '';
+                const initialFire = (foundInsurance.remainingFirePolicyAmount ?? foundInsurance.firePolicyRemainingAmount);
+                const initialBurglary = (foundInsurance.remainingBurglaryPolicyAmount ?? foundInsurance.burglaryPolicyRemainingAmount);
                 
                 console.log('Agrogreen insurance - Initial Fire:', initialFire, 'Type:', typeof initialFire);
                 console.log('Agrogreen insurance - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
+                // Set base form original amounts from agrogreen insurance if present
+                setBaseForm(f => ({
+                  ...f,
+                  firePolicyAmount: foundInsurance.firePolicyAmount ? String(foundInsurance.firePolicyAmount) : (ins.firePolicyAmount ? String(ins.firePolicyAmount) : ''),
+                  burglaryPolicyAmount: foundInsurance.burglaryPolicyAmount ? String(foundInsurance.burglaryPolicyAmount) : (ins.burglaryPolicyAmount ? String(ins.burglaryPolicyAmount) : ''),
+                }));
                 
-                setInitialRemainingFire(initialFire);
-                setInitialRemainingBurglary(initialBurglary);
+                if (initialFire != null || initialBurglary != null) {
+                  setInitialRemainingFire((initialFire ?? '').toString());
+                  setInitialRemainingBurglary((initialBurglary ?? '').toString());
+                  setIsFireRemainingSource(true);
+                  setIsBurglaryRemainingSource(true);
+                } else {
+                  setInitialRemainingFire(foundInsurance.firePolicyAmount || '');
+                  setInitialRemainingBurglary(foundInsurance.burglaryPolicyAmount || '');
+                  setIsFireRemainingSource(false);
+                  setIsBurglaryRemainingSource(false);
+                }
               }
             } else {
               console.log('Agrogreen document not found with ID:', ins.sourceDocumentId);
@@ -5573,38 +5659,92 @@ export default function InwardPage() {
           
           console.log('Found Firestore insurance:', firestoreIns);
           
-          // Use remaining values if they exist, otherwise use policy amounts
-          const initialFire = firestoreIns?.remainingFirePolicyAmount || ins.firePolicyAmount || '';
-          const initialBurglary = firestoreIns?.remainingBurglaryPolicyAmount || ins.burglaryPolicyAmount || '';
-          
-          console.log('Fallback - Initial Fire:', initialFire, 'Type:', typeof initialFire);
-          console.log('Fallback - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
-          
-          setInitialRemainingFire(initialFire);
-          setInitialRemainingBurglary(initialBurglary);
+          const fireRemain = firestoreIns?.remainingFirePolicyAmount ?? firestoreIns?.firePolicyRemainingAmount;
+          const burgRemain = firestoreIns?.remainingBurglaryPolicyAmount ?? firestoreIns?.burglaryPolicyRemainingAmount;
+          // Prefer original amounts from Firestore if present
+          const originalFire2 = firestoreIns?.firePolicyAmount ?? ins.firePolicyAmount ?? '';
+          const originalBurglary2 = firestoreIns?.burglaryPolicyAmount ?? ins.burglaryPolicyAmount ?? '';
+          setBaseForm(f => ({
+            ...f,
+            firePolicyAmount: originalFire2 !== undefined && originalFire2 !== null ? String(originalFire2) : '',
+            burglaryPolicyAmount: originalBurglary2 !== undefined && originalBurglary2 !== null ? String(originalBurglary2) : '',
+          }));
+          if (fireRemain != null || burgRemain != null) {
+            setInitialRemainingFire((fireRemain ?? '').toString());
+            setInitialRemainingBurglary((burgRemain ?? '').toString());
+            setIsFireRemainingSource(true);
+            setIsBurglaryRemainingSource(true);
+          } else {
+            // Fallback to entry's remaining fields if present
+            const entryFireRemain = ins.firePolicyRemainingAmount ?? ins.remainingFirePolicyAmount;
+            const entryBurgRemain = ins.burglaryPolicyRemainingAmount ?? ins.remainingBurglaryPolicyAmount;
+            if (entryFireRemain != null || entryBurgRemain != null) {
+              setInitialRemainingFire((entryFireRemain ?? '').toString());
+              setInitialRemainingBurglary((entryBurgRemain ?? '').toString());
+              setIsFireRemainingSource(true);
+              setIsBurglaryRemainingSource(true);
+            } else {
+              // Last resort original amounts (marked as non-remaining source)
+              setInitialRemainingFire(ins.firePolicyAmount || '');
+              setInitialRemainingBurglary(ins.burglaryPolicyAmount || '');
+              setIsFireRemainingSource(false);
+              setIsBurglaryRemainingSource(false);
+            }
+          }
         } else {
           // If no Firestore data, use policy amounts
-          const initialFire = ins.firePolicyAmount || '';
-          const initialBurglary = ins.burglaryPolicyAmount || '';
+          const entryFireRemain = ins.firePolicyRemainingAmount ?? ins.remainingFirePolicyAmount;
+          const entryBurgRemain = ins.burglaryPolicyRemainingAmount ?? ins.remainingBurglaryPolicyAmount;
+          // Ensure base form has original amounts from selected entry
+          setBaseForm(f => ({
+            ...f,
+            firePolicyAmount: ins.firePolicyAmount ? String(ins.firePolicyAmount) : '',
+            burglaryPolicyAmount: ins.burglaryPolicyAmount ? String(ins.burglaryPolicyAmount) : '',
+          }));
+          if (entryFireRemain != null || entryBurgRemain != null) {
+            setInitialRemainingFire((entryFireRemain ?? '').toString());
+            setInitialRemainingBurglary((entryBurgRemain ?? '').toString());
+            setIsFireRemainingSource(true);
+            setIsBurglaryRemainingSource(true);
+          } else {
+            const initialFire = ins.firePolicyAmount || '';
+            const initialBurglary = ins.burglaryPolicyAmount || '';
+            setInitialRemainingFire(initialFire);
+            setInitialRemainingBurglary(initialBurglary);
+            setIsFireRemainingSource(false);
+            setIsBurglaryRemainingSource(false);
+          }
           
-          console.log('No Firestore data - Initial Fire:', initialFire, 'Type:', typeof initialFire);
-          console.log('No Firestore data - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
-          
-          setInitialRemainingFire(initialFire);
-          setInitialRemainingBurglary(initialBurglary);
+          console.log('No Firestore data - Remaining/Original selection applied');
         }
       }
     } catch (error) {
       console.error('Error finding insurance:', error);
       // Fallback to policy amounts on error
-      const initialFire = ins.firePolicyAmount || '';
-      const initialBurglary = ins.burglaryPolicyAmount || '';
-      
-      console.log('Error fallback - Initial Fire:', initialFire, 'Type:', typeof initialFire);
-      console.log('Error fallback - Initial Burglary:', initialBurglary, 'Type:', typeof initialBurglary);
-      
-      setInitialRemainingFire(initialFire);
-      setInitialRemainingBurglary(initialBurglary);
+      const entryFireRemain = ins.firePolicyRemainingAmount ?? ins.remainingFirePolicyAmount;
+      const entryBurgRemain = ins.burglaryPolicyRemainingAmount ?? ins.remainingBurglaryPolicyAmount;
+      // Ensure base form has original amounts from selected entry on error
+      setBaseForm(f => ({
+        ...f,
+        firePolicyAmount: ins.firePolicyAmount ? String(ins.firePolicyAmount) : '',
+        burglaryPolicyAmount: ins.burglaryPolicyAmount ? String(ins.burglaryPolicyAmount) : '',
+      }));
+      if (entryFireRemain != null || entryBurgRemain != null) {
+        setInitialRemainingFire((entryFireRemain ?? '').toString());
+        setInitialRemainingBurglary((entryBurgRemain ?? '').toString());
+        setIsFireRemainingSource(true);
+        setIsBurglaryRemainingSource(true);
+      } else {
+        const initialFire = ins.firePolicyAmount || '';
+        const initialBurglary = ins.burglaryPolicyAmount || '';
+        
+        console.log('Error fallback - Using original amounts');
+        
+        setInitialRemainingFire(initialFire);
+        setInitialRemainingBurglary(initialBurglary);
+        setIsFireRemainingSource(false);
+        setIsBurglaryRemainingSource(false);
+      }
     }
     console.log('=== END INSURANCE SELECTION DEBUG ===');
   };
@@ -5684,13 +5824,13 @@ export default function InwardPage() {
       const initialFire = parseFloat(initialRemainingFire) || 0;
       const initialBurglary = parseFloat(initialRemainingBurglary) || 0;
       
-      const remainingFire = initialFire - totalValue;
-      const remainingBurglary = initialBurglary - totalValue;
+      const remainingFire = isFireRemainingSource ? (initialFire - totalValue) : initialFire;
+      const remainingBurglary = isBurglaryRemainingSource ? (initialBurglary - totalValue) : initialBurglary;
       
       setRemainingFirePolicy(remainingFire >= 0 ? remainingFire.toFixed(2) : '0.00');
       setRemainingBurglaryPolicy(remainingBurglary >= 0 ? remainingBurglary.toFixed(2) : '0.00');
     }
-  }, [selectedInsuranceInfoIndex, initialRemainingFire, initialRemainingBurglary, baseForm.totalValue]);
+  }, [selectedInsuranceInfoIndex, initialRemainingFire, initialRemainingBurglary, baseForm.totalValue, isFireRemainingSource, isBurglaryRemainingSource]);
 
   // ... inside InwardPage component, after other useState hooks ...
   const [isPrinting, setIsPrinting] = useState(false);
@@ -6075,6 +6215,116 @@ export default function InwardPage() {
     }
   };
 
+  // Helper: adjust insurance remaining/used amounts when CIR status changes
+  // delta > 0 means add back (e.g., Reject/Resubmit). delta < 0 would deduct.
+  const adjustInsuranceForCIR = async (delta: number) => {
+    try {
+      if (!cirModalData) return;
+      const amount = parseFloat(cirModalData.totalValue) || 0;
+      if (amount <= 0) return;
+
+      // Use selected insurance entry shown in the CIR modal when available
+      const selectedIns = Array.isArray(cirModalData.insuranceEntries) && cirModalData.insuranceEntries.length > 0
+        ? cirModalData.insuranceEntries[0]
+        : null;
+
+      // 1) Update Insurance Master collection
+      try {
+        const insuranceMasterCollection = collection(db, 'insurance');
+        // Prefer matching by warehouse + policy numbers when available
+        const masterQuery = query(
+          insuranceMasterCollection,
+          where('warehouseName', '==', cirModalData.warehouseName)
+        );
+        const masterSnap = await getDocs(masterQuery);
+        if (!masterSnap.empty) {
+          // Filter to matching doc using policy numbers if we have them; otherwise fallback to commodity/variety
+          const matchedDoc = masterSnap.docs.find(doc => {
+            const data: any = doc.data();
+            if (selectedIns?.firePolicyNumber && selectedIns?.burglaryPolicyNumber) {
+              return (
+                (data.firePolicyNumber === selectedIns.firePolicyNumber) &&
+                (data.burglaryPolicyNumber === selectedIns.burglaryPolicyNumber)
+              );
+            }
+            // Fallback by commodity/variety
+            return (
+              (data.commodityName?.toLowerCase().trim() === (cirModalData.commodity || '').toLowerCase().trim()) &&
+              (data.varietyName?.toLowerCase().trim() === (cirModalData.varietyName || '').toLowerCase().trim())
+            );
+          });
+
+          if (matchedDoc) {
+            const data: any = matchedDoc.data();
+            const totalFire = parseFloat(data.firePolicyAmount || '0');
+            const totalBurg = parseFloat(data.burglaryPolicyAmount || '0');
+            const usedFire = parseFloat(data.firePolicyUsedAmount || '0');
+            const usedBurg = parseFloat(data.burglaryPolicyUsedAmount || '0');
+            const remainFire = parseFloat(data.firePolicyRemainingAmount || '0');
+            const remainBurg = parseFloat(data.burglaryPolicyRemainingAmount || '0');
+
+            // Add back on Reject/Resubmit (delta > 0)
+            const newUsedFire = Math.max(0, usedFire - amount);
+            const newUsedBurg = Math.max(0, usedBurg - amount);
+            const newRemainFire = Math.min(totalFire, remainFire + amount);
+            const newRemainBurg = Math.min(totalBurg, remainBurg + amount);
+
+            await updateDoc(doc(db, 'insurance', matchedDoc.id), {
+              firePolicyUsedAmount: newUsedFire.toFixed(2),
+              firePolicyRemainingAmount: newRemainFire.toFixed(2),
+              burglaryPolicyUsedAmount: newUsedBurg.toFixed(2),
+              burglaryPolicyRemainingAmount: newRemainBurg.toFixed(2),
+              lastUpdated: new Date().toISOString()
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('CIR insurance master adjust warning:', e);
+      }
+
+      // 2) Update inspections collection remaining fields
+      try {
+        const inspectionsCollection = collection(db, 'inspections');
+        const q = query(inspectionsCollection, where('warehouseName', '==', cirModalData.warehouseName));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const docRef = doc(db, 'inspections', snap.docs[0].id);
+          const inspectionData: any = snap.docs[0].data();
+          let insuranceList = inspectionData.insuranceEntries || [];
+          if (!Array.isArray(insuranceList) && inspectionData.warehouseInspectionData?.insuranceEntries) {
+            insuranceList = inspectionData.warehouseInspectionData.insuranceEntries;
+          }
+
+          const updated = insuranceList.map((i: any) => {
+            const isMatch = selectedIns?.firePolicyNumber && selectedIns?.burglaryPolicyNumber
+              ? (i.firePolicyNumber === selectedIns.firePolicyNumber && i.burglaryPolicyNumber === selectedIns.burglaryPolicyNumber)
+              : false;
+            if (!isMatch) return i;
+
+            const origFire = parseFloat(i.firePolicyAmount || '0');
+            const origBurg = parseFloat(i.burglaryPolicyAmount || '0');
+            const curRemainFire = parseFloat(i.remainingFirePolicyAmount ?? i.firePolicyRemainingAmount ?? '0');
+            const curRemainBurg = parseFloat(i.remainingBurglaryPolicyAmount ?? i.burglaryPolicyRemainingAmount ?? '0');
+            const newRemainFire = Math.min(origFire, curRemainFire + amount);
+            const newRemainBurg = Math.min(origBurg, curRemainBurg + amount);
+
+            return {
+              ...i,
+              remainingFirePolicyAmount: newRemainFire.toFixed(2),
+              remainingBurglaryPolicyAmount: newRemainBurg.toFixed(2)
+            };
+          });
+
+          await updateDoc(docRef, { insuranceEntries: updated });
+        }
+      } catch (e) {
+        console.warn('CIR inspections adjust warning:', e);
+      }
+    } catch (err) {
+      console.error('CIR insurance adjust error:', err);
+    }
+  };
+
   const handleCIRReject = async () => {
     if (cirModalData) {
       try {
@@ -6086,6 +6336,9 @@ export default function InwardPage() {
           const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
           await updateDoc(docRef, { cirStatus: 'Rejected', remarks: cirRemarks });
           console.log('✅ CIR: Successfully rejected entry');
+
+          // Add back the total value to insurance remaining amounts
+          await adjustInsuranceForCIR(+1);
           
           // Refresh the data to show updated status
           await fetchData();
@@ -6109,6 +6362,9 @@ export default function InwardPage() {
           const docRef = doc(db, 'inward', querySnapshot.docs[0].id);
           await updateDoc(docRef, { cirStatus: 'Resubmitted', remarks: cirRemarks });
           console.log('✅ CIR: Successfully resubmitted entry');
+
+          // Add back the total value to insurance remaining amounts
+          await adjustInsuranceForCIR(+1);
           
           // Refresh the data to show updated status
           await fetchData();
@@ -7572,6 +7828,10 @@ export default function InwardPage() {
                                   <Input value={insurance.firePolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
                                 </div>
                                 <div>
+                                  <Label className="block font-semibold mb-1">Fire Policy Amount (Original)</Label>
+                                  <Input value={formatAmount(insurance.firePolicyAmount)} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
                                   <Label className="block font-semibold mb-1">Fire Policy Amount (Remaining)</Label>
                                   <Input value={`₹${parseFloat(insurance.remainingFirePolicyAmount || insurance.firePolicyAmount || '0').toLocaleString()}`} readOnly placeholder="Auto-filled from inspection" className="bg-green-50 font-semibold" />
                                 </div>
@@ -7606,6 +7866,10 @@ export default function InwardPage() {
                                 <div>
                                   <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
                                   <Input value={insurance.burglaryPolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
+                                </div>
+                                <div>
+                                  <Label className="block font-semibold mb-1">Burglary Policy Amount (Original)</Label>
+                                  <Input value={formatAmount(insurance.burglaryPolicyAmount)} readOnly placeholder="Auto-filled from inspection" />
                                 </div>
                                 <div>
                                   <Label className="block font-semibold mb-1">Burglary Policy Amount (Remaining)</Label>
