@@ -294,6 +294,9 @@ export default function InwardPage() {
   
   // Total Value validation state
   const [totalValueExceedsInsurance, setTotalValueExceedsInsurance] = useState(false);
+  
+  // Track if selected insurance is bank-funded (no amount validation needed)
+  const [isBankFundedInsurance, setIsBankFundedInsurance] = useState(false);
 
   // Filter and sort inward data
   const filteredData = useMemo(() => {
@@ -2642,12 +2645,11 @@ export default function InwardPage() {
     console.log('All entries validated successfully');
 
     // Save to Firebase
-    try {
-      console.log('Initializing Firebase collection...');
-      const inwardCollection = collection(db, 'inward');
-      console.log('Firebase collection initialized:', inwardCollection);
-      
-      if (isEditMode && editingRow) {
+    console.log('Initializing Firebase collection...');
+    const inwardCollection = collection(db, 'inward');
+    console.log('Firebase collection initialized:', inwardCollection);
+    
+    if (isEditMode && editingRow) {
         // Update existing document
         console.log('Starting update for editingRow:', editingRow.inwardId);
         const q = query(inwardCollection, where('inwardId', '==', editingRow.inwardId));
@@ -2945,25 +2947,32 @@ export default function InwardPage() {
     if (selectedInsuranceIndex !== null) {
       const ins = insuranceEntries[selectedInsuranceIndex];
       
-      // Safely parse amounts to avoid NaN
-      const safeParseAmount = (amount: any): string => {
-        if (amount === null || amount === undefined || amount === '') return '0.00';
-        if (typeof amount === 'string' && (amount === '-' || amount === 'N/A' || amount === 'null' || amount === 'undefined')) return '0.00';
-        const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
-        return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
-      };
+      // Check if this is bank-funded insurance - skip amount updates
+      const insuranceType = (ins.insuranceTakenBy || '').toLowerCase();
+      const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
       
-      // Get the current total value being processed
-      const currentTotalValue = parseFloat(baseForm.totalValue) || 0;
-      
-  // Get the original (prefer remaining) insurance amounts from the insurance entry
-  // If a remaining amount exists on the inspection entry, use that. Otherwise fall back to the full policy amount.
-  const originalFireAmount = safeParseAmount(ins.remainingFirePolicyAmount ?? ins.firePolicyAmount);
-  const originalBurglaryAmount = safeParseAmount(ins.remainingBurglaryPolicyAmount ?? ins.burglaryPolicyAmount);
-      
-      // Calculate new remaining amounts
-      const newRemainingFire = Math.max(0, parseFloat(originalFireAmount) - currentTotalValue).toFixed(2);
-      const newRemainingBurglary = Math.max(0, parseFloat(originalBurglaryAmount) - currentTotalValue).toFixed(2);
+      if (!isBankFunded) {
+        // Only update amounts for non-bank-funded insurance
+        
+        // Safely parse amounts to avoid NaN
+        const safeParseAmount = (amount: any): string => {
+          if (amount === null || amount === undefined || amount === '') return '0.00';
+          if (typeof amount === 'string' && (amount === '-' || amount === 'N/A' || amount === 'null' || amount === 'undefined')) return '0.00';
+          const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
+          return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
+        };
+        
+        // Get the current total value being processed
+        const currentTotalValue = parseFloat(baseForm.totalValue) || 0;
+        
+    // Get the original (prefer remaining) insurance amounts from the insurance entry
+    // If a remaining amount exists on the inspection entry, use that. Otherwise fall back to the full policy amount.
+    const originalFireAmount = safeParseAmount(ins.remainingFirePolicyAmount ?? ins.firePolicyAmount);
+    const originalBurglaryAmount = safeParseAmount(ins.remainingBurglaryPolicyAmount ?? ins.burglaryPolicyAmount);
+        
+        // Calculate new remaining amounts
+        const newRemainingFire = Math.max(0, parseFloat(originalFireAmount) - currentTotalValue).toFixed(2);
+        const newRemainingBurglary = Math.max(0, parseFloat(originalBurglaryAmount) - currentTotalValue).toFixed(2);
       
       console.log('=== FIRST INSURANCE UPDATE DEBUG ===');
       console.log('Original fire amount:', originalFireAmount);
@@ -3105,43 +3114,51 @@ export default function InwardPage() {
         console.error('❌ Error updating insurance master collection:', insuranceMasterError);
         // Don't throw - continue with the rest of the flow
       }
+      } // End of if (!isBankFunded) check
     }
 
     // Also update if insurance is selected in information section
     if (selectedInsuranceInfoIndex !== null && filteredInsuranceInfoEntries.length > 0 && selectedInsuranceInfoIndex < filteredInsuranceInfoEntries.length) {
       const ins = filteredInsuranceInfoEntries[selectedInsuranceInfoIndex];
       
-      // Debug logging to understand the insurance structure
-      console.log('=== INSURANCE UPDATE DEBUG ===');
-      console.log('Selected insurance entry:', ins);
-      console.log('Insurance properties:', {
-        sourceDocumentId: ins?.sourceDocumentId,
-        sourceCollection: ins?.sourceCollection,
-        insuranceId: ins?.insuranceId,
-        firePolicyNumber: ins?.firePolicyNumber,
-        burglaryPolicyNumber: ins?.burglaryPolicyNumber
-      });
-      console.log('=== END INSURANCE UPDATE DEBUG ===');
+      // Check if this is bank-funded insurance - skip amount updates
+      const insuranceType = (ins.insuranceTakenBy || '').toLowerCase();
+      const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
       
-      // Safely get the remaining amounts from state, with fallback to calculated values
-      const safeParseAmount = (amount: any): string => {
-        if (amount === null || amount === undefined || amount === '') return '0.00';
-        if (typeof amount === 'string' && (amount === '-' || amount === 'N/A' || amount === 'null' || amount === 'undefined')) return '0.00';
-        const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
-        return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
-      };
-      
-      // Get the current total value being processed
-      const currentTotalValue = parseFloat(baseForm.totalValue) || 0;
-      
-  // Get the original (prefer remaining) insurance amounts from the insurance entry
-  // If a remaining amount exists on the source insurance entry, use that. Otherwise fall back to the full policy amount.
-  const originalFireAmount = safeParseAmount(ins.remainingFirePolicyAmount ?? ins.firePolicyAmount);
-  const originalBurglaryAmount = safeParseAmount(ins.remainingBurglaryPolicyAmount ?? ins.burglaryPolicyAmount);
-      
-      // Calculate new remaining amounts
-      const newRemainingFire = Math.max(0, parseFloat(originalFireAmount) - currentTotalValue).toFixed(2);
-      const newRemainingBurglary = Math.max(0, parseFloat(originalBurglaryAmount) - currentTotalValue).toFixed(2);
+      if (!isBankFunded) {
+        // Only update amounts for non-bank-funded insurance
+        
+        // Debug logging to understand the insurance structure
+        console.log('=== INSURANCE UPDATE DEBUG ===');
+        console.log('Selected insurance entry:', ins);
+        console.log('Insurance properties:', {
+          sourceDocumentId: ins?.sourceDocumentId,
+          sourceCollection: ins?.sourceCollection,
+          insuranceId: ins?.insuranceId,
+          firePolicyNumber: ins?.firePolicyNumber,
+          burglaryPolicyNumber: ins?.burglaryPolicyNumber
+        });
+        console.log('=== END INSURANCE UPDATE DEBUG ===');
+        
+        // Safely get the remaining amounts from state, with fallback to calculated values
+        const safeParseAmount = (amount: any): string => {
+          if (amount === null || amount === undefined || amount === '') return '0.00';
+          if (typeof amount === 'string' && (amount === '-' || amount === 'N/A' || amount === 'null' || amount === 'undefined')) return '0.00';
+          const parsed = parseFloat(String(amount).replace(/[^\d.-]/g, ''));
+          return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
+        };
+        
+        // Get the current total value being processed
+        const currentTotalValue = parseFloat(baseForm.totalValue) || 0;
+        
+    // Get the original (prefer remaining) insurance amounts from the insurance entry
+    // If a remaining amount exists on the source insurance entry, use that. Otherwise fall back to the full policy amount.
+    const originalFireAmount = safeParseAmount(ins.remainingFirePolicyAmount ?? ins.firePolicyAmount);
+    const originalBurglaryAmount = safeParseAmount(ins.remainingBurglaryPolicyAmount ?? ins.burglaryPolicyAmount);
+        
+        // Calculate new remaining amounts
+        const newRemainingFire = Math.max(0, parseFloat(originalFireAmount) - currentTotalValue).toFixed(2);
+        const newRemainingBurglary = Math.max(0, parseFloat(originalBurglaryAmount) - currentTotalValue).toFixed(2);
       
       console.log('=== INSURANCE AMOUNT CALCULATION DEBUG ===');
       console.log('Original fire amount:', originalFireAmount);
@@ -3342,16 +3359,8 @@ export default function InwardPage() {
         console.error('❌ Error updating insurance master collection:', insuranceMasterError);
         // Don't fail the operation, just log the error
       }
-        }
-      } catch (insuranceError) {
-        console.error('Error updating insurance data:', insuranceError);
-        // Don't fail the entire operation if insurance update fails
-        toast({
-          title: "Warning",
-          description: "Inward entry saved successfully, but there was an issue updating insurance data.",
-          variant: "default",
-        });
-      }
+      } // End of if (!isBankFunded) check for selectedInsuranceInfoIndex
+    }
       
       // ✅ ALWAYS UPDATE INSURANCE MASTER COLLECTION (regardless of selection path)
       try {
@@ -3447,6 +3456,10 @@ export default function InwardPage() {
       
       // Refresh insurance data to show updated amounts
       await refreshInsuranceData();
+    } catch (saveError) {
+      // If save operations fail, rethrow to outer catch
+      throw saveError;
+    }
     } catch (error: any) {
       console.error('Error saving inward entries to Firebase:', error);
       console.error('Error details:', {
@@ -3471,14 +3484,6 @@ export default function InwardPage() {
       toast({
         title: "Error",
         description: errorMessage,
-        variant: "destructive",
-      });
-    }
-    } catch (error: any) {
-      console.error('Error in handleSubmit:', error);
-      toast({
-        title: "Error",
-        description: `An unexpected error occurred: ${error.message || 'Unknown error'}`,
         variant: "destructive",
       });
     }
@@ -3897,6 +3902,12 @@ export default function InwardPage() {
   useEffect(() => {
     const totalValue = parseFloat(baseForm.totalValue) || 0;
     
+    // Skip validation for bank-funded insurance (no fixed amount limit)
+    if (isBankFundedInsurance) {
+      setTotalValueExceedsInsurance(false);
+      return;
+    }
+    
     // Only validate if total value exists and insurance is selected
     if (totalValue > 0 && (initialRemainingFire || initialRemainingBurglary)) {
       const fireRemaining = parseFloat(initialRemainingFire) || 0;
@@ -3926,7 +3937,7 @@ export default function InwardPage() {
     } else {
       setTotalValueExceedsInsurance(false);
     }
-  }, [baseForm.totalValue, initialRemainingFire, initialRemainingBurglary]);
+  }, [baseForm.totalValue, initialRemainingFire, initialRemainingBurglary, isBankFundedInsurance]);
 
   const calculateAverageWeight = (netWeight: string, totalBags: string) => {
     const net = parseFloat(netWeight) || 0;
@@ -5125,6 +5136,7 @@ export default function InwardPage() {
               insuranceCommodity: data.commodityName,
               commodityName: data.commodityName,
               clientName: data.clientName,
+              clientAddress: data.clientAddress || '',
               firePolicyCompanyName: data.firePolicyCompanyName,
               firePolicyNumber: data.firePolicyNumber,
               firePolicyAmount: data.firePolicyAmount,
@@ -5425,6 +5437,12 @@ export default function InwardPage() {
   const handleInsuranceSelect = async (idx: number) => {
     setSelectedInsuranceIndex(idx);
     const ins = insuranceEntries[idx];
+    
+    // Check if this is bank-funded insurance
+    const insuranceType = (ins.insuranceTakenBy || '').toLowerCase();
+    const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
+    setIsBankFundedInsurance(isBankFunded);
+    
     setBaseForm(f => ({
       ...f,
       selectedInsurance: {
@@ -5444,6 +5462,16 @@ export default function InwardPage() {
       burglaryPolicyCompanyName: ins.burglaryPolicyCompanyName || '',
       bankFundedBy: ins.selectedBankName || '',
     }));
+    
+    // Skip amount tracking for bank-funded insurance (no fixed limit)
+    if (isBankFunded) {
+      setInitialRemainingFire('0');
+      setInitialRemainingBurglary('0');
+      setIsFireRemainingSource(false);
+      setIsBurglaryRemainingSource(false);
+      return;
+    }
+    
     // Fetch latest remaining values from Firestore
     const inspectionsCollection = collection(db, 'inspections');
     const q = query(inspectionsCollection, where('warehouseName', '==', form.warehouseName));
@@ -5859,7 +5887,20 @@ export default function InwardPage() {
             warehouseName: selectedRowForSR?.warehouseName || '',
             warehouseAddress: selectedRowForSR?.warehouseAddress || '',
             client: selectedRowForSR?.client || '',
-            clientAddress: selectedRowForSR?.clientAddress || '',
+            clientAddress: (() => {
+              // Get clientAddress from matched insurance entry
+              const sel = selectedRowForSR?.selectedInsurance;
+              let matched: any = null;
+              try {
+                if (sel && inspectionInsuranceData && inspectionInsuranceData.length) {
+                  matched = inspectionInsuranceData.find((i: any) => i.insuranceId === sel.insuranceId && i.insuranceTakenBy === sel.insuranceTakenBy) || null;
+                }
+              } catch (e) {
+                matched = null;
+              }
+              matched = matched || inspectionInsuranceData[0] || null;
+              return matched?.clientAddress || selectedRowForSR?.clientAddress || '';
+            })(),
             commodity: selectedRowForSR?.commodity || '',
             totalBags: selectedRowForSR?.totalBags || '',
             netWeight: selectedRowForSR?.totalQuantity || '',
@@ -6041,7 +6082,8 @@ export default function InwardPage() {
             firePolicyStartDate: data.firePolicyStartDate,
             burglaryPolicyStartDate: data.burglaryPolicyStartDate,
             commodityName: data.commodityName,
-            clientName: data.clientName
+            clientName: data.clientName,
+            clientAddress: data.clientAddress || ''
           };
         });
       } else {
@@ -6151,6 +6193,7 @@ export default function InwardPage() {
       inwardEntries,
       labParameterNames,
       insuranceEntries: selectedInsuranceEntries, // Only show the selected insurance
+      clientAddress: yourInsurance?.clientAddress || row.clientAddress || '', // Get from insurance or row
     };
     
     console.log('=== CIR Modal Data Debug ===');
@@ -9325,18 +9368,6 @@ export default function InwardPage() {
                       {canGenerateStorageReceipt() || canGenerateWarehouseReceipt() ? (
                         <>
                           <Button
-                            onClick={() => handleRejectSR(selectedRowForSR)}
-                            className="bg-red-600 hover:bg-red-700 text-white"
-                          >
-                            Reject
-                          </Button>
-                          <Button
-                            onClick={() => handleResubmitSR(selectedRowForSR)}
-                            className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                          >
-                            Resubmit
-                          </Button>
-                          <Button
                             onClick={() => handleApproveSR(selectedRowForSR)}
                             disabled={isInsuranceExpired(selectedRowForSR)}
                             className="bg-green-600 hover:bg-green-700 text-white"
@@ -9374,6 +9405,7 @@ export default function InwardPage() {
                       hologramNumber={hologramNumber}
                       srGenerationDate={srGenerationDate}
                       getSelectedVarietyParticulars={getSelectedVarietyParticulars}
+                      inspectionInsuranceData={inspectionInsuranceData}
                     />
                   </div>
                   {/* Keep original components for backward compatibility */}
@@ -9390,7 +9422,20 @@ export default function InwardPage() {
                         warehouseName: selectedRowForSR?.warehouseName || '',
                         warehouseAddress: selectedRowForSR?.warehouseAddress || '',
                         client: selectedRowForSR?.client || '',
-                        clientAddress: selectedRowForSR?.clientAddress || '',
+                        clientAddress: (() => {
+                          // Get clientAddress from matched insurance entry
+                          const sel = selectedRowForSR?.selectedInsurance;
+                          let matched: any = null;
+                          try {
+                            if (sel && inspectionInsuranceData && inspectionInsuranceData.length) {
+                              matched = inspectionInsuranceData.find((i: any) => i.insuranceId === sel.insuranceId && i.insuranceTakenBy === sel.insuranceTakenBy) || null;
+                            }
+                          } catch (e) {
+                            matched = null;
+                          }
+                          matched = matched || inspectionInsuranceData[0] || null;
+                          return matched?.clientAddress || selectedRowForSR?.clientAddress || '';
+                        })(),
                         commodity: selectedRowForSR?.commodity || '',
                         totalBags: selectedRowForSR?.totalBags || '',
                         netWeight: selectedRowForSR?.totalQuantity || '',

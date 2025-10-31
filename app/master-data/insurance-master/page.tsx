@@ -1093,12 +1093,36 @@ export default function InsuranceMasterPage() {
           firePolicyStartDate: new Date().toISOString().split('T')[0],
           firePolicyEndDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
           firePolicyUsedAmount: '0',
+          firePolicyRemainingAmount: '0',
           burglaryPolicyCompanyName: 'N/A - Bank Funded',
           burglaryPolicyNumber: 'N/A - Bank Funded',
           burglaryPolicyAmount: '0',
           burglaryPolicyStartDate: new Date().toISOString().split('T')[0],
           burglaryPolicyEndDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
           burglaryPolicyUsedAmount: '0',
+          burglaryPolicyRemainingAmount: '0',
+        };
+      } else {
+        // For non-bank-funded insurance, calculate remaining amounts
+        // Get the used amounts from the existing insurance record
+        const existingFireUsed = parseFloat(selectedInsuranceForAction.firePolicyUsedAmount || '0');
+        const existingBurglaryUsed = parseFloat(selectedInsuranceForAction.burglaryPolicyUsedAmount || '0');
+        
+        // Get the new policy amounts
+        const newFireAmount = parseFloat(replaceDataToSave.firePolicyAmount || '0');
+        const newBurglaryAmount = parseFloat(replaceDataToSave.burglaryPolicyAmount || '0');
+        
+        // Calculate remaining amounts: New Amount - Used Amount
+        const fireRemaining = Math.max(0, newFireAmount - existingFireUsed).toFixed(2);
+        const burglaryRemaining = Math.max(0, newBurglaryAmount - existingBurglaryUsed).toFixed(2);
+        
+        // Add the calculated remaining amounts to the data
+        replaceDataToSave = {
+          ...replaceDataToSave,
+          firePolicyRemainingAmount: fireRemaining,
+          burglaryPolicyRemainingAmount: burglaryRemaining,
+          firePolicyUsedAmount: existingFireUsed.toFixed(2),
+          burglaryPolicyUsedAmount: existingBurglaryUsed.toFixed(2),
         };
       }
 

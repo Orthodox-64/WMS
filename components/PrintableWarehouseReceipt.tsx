@@ -7,15 +7,32 @@ interface PrintableWarehouseReceiptProps {
   hologramNumber: string;
   srGenerationDate: string;
   getSelectedVarietyParticulars: () => any[];
+  inspectionInsuranceData?: any[];
 }
 
 const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
   selectedRowForSR,
   hologramNumber,
   srGenerationDate,
-  getSelectedVarietyParticulars
+  getSelectedVarietyParticulars,
+  inspectionInsuranceData = []
 }) => {
   const particulars = getSelectedVarietyParticulars();
+  
+  // Get clientAddress from matched insurance entry
+  const getClientAddress = () => {
+    const sel = selectedRowForSR?.selectedInsurance;
+    let matched: any = null;
+    try {
+      if (sel && inspectionInsuranceData && inspectionInsuranceData.length) {
+        matched = inspectionInsuranceData.find((i: any) => i.insuranceId === sel.insuranceId && i.insuranceTakenBy === sel.insuranceTakenBy) || null;
+      }
+    } catch (e) {
+      matched = null;
+    }
+    matched = matched || inspectionInsuranceData[0] || null;
+    return matched?.clientAddress || selectedRowForSR?.clientAddress || '';
+  };
 
   return (
     <div style={{ 
@@ -263,7 +280,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Client Address</Label>
               <Input 
-                value={selectedRowForSR?.clientAddress || ''} 
+                value={getClientAddress()} 
                 readOnly
                 style={{ 
                   backgroundColor: '#f9f9f9',
@@ -604,7 +621,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Client Address</Label>
               <Input 
-                value={selectedRowForSR?.clientAddress || ''} 
+                value={getClientAddress()} 
                 readOnly
                 style={{ 
                   backgroundColor: '#f9f9f9',
@@ -862,7 +879,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Client Address</Label>
               <Input 
-                value={selectedRowForSR?.clientAddress || ''} 
+                value={getClientAddress()} 
                 readOnly
                 style={{ 
                   backgroundColor: '#f9f9f9',
