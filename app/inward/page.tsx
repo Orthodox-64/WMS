@@ -3899,13 +3899,10 @@ export default function InwardPage() {
     
     // Only validate if total value exists and insurance is selected
     if (totalValue > 0 && (initialRemainingFire || initialRemainingBurglary)) {
-      const fireRemainingBase = parseFloat(initialRemainingFire) || 0;
-      const burglaryRemainingBase = parseFloat(initialRemainingBurglary) || 0;
-      // For validation, only subtract from remaining when we truly have remaining sources.
-      const fireRemaining = isFireRemainingSource ? (fireRemainingBase - totalValue) : fireRemainingBase;
-      const burglaryRemaining = isBurglaryRemainingSource ? (burglaryRemainingBase - totalValue) : burglaryRemainingBase;
-      
-      // Check if total value exceeds either policy's remaining amount
+      const fireRemaining = parseFloat(initialRemainingFire) || 0;
+      const burglaryRemaining = parseFloat(initialRemainingBurglary) || 0;
+
+      // Validate: Total Value must be <= remaining Fire AND <= remaining Burglary
       if (totalValue > fireRemaining || totalValue > burglaryRemaining) {
         setTotalValueExceedsInsurance(true);
         
@@ -3929,7 +3926,7 @@ export default function InwardPage() {
     } else {
       setTotalValueExceedsInsurance(false);
     }
-  }, [baseForm.totalValue, initialRemainingFire, initialRemainingBurglary, isFireRemainingSource, isBurglaryRemainingSource]);
+  }, [baseForm.totalValue, initialRemainingFire, initialRemainingBurglary]);
 
   const calculateAverageWeight = (netWeight: string, totalBags: string) => {
     const net = parseFloat(netWeight) || 0;
