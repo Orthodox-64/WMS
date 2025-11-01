@@ -535,8 +535,20 @@ export default function WarehouseInspectionForm({
   const [selectedAgrogreenInsurances, setSelectedAgrogreenInsurances] = useState<any[]>([]);
   const [selectedWarehouseInsurances, setSelectedWarehouseInsurances] = useState<any[]>([]);
   const [additionalInsuranceClientData, setAdditionalInsuranceClientData] = useState<{[key: string]: any[]}>({});
+  const [additionalInsuranceAgrogreenData, setAdditionalInsuranceAgrogreenData] = useState<{[key: string]: any[]}>({});
+  const [additionalInsuranceWarehouseData, setAdditionalInsuranceWarehouseData] = useState<{[key: string]: any[]}>({});
+  const [additionalInsuranceBankData, setAdditionalInsuranceBankData] = useState<{[key: string]: any[]}>({});
   const [commodityInsuranceData, setCommodityInsuranceData] = useState<any[]>([]);
   const [allAvailableInsurances, setAllAvailableInsurances] = useState<any[]>([]); // New state for all insurances
+  const [showInsuranceSummary, setShowInsuranceSummary] = useState(false);
+  const [warehouseInsuranceSummary, setWarehouseInsuranceSummary] = useState<{
+    client: any[];
+    agrogreen: any[];
+    warehouseOwner: any[];
+    bank: any[];
+  }>({ client: [], agrogreen: [], warehouseOwner: [], bank: [] });
+  const [selectedCommodityFilter, setSelectedCommodityFilter] = useState<string>('');
+  const [selectedInsurancesForForm, setSelectedInsurancesForForm] = useState<string[]>([]); // Track selected insurance IDs
 
   // Insurance popup state
   // Removed insurance popup states - using direct validation instead
@@ -1025,6 +1037,21 @@ export default function WarehouseInspectionForm({
       }
     }
   }, [initialData, initialData?.inspectionCode, mode, fetchAssociatedBanks]); // include initialData to satisfy exhaustive-deps
+
+  // Sync selectedInsurancesForForm with existing insuranceEntries on load
+  useEffect(() => {
+    if (formData.insuranceEntries && formData.insuranceEntries.length > 0) {
+      const existingInsuranceIds = formData.insuranceEntries
+        .map((entry: InsuranceEntry) => entry.insuranceId)
+        .filter((id: string | undefined) => id); // Filter out undefined
+      
+      // Only update if we have IDs and they're different from current selection
+      if (existingInsuranceIds.length > 0) {
+        setSelectedInsurancesForForm(existingInsuranceIds);
+        console.log('📋 Synced selected insurances from existing entries:', existingInsuranceIds);
+      }
+    }
+  }, [formData.insuranceEntries?.length]); // Only react to length changes to avoid infinite loops
 
   // Refresh insurance amounts after form initialization
   useEffect(() => {
@@ -1704,6 +1731,162 @@ export default function WarehouseInspectionForm({
         return chamber;
       })
     }));
+  };
+
+  // Function to fetch all available insurances for this warehouse
+  const fetchWarehouseInsurances = async (commodityFilter: string = '') => {
+    if (!formData.warehouseCode) {
+      toast({
+        title: "Warehouse Code Required",
+        description: "Please select a warehouse first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      console.log('Fetching all insurances for warehouse:', formData.warehouseCode);
+      
+      // Fetch Client Insurances
+      const clientQuery = query(
+        collection(db, 'insurances'),
+        where('insuranceTakenBy', '==', 'client'),
+        where('warehouseCode', '==', formData.warehouseCode)
+      );
+      const clientSnapshot = await getDocs(clientQuery);
+      let clientInsurances = clientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Fetch Agrogreen Insurances
+      const agrogreenSnapshot = await getDocs(collection(db, 'agrogreen'));
+      let agrogreenInsurances = agrogreenSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((ins: any) => ins.warehouseCode === formData.warehouseCode);
+      
+      // Fetch Warehouse Owner Insurances
+      const warehouseQuery = query(
+        collection(db, 'insurances'),
+        where('insuranceTakenBy', '==', 'warehouse owner'),
+        where('warehouseCode', '==', formData.warehouseCode)
+      );
+      const warehouseSnapshot = await getDocs(warehouseQuery);
+      let warehouseOwnerInsurances = warehouseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Fetch Bank Insurances
+      const bankQuery = query(
+        collection(db, 'insurances'),
+        where('insuranceTakenBy', '==', 'bank'),
+        where('warehouseCode', '==', formData.warehouseCode)
+      );
+      const bankSnapshot = await getDocs(bankQuery);
+      let bankInsurances = bankSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Apply commodity filter if provided
+      if (commodityFilter) {
+        const filterFn = (ins: any) => {
+          const insCommodity = (ins.insuranceCommodity || ins.commodity || '').toLowerCase();
+          return insCommodity === commodityFilter.toLowerCase();
+        };
+        clientInsurances = clientInsurances.filter(filterFn);
+        agrogreenInsurances = agrogreenInsurances.filter(filterFn);
+        warehouseOwnerInsurances = warehouseOwnerInsurances.filter(filterFn);
+        bankInsurances = bankInsurances.filter(filterFn);
+      }
+      
+      setWarehouseInsuranceSummary({
+        client: clientInsurances,
+        agrogreen: agrogreenInsurances,
+        warehouseOwner: warehouseOwnerInsurances,
+        bank: bankInsurances
+      });
+      
+      setShowInsuranceSummary(true);
+      
+      const totalCount = clientInsurances.length + agrogreenInsurances.length + 
+                        warehouseOwnerInsurances.length + bankInsurances.length;
+      
+      console.log('Found insurances:', {
+        client: clientInsurances.length,
+        agrogreen: agrogreenInsurances.length,
+        warehouseOwner: warehouseOwnerInsurances.length,
+        bank: bankInsurances.length,
+        total: totalCount
+      });
+      
+    } catch (error) {
+      console.error('Error fetching warehouse insurances:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch insurance data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle insurance selection from available insurances
+  const handleInsuranceSelection = (insurance: any, isSelected: boolean) => {
+    const insuranceId = insurance.id;
+    
+    if (isSelected) {
+      // Add to selected list
+      setSelectedInsurancesForForm(prev => [...prev, insuranceId]);
+      
+      // Create a new insurance entry with pre-filled data
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substr(2, 9);
+      const newInsuranceId = `insurance_${timestamp}_${randomSuffix}`;
+      
+      const newInsuranceEntry: InsuranceEntry = {
+        id: newInsuranceId,
+        insuranceId: insurance.id, // Link to the source insurance
+        insuranceTakenBy: insurance.insuranceTakenBy || insurance.insuranceType || '',
+        insuranceCommodity: insurance.insuranceCommodity || insurance.commodity || insurance.commodityName || '',
+        clientName: insurance.clientName || '',
+        clientAddress: insurance.clientAddress || '',
+        selectedBankName: insurance.selectedBankName || insurance.bankFundedBy || '',
+        firePolicyCompanyName: insurance.firePolicyCompanyName || '',
+        firePolicyNumber: insurance.firePolicyNumber || '',
+        firePolicyAmount: insurance.firePolicyAmount || '',
+        firePolicyStartDate: safeCreateDate(insurance.firePolicyStartDate),
+        firePolicyEndDate: safeCreateDate(insurance.firePolicyEndDate),
+        burglaryPolicyCompanyName: insurance.burglaryPolicyCompanyName || '',
+        burglaryPolicyNumber: insurance.burglaryPolicyNumber || '',
+        burglaryPolicyAmount: insurance.burglaryPolicyAmount || '',
+        burglaryPolicyStartDate: safeCreateDate(insurance.burglaryPolicyStartDate),
+        burglaryPolicyEndDate: safeCreateDate(insurance.burglaryPolicyEndDate),
+        remainingFirePolicyAmount: insurance.remainingFirePolicyAmount || '',
+        remainingBurglaryPolicyAmount: insurance.remainingBurglaryPolicyAmount || '',
+        sourceDocumentId: insurance.sourceDocumentId || insurance.id,
+        sourceCollection: insurance.sourceCollection || 'insurances',
+        createdAt: new Date().toISOString(),
+      };
+      
+      setFormData(prev => ({
+        ...prev,
+        insuranceEntries: [...prev.insuranceEntries, newInsuranceEntry]
+      }));
+      
+      toast({
+        title: "Insurance Added",
+        description: `Insurance ${insurance.insuranceCode || insuranceId} has been added to the form`,
+        variant: "default",
+      });
+      
+    } else {
+      // Remove from selected list
+      setSelectedInsurancesForForm(prev => prev.filter(id => id !== insuranceId));
+      
+      // Remove the corresponding insurance entry
+      setFormData(prev => ({
+        ...prev,
+        insuranceEntries: prev.insuranceEntries.filter((entry: InsuranceEntry) => entry.insuranceId !== insuranceId)
+      }));
+      
+      toast({
+        title: "Insurance Removed",
+        description: `Insurance has been removed from the form`,
+        variant: "default",
+      });
+    }
   };
 
   // Insurance management functions
@@ -3872,14 +4055,25 @@ export default function WarehouseInspectionForm({
           {!collapsedSections.insuranceDetails && (
             <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
             
-            {/* Available Insurance Summary Box */}
-            <div className="mb-6 p-4 border-2 border-blue-300 rounded-lg bg-blue-50">
-              <h3 className="text-lg font-semibold text-blue-800 mb-3 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Available Insurance Summary
-              </h3>
+            {/* Available Insurance Summary Box - SELECT INSURANCES HERE */}
+            <div className="mb-6 p-4 border-2 border-green-400 rounded-lg bg-green-50 shadow-lg">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-xl font-bold text-green-800 flex items-center gap-2">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Select Insurance Policies
+                  <span className="text-sm font-normal text-green-600">(Check boxes to select)</span>
+                </h3>
+                <Button
+                  type="button"
+                  onClick={() => fetchWarehouseInsurances()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  size="sm"
+                >
+                  View All Insurances
+                </Button>
+              </div>
               <div className="text-sm space-y-2">
                 <div className="grid grid-cols-2 gap-2 mb-3 p-2 bg-white rounded border border-blue-200">
                   <div><span className="font-medium text-blue-700">Warehouse Code:</span> <span className="text-orange-600">{formData.warehouseCode || 'N/A'}</span></div>
@@ -4002,28 +4196,50 @@ export default function WarehouseInspectionForm({
                               </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                              {dataToShow.slice(0, 2).map((ins: any, insIdx: number) => (
-                                <div key={insIdx} className="bg-white p-2 rounded border border-gray-200">
-                                  <div className="font-semibold text-blue-600 mb-1">📄 {ins.insuranceCode || 'N/A'}</div>
-                                  <div><strong>Commodity:</strong> {ins.commodityName || ins.commodity || ins.commodities || 'N/A'}</div>
-                                  {ins.bankFundedBy && (
-                                    <div className="text-indigo-600"><strong>Bank:</strong> {ins.bankFundedBy}</div>
-                                  )}
-                                  <div className="mt-1 pt-1 border-t border-gray-200">
-                                    <div><strong>Fire Policy:</strong> {ins.firePolicyNumber || 'N/A'}</div>
-                                    <div><strong>Fire Amount:</strong> Rs. {ins.firePolicyAmount || ins.firePolicyRemainingAmount || '0'}</div>
+                              {dataToShow.map((ins: any, insIdx: number) => {
+                                const isSelected = selectedInsurancesForForm.includes(ins.id);
+                                return (
+                                  <div 
+                                    key={insIdx} 
+                                    className={`bg-white p-2 rounded border-2 transition-all ${
+                                      isSelected 
+                                        ? 'border-green-500 bg-green-50 shadow-md' 
+                                        : 'border-gray-200 hover:border-blue-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-2 mb-1">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={(checked) => handleInsuranceSelection(ins, checked as boolean)}
+                                        className="mt-1"
+                                      />
+                                      <div 
+                                        className="flex-1 cursor-pointer"
+                                        onClick={() => handleInsuranceSelection(ins, !isSelected)}
+                                      >
+                                        <div className="font-semibold text-blue-600 flex items-center justify-between">
+                                          <span>📄 {ins.insuranceCode || 'N/A'}</span>
+                                          {isSelected && (
+                                            <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded">✓ Selected</span>
+                                          )}
+                                        </div>
+                                        <div><strong>Commodity:</strong> {ins.commodityName || ins.commodity || ins.commodities || 'N/A'}</div>
+                                        {ins.bankFundedBy && (
+                                          <div className="text-indigo-600"><strong>Bank:</strong> {ins.bankFundedBy}</div>
+                                        )}
+                                        <div className="mt-1 pt-1 border-t border-gray-200">
+                                          <div><strong>Fire Policy:</strong> {ins.firePolicyNumber || 'N/A'}</div>
+                                          <div><strong>Fire Amount:</strong> Rs. {ins.firePolicyAmount || ins.firePolicyRemainingAmount || '0'}</div>
+                                        </div>
+                                        <div className="mt-1 pt-1 border-t border-gray-200">
+                                          <div><strong>Burglary Policy:</strong> {ins.burglaryPolicyNumber || 'N/A'}</div>
+                                          <div><strong>Burglary Amount:</strong> Rs. {ins.burglaryPolicyAmount || ins.burglaryPolicyRemainingAmount || '0'}</div>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="mt-1 pt-1 border-t border-gray-200">
-                                    <div><strong>Burglary Policy:</strong> {ins.burglaryPolicyNumber || 'N/A'}</div>
-                                    <div><strong>Burglary Amount:</strong> Rs. {ins.burglaryPolicyAmount || ins.burglaryPolicyRemainingAmount || '0'}</div>
-                                  </div>
-                                </div>
-                              ))}
-                              {dataToShow.length > 2 && (
-                                <div className="col-span-2 text-center text-xs text-gray-600 italic bg-white py-2 rounded">
-                                  +{dataToShow.length - 2} more {insurance.type.toLowerCase()} insurance(s) available
-                                </div>
-                              )}
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -4034,6 +4250,8 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
             
+            {/* OLD INSURANCE INPUT METHOD - HIDDEN, REPLACED BY CHECKBOX SELECTION ABOVE */}
+            {false && (<>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="insuranceTakenBy">Insurance Taken By</Label>
@@ -5120,7 +5338,11 @@ export default function WarehouseInspectionForm({
                   </div>
                 </div>
 
-                {/* Additional Insurance Sections */}
+                {/* End of OLD INSURANCE INPUT METHOD - HIDDEN */}
+              </>
+                )}
+
+                {/* Additional Insurance Sections - NOW SHOWS SELECTED INSURANCES */}
                 {additionalInsuranceSections.map((section) => (
                   <div key={section.id}>
                     {/* Fire Policy Details - Additional Section */}
@@ -5248,8 +5470,8 @@ export default function WarehouseInspectionForm({
               </>
             )}
 
-            {/* Add Another Insurance Button - Only show for activated warehouses and authorized roles */}
-            {formData.status === 'activated' && canAccessInsuranceFunction(formData.status || '') && (
+            {/* Add Another Insurance Button - HIDDEN - Now using checkbox selection method */}
+            {false && formData.status === 'activated' && canAccessInsuranceFunction(formData.status || '') && (
               <div className="border-t pt-4 mt-4">
                 <Button
                   type="button"
@@ -5262,11 +5484,31 @@ export default function WarehouseInspectionForm({
               </div>
             )}
 
-            {/* Insurance Sections - Show existing insurance for all statuses, allow editing only for activated */}
+            {/* Selected Insurances - Displaying sections for each checked insurance */}
+            {formData.insuranceEntries && formData.insuranceEntries.length === 0 && (
+              <div className="border-t pt-4 mt-4">
+                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                  <svg className="w-16 h-16 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="font-medium text-lg">No Insurances Selected</p>
+                  <p className="text-sm mt-2">Select insurances from the Available Insurance Summary above by checking the boxes</p>
+                  <p className="text-xs mt-1 text-blue-600">Each selected insurance will create a new section with pre-filled policy details</p>
+                </div>
+              </div>
+            )}
+            
             {formData.insuranceEntries && formData.insuranceEntries.length > 0 && formData.insuranceEntries.map((insurance: InsuranceEntry, index: number) => (
               <div key={insurance.id} className="border-t pt-4 mt-4">
                 <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-lg font-medium text-green-700">Additional Insurance #{index + 1}</h4>
+                  <h4 className="text-lg font-medium text-green-700">
+                    Selected Insurance #{index + 1}
+                    {insurance.insuranceTakenBy && (
+                      <span className="ml-2 text-sm font-normal text-blue-600">
+                        ({insurance.insuranceTakenBy})
+                      </span>
+                    )}
+                  </h4>
                   <div className="flex items-center space-x-2">
                     {(() => {
                       const status = getInsuranceAlertStatus(insurance);
@@ -5343,18 +5585,131 @@ export default function WarehouseInspectionForm({
                   </div>
                 </div>
                 
+                {/* Read-only Insurance Info Fields */}
+                <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Insurance Taken By</Label>
+                    <Input
+                      value={insurance.insuranceTakenBy || ''}
+                      readOnly
+                      className="bg-gray-100 text-gray-700 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Commodity</Label>
+                    <Input
+                      value={insurance.insuranceCommodity || ''}
+                      readOnly
+                      className="bg-gray-100 text-gray-700 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                {/* Client fields for Client insurance - Read-only */}
+                {insurance.insuranceTakenBy === 'client' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div className="space-y-2">
+                      <Label>Client Name</Label>
+                      <Input
+                        value={insurance.clientName || ''}
+                        readOnly
+                        className="bg-gray-100 text-gray-700 cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Client Address</Label>
+                      <Input
+                        value={insurance.clientAddress || ''}
+                        readOnly
+                        className="bg-gray-100 text-gray-700 cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Bank field for Bank insurance - Read-only */}
+                {insurance.insuranceTakenBy === 'bank' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div className="space-y-2">
+                      <Label>Bank Name</Label>
+                      <Input
+                        value={insurance.selectedBankName || ''}
+                        readOnly
+                        className="bg-gray-100 text-gray-700 cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+                )}
+                </>
+
+                {/* OLD EDITABLE FIELDS - HIDDEN SINCE WE USE CHECKBOX SELECTION */}
+                {false && (<>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Insurance Taken By</Label>
                     <Select 
                       value={insurance.insuranceTakenBy} 
-                      onValueChange={(value) => {
+                      onValueChange={async (value) => {
                         const updatedEntries = formData.insuranceEntries.map((entry: InsuranceEntry) =>
                           entry.id === insurance.id 
                             ? { ...entry, insuranceTakenBy: value, clientName: '', clientAddress: '', selectedBankName: '' }
                             : entry
                         );
                         setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+
+                        // Fetch data independently for this additional insurance entry
+                        if (value === 'client') {
+                          try {
+                            const clientInsuranceQuery = query(
+                              collection(db, 'insurances'),
+                              where('insuranceTakenBy', '==', 'client')
+                            );
+                            const snapshot = await getDocs(clientInsuranceQuery);
+                            const insurances = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setAdditionalInsuranceClientData(prev => ({ ...prev, [insurance.id]: insurances }));
+                          } catch (error) {
+                            console.error('Error fetching client insurances:', error);
+                          }
+                        } else if (value === 'agrogreen') {
+                          try {
+                            const agrogreenInsuranceQuery = query(
+                              collection(db, 'insurances'),
+                              where('insuranceTakenBy', '==', 'agrogreen')
+                            );
+                            const snapshot = await getDocs(agrogreenInsuranceQuery);
+                            const insurances = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setAdditionalInsuranceAgrogreenData(prev => ({ ...prev, [insurance.id]: insurances }));
+                          } catch (error) {
+                            console.error('Error fetching agrogreen insurances:', error);
+                          }
+                        } else if (value === 'warehouse owner') {
+                          try {
+                            const warehouseInsuranceQuery = query(
+                              collection(db, 'insurances'),
+                              where('insuranceTakenBy', '==', 'warehouse owner')
+                            );
+                            const snapshot = await getDocs(warehouseInsuranceQuery);
+                            const insurances = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setAdditionalInsuranceWarehouseData(prev => ({ ...prev, [insurance.id]: insurances }));
+                          } catch (error) {
+                            console.error('Error fetching warehouse owner insurances:', error);
+                          }
+                        } else if (value === 'bank') {
+                          try {
+                            const bankInsuranceQuery = query(
+                              collection(db, 'insurances'),
+                              where('insuranceTakenBy', '==', 'bank')
+                            );
+                            const snapshot = await getDocs(bankInsuranceQuery);
+                            const insurances = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setAdditionalInsuranceBankData(prev => ({ ...prev, [insurance.id]: insurances }));
+                          } catch (error) {
+                            console.error('Error fetching bank insurances:', error);
+                          }
+                        }
                       }}
                     >
                       <SelectTrigger className="text-orange-600">
@@ -5590,6 +5945,181 @@ export default function WarehouseInspectionForm({
                     </div>
                   )}
                 </div>
+                </>
+                )}
+                {/* END OF OLD EDITABLE FIELDS */}
+
+                {/* Agrogreen Insurance Selection for Additional Insurance */}
+                {insurance.insuranceTakenBy === 'agrogreen' && additionalInsuranceAgrogreenData[insurance.id] && additionalInsuranceAgrogreenData[insurance.id].length > 0 && (
+                  <div className="md:col-span-2 mt-4">
+                    <div className="space-y-2">
+                      <Label className="text-green-600 font-medium">Select Agrogreen Insurance Policy</Label>
+                      <div className="border border-green-200 rounded-lg p-4 bg-green-50">
+                        <div className="space-y-3">
+                          {additionalInsuranceAgrogreenData[insurance.id]
+                            .filter((ins: any) => !insurance.insuranceCommodity || 
+                              (ins.commodity && ins.commodity.toLowerCase() === insurance.insuranceCommodity.toLowerCase())
+                            )
+                            .map((agrogreenIns: any, agrogreenIndex: number) => {
+                              const alertStatus = getInsuranceAlertStatus(agrogreenIns);
+                              return (
+                                <div key={agrogreenIndex} className="flex items-start space-x-3 p-3 bg-white rounded border border-green-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      // Auto-fill this additional insurance entry with selected Agrogreen insurance
+                                      const updatedEntries = formData.insuranceEntries.map((entry: InsuranceEntry) =>
+                                        entry.id === insurance.id 
+                                          ? {
+                                              ...entry,
+                                              insuranceCommodity: agrogreenIns.commodity || entry.insuranceCommodity,
+                                              firePolicyCompanyName: agrogreenIns.firePolicyCompanyName || '',
+                                              firePolicyNumber: agrogreenIns.firePolicyNumber || '',
+                                              firePolicyAmount: agrogreenIns.firePolicyAmount || '',
+                                              firePolicyStartDate: safeCreateDate(agrogreenIns.firePolicyStartDate),
+                                              firePolicyEndDate: safeCreateDate(agrogreenIns.firePolicyEndDate),
+                                              burglaryPolicyCompanyName: agrogreenIns.burglaryPolicyCompanyName || '',
+                                              burglaryPolicyNumber: agrogreenIns.burglaryPolicyNumber || '',
+                                              burglaryPolicyAmount: agrogreenIns.burglaryPolicyAmount || '',
+                                              burglaryPolicyStartDate: safeCreateDate(agrogreenIns.burglaryPolicyStartDate),
+                                              burglaryPolicyEndDate: safeCreateDate(agrogreenIns.burglaryPolicyEndDate),
+                                              remainingFirePolicyAmount: agrogreenIns.remainingFirePolicyAmount || '',
+                                              remainingBurglaryPolicyAmount: agrogreenIns.remainingBurglaryPolicyAmount || '',
+                                              sourceDocumentId: agrogreenIns.sourceDocumentId,
+                                              sourceCollection: agrogreenIns.sourceCollection,
+                                              insuranceId: agrogreenIns.insuranceId
+                                            }
+                                          : entry
+                                      );
+                                      setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                      
+                                      toast({
+                                        title: "Insurance Selected",
+                                        description: "Agrogreen insurance policy has been applied to this entry",
+                                        variant: "default",
+                                      });
+                                    }}
+                                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
+                                  >
+                                    Select
+                                  </button>
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                      <div className="font-medium text-green-700">
+                                        {agrogreenIns.commodity || 'N/A'}
+                                      </div>
+                                      {alertStatus !== 'none' && (
+                                        <div className={`px-2 py-1 rounded text-xs font-medium ${
+                                          alertStatus === 'expired' 
+                                            ? 'bg-red-100 text-red-700' 
+                                            : 'bg-yellow-100 text-yellow-700'
+                                        }`}>
+                                          {alertStatus === 'expired' ? '⚠ EXPIRED' : '⚠ EXPIRING SOON'}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-sm text-gray-600 mt-1 space-y-1">
+                                      <div>Fire: {agrogreenIns.firePolicyNumber || 'N/A'} - ₹{agrogreenIns.firePolicyAmount || '0'}</div>
+                                      <div>Burglary: {agrogreenIns.burglaryPolicyNumber || 'N/A'} - ₹{agrogreenIns.burglaryPolicyAmount || '0'}</div>
+                                      <div className="text-green-600 font-medium">
+                                        Remaining: Fire ₹{agrogreenIns.remainingFirePolicyAmount || '0'} | Burglary ₹{agrogreenIns.remainingBurglaryPolicyAmount || '0'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Warehouse Owner Insurance Selection for Additional Insurance */}
+                {insurance.insuranceTakenBy === 'warehouse owner' && additionalInsuranceWarehouseData[insurance.id] && additionalInsuranceWarehouseData[insurance.id].length > 0 && (
+                  <div className="md:col-span-2 mt-4">
+                    <div className="space-y-2">
+                      <Label className="text-orange-600 font-medium">Select Warehouse Owner Insurance Policy</Label>
+                      <div className="border border-orange-200 rounded-lg p-4 bg-orange-50">
+                        <div className="space-y-3">
+                          {additionalInsuranceWarehouseData[insurance.id]
+                            .filter((ins: any) => !insurance.insuranceCommodity || 
+                              (ins.commodity && ins.commodity.toLowerCase() === insurance.insuranceCommodity.toLowerCase())
+                            )
+                            .map((warehouseIns: any, warehouseIndex: number) => {
+                              const alertStatus = getInsuranceAlertStatus(warehouseIns);
+                              return (
+                                <div key={warehouseIndex} className="flex items-start space-x-3 p-3 bg-white rounded border border-orange-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      // Auto-fill this additional insurance entry with selected Warehouse Owner insurance
+                                      const updatedEntries = formData.insuranceEntries.map((entry: InsuranceEntry) =>
+                                        entry.id === insurance.id 
+                                          ? {
+                                              ...entry,
+                                              insuranceCommodity: warehouseIns.commodity || entry.insuranceCommodity,
+                                              firePolicyCompanyName: warehouseIns.firePolicyCompanyName || '',
+                                              firePolicyNumber: warehouseIns.firePolicyNumber || '',
+                                              firePolicyAmount: warehouseIns.firePolicyAmount || '',
+                                              firePolicyStartDate: safeCreateDate(warehouseIns.firePolicyStartDate),
+                                              firePolicyEndDate: safeCreateDate(warehouseIns.firePolicyEndDate),
+                                              burglaryPolicyCompanyName: warehouseIns.burglaryPolicyCompanyName || '',
+                                              burglaryPolicyNumber: warehouseIns.burglaryPolicyNumber || '',
+                                              burglaryPolicyAmount: warehouseIns.burglaryPolicyAmount || '',
+                                              burglaryPolicyStartDate: safeCreateDate(warehouseIns.burglaryPolicyStartDate),
+                                              burglaryPolicyEndDate: safeCreateDate(warehouseIns.burglaryPolicyEndDate),
+                                              remainingFirePolicyAmount: warehouseIns.remainingFirePolicyAmount || '',
+                                              remainingBurglaryPolicyAmount: warehouseIns.remainingBurglaryPolicyAmount || '',
+                                              sourceDocumentId: warehouseIns.sourceDocumentId,
+                                              sourceCollection: warehouseIns.sourceCollection,
+                                              insuranceId: warehouseIns.insuranceId
+                                            }
+                                          : entry
+                                      );
+                                      setFormData(prev => ({ ...prev, insuranceEntries: updatedEntries }));
+                                      
+                                      toast({
+                                        title: "Insurance Selected",
+                                        description: "Warehouse owner insurance policy has been applied to this entry",
+                                        variant: "default",
+                                      });
+                                    }}
+                                    className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors text-sm"
+                                  >
+                                    Select
+                                  </button>
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                      <div className="font-medium text-orange-700">
+                                        {warehouseIns.commodity || 'N/A'}
+                                      </div>
+                                      {alertStatus !== 'none' && (
+                                        <div className={`px-2 py-1 rounded text-xs font-medium ${
+                                          alertStatus === 'expired' 
+                                            ? 'bg-red-100 text-red-700' 
+                                            : 'bg-yellow-100 text-yellow-700'
+                                        }`}>
+                                          {alertStatus === 'expired' ? '⚠ EXPIRED' : '⚠ EXPIRING SOON'}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-sm text-gray-600 mt-1 space-y-1">
+                                      <div>Fire: {warehouseIns.firePolicyNumber || 'N/A'} - ₹{warehouseIns.firePolicyAmount || '0'}</div>
+                                      <div>Burglary: {warehouseIns.burglaryPolicyNumber || 'N/A'} - ₹{warehouseIns.burglaryPolicyAmount || '0'}</div>
+                                      <div className="text-orange-600 font-medium">
+                                        Remaining: Fire ₹{warehouseIns.remainingFirePolicyAmount || '0'} | Burglary ₹{warehouseIns.remainingBurglaryPolicyAmount || '0'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Fire Policy Section - Show for all except bank */}
                 {insurance.insuranceTakenBy && insurance.insuranceTakenBy !== '' && insurance.insuranceTakenBy !== 'bank' && (
@@ -7195,6 +7725,241 @@ export default function WarehouseInspectionForm({
             <Button type="button" className="bg-green-600 hover:bg-green-700 text-white w-full" onClick={handleSaveEditInsurance}>
               Save Changes
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Insurance Summary Modal */}
+      <Dialog open={showInsuranceSummary} onOpenChange={setShowInsuranceSummary}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-green-700 flex items-center gap-2">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Available Insurance Summary
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Warehouse Info */}
+            <div className="p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="font-semibold text-blue-700">Warehouse Code:</span>
+                  <span className="ml-2 text-orange-600 font-bold">{formData.warehouseCode || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-blue-700">Warehouse Name:</span>
+                  <span className="ml-2 text-orange-600 font-bold">{formData.warehouseName || 'N/A'}</span>
+                </div>
+              </div>
+              
+              {/* Commodity Filter */}
+              <div className="mt-4">
+                <Label className="text-blue-700 font-medium">Filter by Commodity (Optional)</Label>
+                <Select 
+                  value={selectedCommodityFilter} 
+                  onValueChange={(value) => {
+                    setSelectedCommodityFilter(value);
+                    fetchWarehouseInsurances(value);
+                  }}
+                >
+                  <SelectTrigger className="bg-white border-blue-300">
+                    <SelectValue placeholder="All Commodities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Commodities</SelectItem>
+                    {commoditiesData.map((commodity) => (
+                      <SelectItem key={commodity.id} value={commodity.commodityName}>
+                        {commodity.commodityName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Total Count */}
+              <div className="mt-4 text-sm font-medium text-blue-700">
+                Total: {warehouseInsuranceSummary.client.length + 
+                        warehouseInsuranceSummary.agrogreen.length + 
+                        warehouseInsuranceSummary.warehouseOwner.length + 
+                        warehouseInsuranceSummary.bank.length} insurance(s) found for this warehouse
+                {selectedCommodityFilter && ` | Filtering by: ${selectedCommodityFilter}`}
+              </div>
+            </div>
+
+            {/* Client Insurance */}
+            <div className="border-2 border-green-200 rounded-lg">
+              <div className="bg-green-100 p-3 font-semibold text-green-800 flex items-center justify-between">
+                <span>📋 Client Insurance ({warehouseInsuranceSummary.client.length} matching)</span>
+                {warehouseInsuranceSummary.client.length > 0 && (
+                  <span className="bg-green-600 text-white px-2 py-1 rounded text-xs">Currently Selected</span>
+                )}
+              </div>
+              {warehouseInsuranceSummary.client.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 bg-gray-50">
+                  No matches for &quot;{selectedCommodityFilter || 'All'}&quot;
+                </div>
+              ) : (
+                <div className="p-4 space-y-3">
+                  {warehouseInsuranceSummary.client.map((ins: any, idx: number) => {
+                    const alertStatus = getInsuranceAlertStatus(ins);
+                    return (
+                      <div key={idx} className="bg-white p-3 border border-green-200 rounded">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-semibold text-blue-600">📄 {ins.insuranceCode || `INS-${ins.id?.slice(0, 8)}`}</div>
+                          <div className="flex gap-2">
+                            {alertStatus !== 'none' && (
+                              <div className={`text-xs px-2 py-1 rounded font-medium ${
+                                alertStatus === 'expired' 
+                                  ? 'bg-red-100 text-red-700' 
+                                  : 'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {alertStatus === 'expired' ? '⚠ EXPIRED' : '⚠ EXPIRING SOON'}
+                              </div>
+                            )}
+                            <div className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Client</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div><strong>Commodity:</strong> {ins.insuranceCommodity || ins.commodity || 'N/A'}</div>
+                          <div><strong>Client:</strong> {ins.clientName || 'N/A'}</div>
+                          <div><strong>Fire Policy:</strong> {ins.firePolicyNumber || 'N/A'}</div>
+                          <div><strong>Fire Amount:</strong> Rs. {ins.firePolicyAmount || '0'}</div>
+                          <div><strong>Burglary Policy:</strong> {ins.burglaryPolicyNumber || 'N/A'}</div>
+                          <div><strong>Burglary Amount:</strong> Rs. {ins.burglaryPolicyAmount || '0'}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Bank Funded Insurance */}
+            <div className="border-2 border-blue-200 rounded-lg">
+              <div className="bg-blue-100 p-3 font-semibold text-blue-800">
+                🏦 Bank Funded Insurance ({warehouseInsuranceSummary.bank.length} total)
+              </div>
+              {warehouseInsuranceSummary.bank.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 bg-gray-50">
+                  No matches for &quot;{selectedCommodityFilter || 'All'}&quot;
+                </div>
+              ) : (
+                <div className="p-4 space-y-3">
+                  {warehouseInsuranceSummary.bank.map((ins: any, idx: number) => (
+                    <div key={idx} className="bg-white p-3 border border-blue-200 rounded">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-semibold text-blue-600">📄 {ins.insuranceCode || `INS-${ins.id?.slice(0, 8)}`}</div>
+                        <div className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Bank</div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><strong>Commodity:</strong> {ins.insuranceCommodity || ins.commodity || 'N/A'}</div>
+                        <div><strong>Bank:</strong> {ins.selectedBankName || ins.bankFundedBy || 'N/A'}</div>
+                        <div><strong>Fire Policy:</strong> N/A - Bank Funded</div>
+                        <div><strong>Fire Amount:</strong> Rs. 0</div>
+                        <div><strong>Burglary Policy:</strong> N/A - Bank Funded</div>
+                        <div><strong>Burglary Amount:</strong> Rs. 0</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Agrogreen Insurance */}
+            <div className="border-2 border-green-200 rounded-lg">
+              <div className="bg-green-100 p-3 font-semibold text-green-800">
+                🌱 Agrogreen Insurance ({warehouseInsuranceSummary.agrogreen.length} total)
+              </div>
+              {warehouseInsuranceSummary.agrogreen.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 bg-gray-50">
+                  No Agrogreen insurance found
+                </div>
+              ) : (
+                <div className="p-4 space-y-3">
+                  {warehouseInsuranceSummary.agrogreen.map((ins: any, idx: number) => {
+                    const alertStatus = getInsuranceAlertStatus(ins);
+                    return (
+                      <div key={idx} className="bg-white p-3 border border-green-200 rounded">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-semibold text-green-600">🌱 {ins.commodity || 'N/A'}</div>
+                          <div className="flex gap-2">
+                            {alertStatus !== 'none' && (
+                              <div className={`text-xs px-2 py-1 rounded font-medium ${
+                                alertStatus === 'expired' 
+                                  ? 'bg-red-100 text-red-700' 
+                                  : 'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {alertStatus === 'expired' ? '⚠ EXPIRED' : '⚠ EXPIRING SOON'}
+                              </div>
+                            )}
+                            <div className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Agrogreen</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div><strong>Fire Policy:</strong> {ins.firePolicyNumber || 'N/A'}</div>
+                          <div><strong>Fire Amount:</strong> Rs. {ins.firePolicyAmount || '0'}</div>
+                          <div><strong>Burglary Policy:</strong> {ins.burglaryPolicyNumber || 'N/A'}</div>
+                          <div><strong>Burglary Amount:</strong> Rs. {ins.burglaryPolicyAmount || '0'}</div>
+                          <div className="col-span-2 text-green-600 font-medium">
+                            <strong>Remaining:</strong> Fire Rs. {ins.remainingFirePolicyAmount || '0'} | Burglary Rs. {ins.remainingBurglaryPolicyAmount || '0'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Warehouse Owner Insurance */}
+            <div className="border-2 border-orange-200 rounded-lg">
+              <div className="bg-orange-100 p-3 font-semibold text-orange-800">
+                🏢 Warehouse Owner Insurance ({warehouseInsuranceSummary.warehouseOwner.length} total)
+              </div>
+              {warehouseInsuranceSummary.warehouseOwner.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 bg-gray-50">
+                  No Warehouse Owner insurance found
+                </div>
+              ) : (
+                <div className="p-4 space-y-3">
+                  {warehouseInsuranceSummary.warehouseOwner.map((ins: any, idx: number) => {
+                    const alertStatus = getInsuranceAlertStatus(ins);
+                    return (
+                      <div key={idx} className="bg-white p-3 border border-orange-200 rounded">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-semibold text-orange-600">🏢 {ins.insuranceCode || `INS-${ins.id?.slice(0, 8)}`}</div>
+                          <div className="flex gap-2">
+                            {alertStatus !== 'none' && (
+                              <div className={`text-xs px-2 py-1 rounded font-medium ${
+                                alertStatus === 'expired' 
+                                  ? 'bg-red-100 text-red-700' 
+                                  : 'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {alertStatus === 'expired' ? '⚠ EXPIRED' : '⚠ EXPIRING SOON'}
+                              </div>
+                            )}
+                            <div className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Warehouse Owner</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div><strong>Commodity:</strong> {ins.insuranceCommodity || ins.commodity || 'N/A'}</div>
+                          <div><strong>Fire Policy:</strong> {ins.firePolicyNumber || 'N/A'}</div>
+                          <div><strong>Fire Amount:</strong> Rs. {ins.firePolicyAmount || '0'}</div>
+                          <div><strong>Burglary Policy:</strong> {ins.burglaryPolicyNumber || 'N/A'}</div>
+                          <div><strong>Burglary Amount:</strong> Rs. {ins.burglaryPolicyAmount || '0'}</div>
+                          <div className="col-span-2 text-orange-600 font-medium">
+                            <strong>Remaining:</strong> Fire Rs. {ins.remainingFirePolicyAmount || '0'} | Burglary Rs. {ins.remainingBurglaryPolicyAmount || '0'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

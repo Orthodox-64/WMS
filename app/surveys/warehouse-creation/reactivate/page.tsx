@@ -249,34 +249,34 @@ const reactivateColumns = [
     },
     meta: { align: 'center' },
   },
-  {
-    accessorKey: "insuranceStatus",
-    header: "Insurance Status",
-    cell: ({ row }: { row: Row<any> }) => {
-      const inspection = row.original;
-      const insuranceEntries = inspection.warehouseInspectionData?.insuranceEntries || [];
-      const hasInsurance = insuranceEntries.length > 0;
-      const hasValidInsurance = insuranceEntries.some((entry: any) => 
-        entry.insuranceStartDate && entry.insuranceEndDate && entry.insuranceCompany
-      );
+  // {
+  //   accessorKey: "insuranceStatus",
+  //   header: "Insurance Status",
+  //   cell: ({ row }: { row: Row<any> }) => {
+  //     const inspection = row.original;
+  //     const insuranceEntries = inspection.warehouseInspectionData?.insuranceEntries || [];
+  //     const hasInsurance = insuranceEntries.length > 0;
+  //     const hasValidInsurance = insuranceEntries.some((entry: any) => 
+  //       entry.insuranceStartDate && entry.insuranceEndDate && entry.insuranceCompany
+  //     );
       
-      return (
-        <div className="w-full flex justify-center items-center space-x-1">
-          {hasValidInsurance ? (
-            <span className="text-green-700">Valid</span>
-          ) : hasInsurance ? (
-            <span className="text-orange-600">Incomplete</span>
-          ) : (
-            <>
-              <span className="text-red-600">Missing</span>
-              <AlertCircle className="w-4 h-4 text-red-600" />
-            </>
-          )}
-        </div>
-      );
-    },
-    meta: { align: 'center' },
-  },
+  //     return (
+  //       <div className="w-full flex justify-center items-center space-x-1">
+  //         {hasValidInsurance ? (
+  //           <span className="text-green-700">Valid</span>
+  //         ) : hasInsurance ? (
+  //           <span className="text-orange-600">Incomplete</span>
+  //         ) : (
+  //           <>
+  //             <span className="text-red-600">Missing</span>
+  //             <AlertCircle className="w-4 h-4 text-red-600" />
+  //           </>
+  //         )}
+  //       </div>
+  //     );
+  //   },
+  //   meta: { align: 'center' },
+  // },
   {
     accessorKey: "actions",
     header: "Actions",
