@@ -430,8 +430,28 @@ export default function InwardReportsPage() {
                 
           console.log(`Processing inward document ${index + 1}:`, doc.id);
           
+          // Generate SR/WR Number in the same format as inward section
+          // Format: {SR/WR}-{inwardId}-{dateWithoutDashes}
+          const generateSRWRNumber = (data: any) => {
+            // Use stored srNo if available
+            if (data.srNo) return data.srNo;
+            if (data.srwrNo) return data.srwrNo;
+            
+            // Otherwise generate it: prefix-inwardId-dateWithoutDashes
+            const receiptType = data.receiptType || 'SR';
+            const prefix = receiptType === 'WR' ? 'WR' : 'SR';
+            const inwardId = data.inwardId || data.id || 'XXX';
+            const dateStr = data.dateOfInward || data.inwardDate || '';
+            const dateWithoutDashes = dateStr.replace(/-/g, '');
+            
+            return `${prefix}-${inwardId}-${dateWithoutDashes}`;
+          };
+          
+          const formattedSRWRNumber = generateSRWRNumber(docData);
+          
           // Get SR/WR number for this inward entry - check multiple possible field names
           const possibleSrWrNumbers = [
+            formattedSRWRNumber,
             docData.srwrNo,
             docData.srWrNumber, 
             docData.inwardId,
@@ -680,7 +700,15 @@ export default function InwardReportsPage() {
             cadNumber: docData.cadNumber || '',
             inwardDate: formatDate(docData.inwardDate || docData.dateOfInward || docData.createdAt),
             srWrNumber: possibleSrWrNumbers[0] || '',
-            srWrDate: formatDate(docData.srGenerationDate),
+            // SR/WR Date - fetch srGenerationDate WITHOUT any bank condition (always show if available)
+            // Try multiple possible field names with fallback to inward date
+            srWrDate: formatDate(
+              docData.srGenerationDate || 
+              docData.srwrGenerationDate || 
+              docData.dateOfIssue || 
+              docData.createdAt
+            ),
+            // Funding SR/WR Date - only show when bank details are present
             fundingSrWrDate: hasBankDetails(docData) ? formatDate(docData.srGenerationDate) : '',
             // SR Last Validity Date with comprehensive calculation
             srLastValidityDate: calculateSRValidityDate(),
@@ -1098,13 +1126,13 @@ export default function InwardReportsPage() {
                 <div>
                   <span className="font-medium text-blue-700">Records with Bank Details:</span>
                   <div className="text-blue-900">
-                    {inwardData.filter(item => item.fundingSrWrDate && item.fundingSrWrDate !== 'N/A').length}
+                    {inwardData.filter(item => item.fundingSrWrDate && item.fundingSrWrDate !== '-').length}
                   </div>
                 </div>
                 <div>
                   <span className="font-medium text-blue-700">Funding SR/WR Dates:</span>
                   <div className="text-blue-900">
-                    {inwardData.filter(item => item.fundingSrWrDate && item.fundingSrWrDate !== 'N/A').length} populated
+                    {inwardData.filter(item => item.fundingSrWrDate && item.fundingSrWrDate !== '-').length} populated
                   </div>
                 </div>
               </div>
@@ -1180,7 +1208,7 @@ export default function InwardReportsPage() {
                   {paginatedData.map((item, rowIndex) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       {visibleColumnsData.map((column, colIndex) => {
-                        const value = item[column.key as keyof InwardReportData] || 'N/A';
+                        const value = item[column.key as keyof InwardReportData] || '-';
                         const isFirstColumn = colIndex === 0;
                         const isNumericColumn = ['totalBags', 'totalQty', 'roBags', 'roQty', 'doBags', 'doQty', 'balanceBags', 'balanceQty', 'rate', 'aum'].includes(column.key);
                         const isFontMedium = ['warehouseName', 'clientName', 'srWrNumber'].includes(column.key);

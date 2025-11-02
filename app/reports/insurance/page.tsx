@@ -40,6 +40,8 @@ interface InsuranceReportData {
   burglaryPolicySumInsured: string;
   burglaryPolicyStartDate: string;
   burglaryPolicyEndDate: string;
+  firePolicyRemainingAmount: string;
+  burglaryPolicyRemainingAmount: string;
   [key: string]: any;
 }
 
@@ -65,7 +67,8 @@ export default function InsuranceReportsPage() {
     'state', 'branch', 'location', 'typeOfBusiness', 'warehouseType', 'warehouseCode', 'warehouseName', 'warehouseAddress',
     'clientCode', 'clientName', 'commodity', 'bankName', 'bankBranchName', 'bankState', 'ifscCode',
     'balanceBags', 'balanceQty', 'insuranceManagedBy', 'rate', 'aum', 'firePolicyNumber', 'firePolicySumInsured',
-    'firePolicyStartDate', 'firePolicyEndDate', 'burglaryPolicyNumber', 'burglaryPolicySumInsured', 'burglaryPolicyStartDate', 'burglaryPolicyEndDate'
+    'firePolicyStartDate', 'firePolicyEndDate', 'burglaryPolicyNumber', 'burglaryPolicySumInsured', 'burglaryPolicyStartDate', 'burglaryPolicyEndDate',
+    'firePolicyRemainingAmount', 'burglaryPolicyRemainingAmount'
   ]);
 
   // Pagination state
@@ -101,7 +104,9 @@ export default function InsuranceReportsPage() {
     { key: 'burglaryPolicyNumber', label: 'Burglary Policy Number', width: 'w-32' },
     { key: 'burglaryPolicySumInsured', label: 'Burglary Policy Sum Insured', width: 'w-36' },
     { key: 'burglaryPolicyStartDate', label: 'Burglary Policy Start Date', width: 'w-32' },
-    { key: 'burglaryPolicyEndDate', label: 'Burglary Policy End Date', width: 'w-32' }
+    { key: 'burglaryPolicyEndDate', label: 'Burglary Policy End Date', width: 'w-32' },
+    { key: 'firePolicyRemainingAmount', label: 'Fire Policy Remaining Amount', width: 'w-36' },
+    { key: 'burglaryPolicyRemainingAmount', label: 'Burglary Policy Remaining Amount', width: 'w-40' }
   ];  // Set default date range (6 months ago to today)
   useEffect(() => {
     const today = new Date();
@@ -376,13 +381,16 @@ export default function InsuranceReportsPage() {
           aum: String(aum),
           // Policy details with updated amounts from Insurance Master
           firePolicyNumber: insuranceData.firePolicyNumber || '',
-          firePolicySumInsured: insuranceData.firePolicyRemainingAmount || insuranceData.firePolicyAmount || '',
+          firePolicySumInsured: insuranceData.firePolicyAmount || '',
           firePolicyStartDate: insuranceData.firePolicyStartDate || '',
           firePolicyEndDate: insuranceData.firePolicyEndDate || '',
           burglaryPolicyNumber: insuranceData.burglaryPolicyNumber || '',
-          burglaryPolicySumInsured: insuranceData.burglaryPolicyRemainingAmount || insuranceData.burglaryPolicyAmount || '',
+          burglaryPolicySumInsured: insuranceData.burglaryPolicyAmount || '',
           burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate || '',
-          burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate || ''
+          burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate || '',
+          // Remaining amounts - fetch from insurance collection
+          firePolicyRemainingAmount: insuranceData.firePolicyRemainingAmount || '',
+          burglaryPolicyRemainingAmount: insuranceData.burglaryPolicyRemainingAmount || ''
         });
       });
       
@@ -495,7 +503,8 @@ export default function InsuranceReportsPage() {
       'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address',
       'Client Code', 'Client Name', 'Commodity', 'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code',
       'Balance Bags', 'Balance Qty', 'Insurance Managed By', 'Rate', 'AUM', 'Fire Policy Number', 'Fire Policy Sum Insured',
-      'Fire Policy Start Date', 'Fire Policy End Date', 'Burglary Policy Number', 'Burglary Policy Sum Insured', 'Burglary Policy Start Date', 'Burglary Policy End Date'
+      'Fire Policy Start Date', 'Fire Policy End Date', 'Burglary Policy Number', 'Burglary Policy Sum Insured', 'Burglary Policy Start Date', 'Burglary Policy End Date',
+      'Fire Policy Remaining Amount', 'Burglary Policy Remaining Amount'
     ];
     
     const csvContent = [
@@ -528,7 +537,9 @@ export default function InsuranceReportsPage() {
         row.burglaryPolicyNumber || '',
         row.burglaryPolicySumInsured || '',
         row.burglaryPolicyStartDate || '',
-        row.burglaryPolicyEndDate || ''
+        row.burglaryPolicyEndDate || '',
+        row.firePolicyRemainingAmount || '',
+        row.burglaryPolicyRemainingAmount || ''
       ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(','))
     ].join('\n');
     

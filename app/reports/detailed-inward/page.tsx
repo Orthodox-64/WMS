@@ -268,6 +268,59 @@ export default function DetailedInwardReportsPage() {
                   formattedDate = new Date(docData.dateOfInward).toISOString().split('T')[0];
                 }
                 
+                // Collect all vehicle numbers, gatepass numbers, weighbridge info, and stack numbers from inwardEntries array
+                let vehicleNumbers = '';
+                let gatepassNumbers = '';
+                let weighbridgeNames = '';
+                let weighbridgeNumbers = '';
+                let stackNumbers = '';
+                
+                if (docData.inwardEntries && Array.isArray(docData.inwardEntries)) {
+                  // Extract vehicle numbers from all entries
+                  vehicleNumbers = docData.inwardEntries
+                    .map((entry: any) => entry.vehicleNumber)
+                    .filter(Boolean)
+                    .join(', ');
+                  
+                  // Extract gatepass numbers from all entries
+                  gatepassNumbers = docData.inwardEntries
+                    .map((entry: any) => entry.getpassNumber)
+                    .filter(Boolean)
+                    .join(', ');
+                  
+                  // Extract weighbridge names from all entries
+                  weighbridgeNames = docData.inwardEntries
+                    .map((entry: any) => entry.weightBridge)
+                    .filter(Boolean)
+                    .join(', ');
+                  
+                  // Extract weighbridge numbers from all entries
+                  weighbridgeNumbers = docData.inwardEntries
+                    .map((entry: any) => entry.weightBridgeSlipNumber)
+                    .filter(Boolean)
+                    .join(', ');
+                  
+                  // Extract stack numbers from all entries (handling both direct stackNumber and stacks array)
+                  stackNumbers = docData.inwardEntries
+                    .map((entry: any) => {
+                      if (entry.stacks && Array.isArray(entry.stacks)) {
+                        return entry.stacks.map((s: any) => s.stackNumber).filter(Boolean).join(', ');
+                      }
+                      return entry.stackNumber || '';
+                    })
+                    .filter(Boolean)
+                    .join(', ');
+                } else {
+                  // Fallback to single field values for backward compatibility
+                  vehicleNumbers = docData.vehicleNumber || '';
+                  gatepassNumbers = docData.getpassNumber || '';
+                  weighbridgeNames = docData.weightBridge || '';
+                  weighbridgeNumbers = docData.weightBridgeSlipNumber || '';
+                  stackNumbers = docData.stacks && Array.isArray(docData.stacks) 
+                    ? docData.stacks.map((s: any) => s.stackNumber).filter(Boolean).join(', ') 
+                    : docData.stackNumber || '';
+                }
+                
                 return {
                   id: doc.id,
                   dateOfInward: formattedDate || docData.dateOfInward || '',
@@ -283,14 +336,12 @@ export default function DetailedInwardReportsPage() {
                   clientName: docData.client || docData.clientName || '',
                   commodity: docData.commodity || '',
                   variety: docData.varietyName || '',
-                  vehicleNumber: docData.vehicleNumber || '',
+                  vehicleNumber: vehicleNumbers || '',
                   cadNumber: docData.cadNumber || '',
-                  gatepassNumber: docData.getpassNumber || '',
-                  weighbridgeName: docData.weightBridge || '',
-                  weighbridgeNumber: docData.weightBridgeSlipNumber || '',
-                  stackNumber: docData.stacks && Array.isArray(docData.stacks) 
-                    ? docData.stacks.map((s: any) => s.stackNumber).filter(Boolean).join(', ') 
-                    : docData.stackNumber || '',
+                  gatepassNumber: gatepassNumbers || '',
+                  weighbridgeName: weighbridgeNames || '',
+                  weighbridgeNumber: weighbridgeNumbers || '',
+                  stackNumber: stackNumbers || '',
                   grossWeight: docData.grossWeight || '0',
                   tareWeight: docData.tareWeight || '0',
                   netWeight: docData.netWeight || '0',
