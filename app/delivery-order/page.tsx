@@ -1664,7 +1664,7 @@ export default function DeliveryOrderPage() {
                                 <span>
                                   {option.srwrNo} - {option.roCode}
                                   <span className="ml-2 text-green-700">
-                                    (Balance: {balanceBags} bags, {option.balanceQuantity ? Number(option.balanceQuantity).toFixed(2) : '0.00'} QT)
+                                    (Balance: {balanceBags} bags, {option.balanceQuantity ? Number(option.balanceQuantity).toFixed(2) : '0.00'} MT)
                                   </span>
                                   {option.hasRejectedDO && (
                                     <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-pink-100 text-red-600 align-middle">

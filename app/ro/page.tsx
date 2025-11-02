@@ -990,7 +990,7 @@ export default function ReleaseOrderPage() {
                     />
                     {filteredInwardOptions.map((opt: any) => (
                       <SelectItem key={opt.inwardId} value={`${opt.receiptType || 'SR'}-${opt.inwardId || ''}-${opt.dateOfInward || ''}`}>
-                        {`${opt.receiptType || 'SR'}-${opt.inwardId || ''}-${opt.dateOfInward || ''} (${opt.balanceBags || 0} bags, ${opt.balanceQuantity ? Number(opt.balanceQuantity).toFixed(2) : '0.00'} QT)`}
+                        {`${opt.receiptType || 'SR'}-${opt.inwardId || ''}-${opt.dateOfInward || ''} (${opt.balanceBags || 0} bags, ${opt.balanceQuantity ? Number(opt.balanceQuantity).toFixed(2) : '0.00'} MT)`}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -1557,8 +1557,11 @@ export default function InwardPage() {
           
           console.log('✅ Found matching insurance:', matchingInsurance);
           
-          // Check if there's sufficient remaining insurance amount
-          if (matchingInsurance.firePolicyRemainingAmount !== undefined || matchingInsurance.burglaryPolicyRemainingAmount !== undefined) {
+          // Check if there's sufficient remaining insurance amount (skip for bank-funded)
+          const insuranceType = (matchingInsurance.insuranceTakenBy || '').toLowerCase();
+          const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
+          
+          if (!isBankFunded && (matchingInsurance.firePolicyRemainingAmount !== undefined || matchingInsurance.burglaryPolicyRemainingAmount !== undefined)) {
             const fireRemaining = parseFloat(matchingInsurance.firePolicyRemainingAmount || '0');
             const burglaryRemaining = parseFloat(matchingInsurance.burglaryPolicyRemainingAmount || '0');
             const totalValue = parseFloat(baseForm.totalValue || '0');
@@ -1569,6 +1572,8 @@ export default function InwardPage() {
               setPreventInward(true);
               return;
             }
+          } else if (isBankFunded) {
+            console.log('🏦 Bank-funded insurance detected - skipping amount validation in commodity check');
           }
         }
 
@@ -4972,6 +4977,19 @@ export default function InwardPage() {
             insuranceId: matched?.insuranceId || null,
           }
         }));
+        
+        // Check if this is bank-funded insurance - skip amount validation
+        const insuranceType = (matched?.insuranceTakenBy || '').toLowerCase();
+        const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
+        setIsBankFundedInsurance(isBankFunded);
+        
+        if (isBankFunded) {
+          console.log('🏦 Bank-funded insurance detected in edit mode - skipping amount validation');
+          setInitialRemainingFire('0');
+          setInitialRemainingBurglary('0');
+          setIsFireRemainingSource(false);
+          setIsBurglaryRemainingSource(false);
+        }
       }
       setInsuranceReadOnly(true);
     } else {
@@ -4995,6 +5013,19 @@ export default function InwardPage() {
         burglaryPolicyAmount: match?.burglaryPolicyAmount,
         burglaryPolicyAmountType: typeof match?.burglaryPolicyAmount
       });
+      
+      // Check if this is bank-funded insurance
+      if (match) {
+        const insuranceType = (match.insuranceTakenBy || '').toLowerCase();
+        const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
+        
+        if (isBankFunded) {
+          console.log('🏦 Bank-funded insurance in edit mode - skipping amount fetching');
+          setYourInsurance(match);
+          console.log('=== END EDIT MODE INSURANCE DEBUG ===');
+          return; // Skip the amount fetching logic below
+        }
+      }
       
       // If match found but amounts are missing, try to fetch from source collections
       if (match) {
@@ -5564,6 +5595,20 @@ export default function InwardPage() {
     console.log('Selected insurance data:', ins);
     console.log('Fire Policy Amount (raw):', ins?.firePolicyAmount, 'Type:', typeof ins?.firePolicyAmount);
     console.log('Burglary Policy Amount (raw):', ins?.burglaryPolicyAmount, 'Type:', typeof ins?.burglaryPolicyAmount);
+    
+    // Check if this is bank-funded insurance - skip amount validation
+    const insuranceType = (ins.insuranceTakenBy || '').toLowerCase();
+    const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
+    setIsBankFundedInsurance(isBankFunded);
+    
+    if (isBankFunded) {
+      console.log('🏦 Bank-funded insurance detected - skipping amount validation');
+      setInitialRemainingFire('0');
+      setInitialRemainingBurglary('0');
+      setIsFireRemainingSource(false);
+      setIsBurglaryRemainingSource(false);
+      return;
+    }
     
     try {
       let foundInsurance = null;
@@ -7530,7 +7575,7 @@ export default function InwardPage() {
                     </div>
                   )}
                   {/* Insurance Deduction Preview */}
-                  {baseForm.totalValue && parseFloat(baseForm.totalValue) > 0 && insuranceEntries.length > 0 && !totalValueExceedsInsurance && (
+                  {baseForm.totalValue && parseFloat(baseForm.totalValue) > 0 && insuranceEntries.length > 0 && !totalValueExceedsInsurance && !isBankFundedInsurance && (
                     <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <AlertTriangle className="h-4 w-4 text-blue-600" />

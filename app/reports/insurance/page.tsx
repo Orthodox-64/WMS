@@ -63,7 +63,7 @@ export default function InsuranceReportsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     'state', 'branch', 'location', 'typeOfBusiness', 'warehouseType', 'warehouseCode', 'warehouseName', 'warehouseAddress',
-    'clientCode', 'clientName', 'commodity', 'variety', 'bankName', 'bankBranchName', 'bankState', 'ifscCode',
+    'clientCode', 'clientName', 'commodity', 'bankName', 'bankBranchName', 'bankState', 'ifscCode',
     'balanceBags', 'balanceQty', 'insuranceManagedBy', 'rate', 'aum', 'firePolicyNumber', 'firePolicySumInsured',
     'firePolicyStartDate', 'firePolicyEndDate', 'burglaryPolicyNumber', 'burglaryPolicySumInsured', 'burglaryPolicyStartDate', 'burglaryPolicyEndDate'
   ]);
@@ -85,7 +85,6 @@ export default function InsuranceReportsPage() {
     { key: 'clientCode', label: 'Client Code', width: 'w-24' },
     { key: 'clientName', label: 'Client Name', width: 'w-28' },
     { key: 'commodity', label: 'Commodity', width: 'w-24' },
-    { key: 'variety', label: 'Variety', width: 'w-24' },
     { key: 'bankName', label: 'Bank Name', width: 'w-28' },
     { key: 'bankBranchName', label: 'Bank Branch Name', width: 'w-32' },
     { key: 'bankState', label: 'Bank State', width: 'w-24' },
@@ -103,9 +102,7 @@ export default function InsuranceReportsPage() {
     { key: 'burglaryPolicySumInsured', label: 'Burglary Policy Sum Insured', width: 'w-36' },
     { key: 'burglaryPolicyStartDate', label: 'Burglary Policy Start Date', width: 'w-32' },
     { key: 'burglaryPolicyEndDate', label: 'Burglary Policy End Date', width: 'w-32' }
-  ];
-
-  // Set default date range (6 months ago to today)
+  ];  // Set default date range (6 months ago to today)
   useEffect(() => {
     const today = new Date();
     const sixMonthsAgo = new Date();
@@ -160,11 +157,21 @@ export default function InsuranceReportsPage() {
             branch: docData.branch || docData.warehouseInspectionData?.branch || '',
             location: docData.location || docData.warehouseInspectionData?.location || '',
             // Warehouse type with comprehensive fallback chain
-            warehouseType: docData.typeOfWarehouse ||
-                          docData.typeofwarehouse ||
-                          docData.warehouseType ||
-                          docData.warehouseInspectionData?.typeOfWarehouse ||
-                          docData.warehouseInspectionData?.warehouseType || '',
+            warehouseType: (() => {
+                          const baseType = docData.typeOfWarehouse ||
+                                           docData.typeofwarehouse ||
+                                           docData.warehouseType ||
+                                           docData.warehouseInspectionData?.typeOfWarehouse ||
+                                           docData.warehouseInspectionData?.warehouseType || '';
+                          const customType = docData.customWarehouseType ||
+                                             docData.warehouseInspectionData?.customWarehouseType || '';
+                          const baseStr = typeof baseType === 'string' ? baseType.trim().toLowerCase() : '';
+                          // If base type indicates 'other(s)', use the customWarehouseType from inspections
+                          if (baseStr.includes('other')) {
+                            return customType || baseType || '';
+                          }
+                          return baseType || '';
+                        })(),
             // Business type with fallback chain
             businessType: docData.businessType ||
                          docData.typeOfBusiness ||
@@ -337,14 +344,11 @@ export default function InsuranceReportsPage() {
           state: insuranceData.state || warehouseDetails.state || '',
           branch: insuranceData.branch || warehouseDetails.branch || '',
           location: insuranceData.location || warehouseDetails.location || '',
-          // Type of Business with multiple fallback sources
-          typeOfBusiness: insuranceData.insuranceType ||
-                         insuranceData.businessType ||
-                         warehouseDetails.businessType ||
-                         latestInward.businessType || '',
-          // Warehouse Type with comprehensive fallback
-          warehouseType: insuranceData.warehouseType ||
-                        warehouseDetails.warehouseType || '',
+          // Type of Business should come from inspections collection (businessType)
+          typeOfBusiness: warehouseDetails.businessType || '',
+          // Warehouse Type: prefer inspections (handles 'Others' via customWarehouseType), then fall back
+          warehouseType: warehouseDetails.warehouseType ||
+                        insuranceData.warehouseType || '',
           warehouseCode: insuranceData.warehouseCode || warehouseDetails.warehouseCode || '',
           warehouseName: warehouseName || '',
           warehouseAddress: warehouseDetails.address || '',
@@ -489,7 +493,7 @@ export default function InsuranceReportsPage() {
     
     const headers = [
       'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address',
-      'Client Code', 'Client Name', 'Commodity', 'Variety', 'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code',
+      'Client Code', 'Client Name', 'Commodity', 'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code',
       'Balance Bags', 'Balance Qty', 'Insurance Managed By', 'Rate', 'AUM', 'Fire Policy Number', 'Fire Policy Sum Insured',
       'Fire Policy Start Date', 'Fire Policy End Date', 'Burglary Policy Number', 'Burglary Policy Sum Insured', 'Burglary Policy Start Date', 'Burglary Policy End Date'
     ];
@@ -508,7 +512,6 @@ export default function InsuranceReportsPage() {
         row.clientCode || '',
         row.clientName || '',
         row.commodity || '',
-        row.variety || '',
         row.bankName || '',
         row.bankBranchName || '',
         row.bankState || '',

@@ -67,14 +67,16 @@ const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
   return (
     <div
       style={{
-        width: 900,
-        margin: '24px auto',
+        width: '210mm', // A4 width for proper PDF rendering
+        maxWidth: '100%',
+        margin: '0 auto',
         background: '#f6fef9', // faint green
         borderRadius: 16,
         fontFamily: 'Arial, sans-serif',
         color: '#222',
         boxShadow: '0 4px 24px #e0f2e9',
-        padding: 36,
+        padding: '20px',
+        boxSizing: 'border-box',
       }}
     >
       {/* Header */}
@@ -90,79 +92,79 @@ const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
         </span>
       </div>
       {/* Info Table - two column, bordered, orange style */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18, tableLayout: 'fixed' }}>
         <tbody>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>{noLabel}</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{srNo}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Generation Date</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{srGenerationDate}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{noLabel}</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{srNo}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Generation Date</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{srGenerationDate}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Client Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.client}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Client Address</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.clientAddress}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Client Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.client}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Client Address</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.clientAddress}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Commodity</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.commodity}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Variety Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.varietyName}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Commodity</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.commodity}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Variety Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.varietyName}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Warehouse Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.warehouseName}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Warehouse Address</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.warehouseAddress}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Warehouse Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.warehouseName}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Warehouse Address</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.warehouseAddress}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Total Bags</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.totalBags}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Net Weight</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.netWeight}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Total Bags</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.totalBags}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Net Weight</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.netWeight}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Total Value (Rs/MT)</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.valueOfCommodity}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Issue</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfIssue}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Total Value (Rs/MT)</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.valueOfCommodity}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Date of Issue</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.dateOfIssue}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Deposit</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfDeposit}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Branch Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.branch}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Date of Deposit</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.dateOfDeposit}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Branch Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.branch}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Base Receipt/Licenses No.</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.baseReceiptNo}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Market Rate</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.marketRate}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Base Receipt/Licenses No.</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.baseReceiptNo}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Market Rate</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.marketRate}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Hologram Number</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.hologramNumber}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Bank Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.bankName}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Hologram Number</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.hologramNumber}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Bank Name</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.bankName}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Place</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.place}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Deposit</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfDeposit}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Place</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.place}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Date of Deposit</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.dateOfDeposit}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Receipt Type</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.receiptType}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>CAD No</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{cadNo}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Receipt Type</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.receiptType}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>CAD No</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{cadNo}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Sampling</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfSampling}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Testing</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfTesting}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Date of Sampling</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.dateOfSampling}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Date of Testing</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.dateOfTesting}</td>
           </tr>
         </tbody>
       </table>
