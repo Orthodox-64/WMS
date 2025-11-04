@@ -2019,103 +2019,129 @@ export default function DeliveryOrderPage() {
                 </div>
                 
 
-                {/* Generate Receipt Button (only if approved) */}
-                {selectedDO.doStatus === 'approved' && (
+                {/* Generate Receipt Button (only if approved and user has permission) */}
+                {selectedDO.doStatus === 'approved' && canViewDOPDF() && (
                   <div className="flex justify-end mt-2">
                     <Button type="button" className="bg-orange-600 hover:bg-orange-700 text-white" onClick={async () => {
                       try {
-                        // Import required libraries
+                        // Import required libraries dynamically (following RO pattern)
                         const html2canvas = (await import('html2canvas')).default;
                         const jsPDF = (await import('jspdf')).default;
                         
-                        const tempElement = document.createElement('div');
-                        tempElement.style.position = 'absolute';
-                        tempElement.style.left = '-9999px';
-                        tempElement.style.top = '0';
-                        tempElement.style.padding = '40px';
-                        tempElement.style.backgroundColor = 'white';
-                        tempElement.style.fontFamily = 'Arial, sans-serif';
+                        // Create temporary container with 900px width (following RO pattern)
+                        const tempContainer = document.createElement('div');
+                        tempContainer.style.width = '900px';
+                        tempContainer.style.position = 'absolute';
+                        tempContainer.style.top = '-9999px';
+                        tempContainer.style.left = '0';
+                        tempContainer.style.backgroundColor = 'white';
+                        tempContainer.style.padding = '40px';
+                        tempContainer.style.fontFamily = 'Arial, sans-serif';
                         
-                        tempElement.innerHTML = `
-                          <div style="text-align: center; margin-bottom: 30px;">
-                            <img src="/Group 86.png" alt="Agrogreen Logo" style="width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 8px;">
-                            <div style="font-size: 28px; font-weight: 700; color: #e67c1f; letter-spacing: 0.5px; margin-bottom: 2px;">AGROGREEN WAREHOUSING PRIVATE LTD.</div>
-                            <div style="font-size: 18px; font-weight: 500; color: #1aad4b; margin-bottom: 8px;">603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
-                            <div style="font-size: 20px; font-weight: 700; color: #e67c1f; margin: 24px 0 0 0; text-decoration: underline;">DO RECEIPT</div>
-                          </div>
-
-                          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 24px; margin-top: 32px;">
-                            ${[
-                              { label: 'DO Code', value: selectedDO.doCode },
-                              { label: 'SR/WR No.', value: selectedDO.srwrNo },
-                              { label: 'CAD Number', value: selectedDO.cadNumber },
-                              { label: 'State', value: selectedDO.state },
-                              { label: 'Branch', value: selectedDO.branch },
-                              { label: 'Location', value: selectedDO.location },
-                              { label: 'Warehouse Name', value: selectedDO.warehouseName },
-                              { label: 'Warehouse Code', value: selectedDO.warehouseCode },
-                              { label: 'Warehouse Address', value: selectedDO.warehouseAddress },
-                              { label: 'Client Name', value: selectedDO.client },
-                              { label: 'Client Code', value: selectedDO.clientCode },
-                              { label: 'Client Address', value: selectedDO.clientAddress },
-                              { label: 'Inward Bags', value: selectedDO.totalBags },
-                              { label: 'Inward Quantity (MT)', value: selectedDO.totalQuantity },
-                              { label: 'Release RO Bags', value: selectedDO.releaseBags },
-                              { label: 'Release RO Quantity (MT)', value: selectedDO.releaseQuantity },
-                              { label: 'DO Bags', value: selectedDO.doBags },
-                              { label: 'DO Quantity (MT)', value: selectedDO.doQuantity },
-                              { label: 'Balance Bags', value: getBalanceBags(selectedDO) },
-                              { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedDO) }
-                            ].map(field => `
-                              <div style="margin-bottom: 12px;">
-                                <div style="font-weight: 700; color: #e67c1f; font-size: 16px; margin-bottom: 4px; margin-top: 12px; letter-spacing: 0.2px;">${field.label}</div>
-                                <div style="font-weight: 500; color: #222; font-size: 16px; margin-bottom: 8px; background: #fff7f0; border-radius: 8px; padding: 6px 12px; border: 1px solid #fed7aa;">${field.value ?? '-'}</div>
-                              </div>
-                            `).join('')}
-                          </div>
-
-                          ${selectedDO.attachmentUrls && Array.isArray(selectedDO.attachmentUrls) && selectedDO.attachmentUrls.length > 0 ? `
-                            <div style="margin-top: 24px;">
-                              <div style="font-weight: 700; color: #e67c1f; font-size: 16px; margin-bottom: 4px; margin-top: 12px; letter-spacing: 0.2px;">Attachment</div>
-                              <div style="display: flex; flex-direction: column; gap: 4px;">
-                                ${selectedDO.attachmentUrls.map((url: string, idx: number) => {
-                                  const ext = url.split('.').pop()?.toLowerCase();
-                                  let label = 'View File';
-                                  if (ext === 'pdf') label = 'View PDF';
-                                  else if (ext === 'docx') label = 'View DOCX';  
-                                  else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
-                                  return `<a href="${url}" style="color: #1a56db; text-decoration: underline; font-size: 15px;">${label} ${idx + 1}</a>`;
-                                }).join('')}
-                              </div>
+                        // Build HTML structure with inline styles (following RO pattern exactly)
+                        tempContainer.innerHTML = `
+                          <div id="printable-do-receipt">
+                            <!-- Header with logo and company details -->
+                            <div style="text-align: center; margin-bottom: 30px;">
+                              <img src="/Group 86.png" alt="Agrogreen Logo" style="width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 8px;">
+                              <div style="font-size: 28px; font-weight: 700; color: #e67c1f; letter-spacing: 0.5px; margin-bottom: 2px;">AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                              <div style="font-size: 18px; font-weight: 500; color: #1aad4b; margin-bottom: 8px;">603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                              <div style="font-size: 20px; font-weight: 700; color: #e67c1f; margin: 24px 0 0 0; text-decoration: underline;">DELIVERY ORDER (DO) RECEIPT</div>
                             </div>
-                          ` : ''}
+
+                            <!-- Three-column grid for DO data fields -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 24px; margin-top: 32px;">
+                              ${[
+                                { label: 'DO Code', value: selectedDO.doCode },
+                                { label: 'SR/WR No.', value: selectedDO.srwrNo },
+                                { label: 'CAD Number', value: selectedDO.cadNumber },
+                                { label: 'State', value: selectedDO.state },
+                                { label: 'Branch', value: selectedDO.branch },
+                                { label: 'Location', value: selectedDO.location },
+                                { label: 'Warehouse Name', value: selectedDO.warehouseName },
+                                { label: 'Warehouse Code', value: selectedDO.warehouseCode },
+                                { label: 'Warehouse Address', value: selectedDO.warehouseAddress },
+                                { label: 'Client Name', value: selectedDO.client },
+                                { label: 'Client Code', value: selectedDO.clientCode },
+                                { label: 'Client Address', value: selectedDO.clientAddress },
+                                { label: 'Inward Bags', value: selectedDO.totalBags },
+                                { label: 'Inward Quantity (MT)', value: selectedDO.totalQuantity },
+                                { label: 'Release RO Bags', value: selectedDO.releaseBags },
+                                { label: 'Release RO Quantity (MT)', value: selectedDO.releaseQuantity },
+                                { label: 'DO Bags', value: selectedDO.doBags },
+                                { label: 'DO Quantity (MT)', value: selectedDO.doQuantity },
+                                { label: 'Balance Bags', value: getBalanceBags(selectedDO) },
+                                { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedDO) }
+                              ].map(field => `
+                                <div style="margin-bottom: 12px;">
+                                  <div style="font-weight: 700; color: #1aad4b; font-size: 16px; margin-bottom: 4px; margin-top: 12px; letter-spacing: 0.2px;">${field.label}</div>
+                                  <div style="font-weight: 500; color: #222; font-size: 16px; margin-bottom: 8px; background: #f6fef9; border-radius: 8px; padding: 6px 12px; border: 1px solid #e0f2e9;">${field.value ?? '-'}</div>
+                                </div>
+                              `).join('')}
+                            </div>
+                          </div>
                         `;
                         
-                        document.body.appendChild(tempElement);
+                        // Append to body (off-screen)
+                        document.body.appendChild(tempContainer);
                         
-                        const canvas = await html2canvas(tempElement, {
+                        // Get the printable element
+                        const printableReceipt = document.getElementById('printable-do-receipt');
+                        if (!printableReceipt) throw new Error('Printable receipt element not found');
+                        
+                        // Render to canvas with high quality settings (following RO pattern)
+                        const canvas = await html2canvas(printableReceipt, {
                           scale: 2,
                           useCORS: true,
-                          allowTaint: true,
                           backgroundColor: '#ffffff'
                         });
                         
-                        const imgData = canvas.toDataURL('image/png');
+                        // Generate PDF (following RO pattern with multi-page support)
                         const pdf = new jsPDF('p', 'mm', 'a4');
-                        
                         const pdfWidth = pdf.internal.pageSize.getWidth();
                         const pdfHeight = pdf.internal.pageSize.getHeight();
                         const imgWidth = canvas.width;
                         const imgHeight = canvas.height;
                         
-                        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-                        const imgX = (pdfWidth - imgWidth * ratio) / 2;
-                        const imgY = 30;
+                        // Calculate scaling to fit page width
+                        const ratio = pdfWidth / imgWidth;
+                        const scaledHeight = imgHeight * ratio;
                         
-                        pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-                        pdf.save(`DO-Receipt-${selectedDO.doCode}.pdf`);
+                        // Handle multi-page if content exceeds A4 height
+                        let heightLeft = scaledHeight;
+                        let position = 0;
                         
-                        document.body.removeChild(tempElement);
+                        // Add first page
+                        pdf.addImage(
+                          canvas.toDataURL('image/jpeg', 1.0),
+                          'JPEG',
+                          0,
+                          position,
+                          pdfWidth,
+                          scaledHeight
+                        );
+                        heightLeft -= pdfHeight;
+                        
+                        // Add additional pages if needed
+                        while (heightLeft > 0) {
+                          position = heightLeft - scaledHeight;
+                          pdf.addPage();
+                          pdf.addImage(
+                            canvas.toDataURL('image/jpeg', 1.0),
+                            'JPEG',
+                            0,
+                            position,
+                            pdfWidth,
+                            scaledHeight
+                          );
+                          heightLeft -= pdfHeight;
+                        }
+                        
+                        // Save PDF with DO code in filename
+                        pdf.save(`delivery-order-receipt-${selectedDO.doCode}.pdf`);
+                        
+                        // Cleanup: remove temporary container
+                        document.body.removeChild(tempContainer);
                         
                         alert("PDF generated successfully!");
                       } catch (error: any) {

@@ -1384,7 +1384,7 @@ export default function OutwardPage() {
               <div className="flex items-center gap-2">
                 {isEditMode ? 'Edit Outward Entry (Resubmission)' : 'New Outward Entry'}
                 {sessionEntries.length > 0 && (
-                  <div className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                  <div className="bg-green-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
                     Multi-Vehicle Mode ({sessionEntries.length} vehicle{sessionEntries.length === 1 ? '' : 's'} added)
                   </div>
                 )}
@@ -2725,15 +2725,6 @@ export default function OutwardPage() {
                                 { label: 'Inward Quantity (MT)', value: selectedOutward.inwardQuantity || selectedOutward.totalQuantity || '' },
                                 { label: 'DO Bags', value: selectedOutward.doBags },
                                 { label: 'DO Quantity (MT)', value: selectedOutward.doQuantity },
-                                { label: 'Outward Bags', value: selectedOutward.outwardBags },
-                                { label: 'Outward Quantity (MT)', value: selectedOutward.outwardQuantity },
-                                { label: 'Vehicle Number', value: selectedOutward.vehicleNumber },
-                                { label: 'Gate Pass', value: selectedOutward.gatepass },
-                                { label: 'Weighbridge Name', value: selectedOutward.weighbridgeName },
-                                { label: 'Weighbridge Slip No.', value: selectedOutward.weighbridgeSlipNo },
-                                { label: 'Gross Weight (MT)', value: selectedOutward.grossWeight },
-                                { label: 'Tare Weight (MT)', value: selectedOutward.tareWeight },
-                                { label: 'Net Weight (MT)', value: selectedOutward.netWeight },
                                 { label: 'Total Bags Outward', value: selectedOutward.totalBagsOutward },
                                 { label: 'Balance Bags', value: selectedOutward.balanceBags },
                                 { label: 'Balance Quantity (MT)', value: selectedOutward.balanceQuantity },
@@ -2777,25 +2768,33 @@ export default function OutwardPage() {
                                 <table style="width: 100%; border-collapse: collapse; border: 1px solid #fde7d2; margin-bottom: 16px;">
                                   <thead>
                                     <tr style="background-color: #fff7ed;">
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700;">Date</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700;">Outward Code</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700;">Vehicle</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700;">Gatepass</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700;">Bags</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700;">Qty (MT)</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700;">Net Wt (MT)</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Date</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Outward Code</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Vehicle Number</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Gate Pass</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Weighbridge Name</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Weighbridge Slip No.</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Gross Weight (MT)</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Net Weight (MT)</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Tare Weight (MT)</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Outward Bags</th>
+                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Outward Quantity (MT)</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     ${entriesForSR.map((entry: any, idx: number) => `
                                       <tr style="background-color: ${idx % 2 === 0 ? '#fff' : '#f9fafb'};">
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center;">${entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : ''}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center;">${entry.outwardCode || ''}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center;">${entry.vehicleNumber || ''}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center;">${entry.gatepass || ''}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center;">${entry.outwardBags || ''}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center;">${entry.outwardQuantity || ''}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center;">${entry.netWeight || ''}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.outwardCode || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.vehicleNumber || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.gatepass || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.weighbridgeName || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.weighbridgeSlipNo || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.grossWeight || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.netWeight || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.tareWeight || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.outwardBags || '-'}</td>
+                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.outwardQuantity || '-'}</td>
                                       </tr>
                                     `).join('')}
                                   </tbody>
