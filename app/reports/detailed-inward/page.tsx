@@ -274,13 +274,26 @@ export default function DetailedInwardReportsPage() {
                 let weighbridgeNames = '';
                 let weighbridgeNumbers = '';
                 let stackNumbers = '';
+                let totalGrossWeight = 0;
+                let totalTareWeight = 0;
+                let totalNetWeight = 0;
+                let totalBags = 0;
                 
                 if (docData.inwardEntries && Array.isArray(docData.inwardEntries)) {
+                  console.log(`Document ${doc.id}: Found ${docData.inwardEntries.length} inward entries`);
+                  console.log(`inwardEntries sample:`, docData.inwardEntries.map((e: any) => ({
+                    vehicleNumber: e.vehicleNumber,
+                    getpassNumber: e.getpassNumber,
+                    weightBridge: e.weightBridge
+                  })));
+                  
                   // Extract vehicle numbers from all entries
                   vehicleNumbers = docData.inwardEntries
                     .map((entry: any) => entry.vehicleNumber)
                     .filter(Boolean)
                     .join(', ');
+                  
+                  console.log(`Vehicle numbers extracted:`, vehicleNumbers);
                   
                   // Extract gatepass numbers from all entries
                   gatepassNumbers = docData.inwardEntries
@@ -310,6 +323,14 @@ export default function DetailedInwardReportsPage() {
                     })
                     .filter(Boolean)
                     .join(', ');
+                  
+                  // Calculate total weights and bags from all entries
+                  docData.inwardEntries.forEach((entry: any) => {
+                    totalGrossWeight += parseFloat(entry.grossWeight) || 0;
+                    totalTareWeight += parseFloat(entry.tareWeight) || 0;
+                    totalNetWeight += parseFloat(entry.netWeight) || 0;
+                    totalBags += parseInt(entry.totalBags) || 0;
+                  });
                 } else {
                   // Fallback to single field values for backward compatibility
                   vehicleNumbers = docData.vehicleNumber || '';
@@ -319,6 +340,10 @@ export default function DetailedInwardReportsPage() {
                   stackNumbers = docData.stacks && Array.isArray(docData.stacks) 
                     ? docData.stacks.map((s: any) => s.stackNumber).filter(Boolean).join(', ') 
                     : docData.stackNumber || '';
+                  totalGrossWeight = parseFloat(docData.grossWeight) || 0;
+                  totalTareWeight = parseFloat(docData.tareWeight) || 0;
+                  totalNetWeight = parseFloat(docData.netWeight) || 0;
+                  totalBags = parseInt(docData.totalBags) || 0;
                 }
                 
                 return {
@@ -342,10 +367,10 @@ export default function DetailedInwardReportsPage() {
                   weighbridgeName: weighbridgeNames || '',
                   weighbridgeNumber: weighbridgeNumbers || '',
                   stackNumber: stackNumbers || '',
-                  grossWeight: docData.grossWeight || '0',
-                  tareWeight: docData.tareWeight || '0',
-                  netWeight: docData.netWeight || '0',
-                  bags: docData.totalBags || '0'
+                  grossWeight: totalGrossWeight.toString(),
+                  tareWeight: totalTareWeight.toString(),
+                  netWeight: totalNetWeight.toString(),
+                  bags: totalBags.toString()
                 };
               })
             );

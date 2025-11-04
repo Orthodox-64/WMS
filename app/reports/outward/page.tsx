@@ -412,6 +412,15 @@ export default function OutwardReportsPage() {
           // Vehicle number - picked from outward section for a particular sr/wr number
           vehicleNumber: docData.vehicleNumber || docData.truckNumber || '',
           
+          // Log for debugging multiple vehicles
+          _debug_vehicle: {
+            docId: doc.id,
+            vehicleNumber: docData.vehicleNumber,
+            truckNumber: docData.truckNumber,
+            srwrNo: docData.srwrNo,
+            doCode: docData.doCode
+          },
+          
           // CAD number - picked from outward section for a particular sr/wr number
           cadNumber: docData.cadNumber || docData.cad || '',
           
@@ -500,6 +509,20 @@ export default function OutwardReportsPage() {
       
       console.log('Processed outward data:', data.length, 'records');
       console.log('Sample processed data:', data.slice(0, 2));
+      
+      // Log vehicle grouping information for debugging
+      const vehiclesByDO = data.reduce((acc: any, record: any) => {
+        const doCode = record.doCode || 'NO_DO';
+        if (!acc[doCode]) acc[doCode] = [];
+        acc[doCode].push({
+          vehicle: record.vehicleNumber,
+          srwr: record.srWrNumber,
+          docId: record._debug_vehicle?.docId
+        });
+        return acc;
+      }, {});
+      console.log('🚛 Vehicles grouped by DO Code:', vehiclesByDO);
+      console.log('📊 Total unique DO codes:', Object.keys(vehiclesByDO).length);
       
       // If no data found with date filters, try without filters
       if (data.length === 0 && startDate && endDate) {
