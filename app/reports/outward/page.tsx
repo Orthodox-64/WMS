@@ -691,26 +691,27 @@ export default function OutwardReportsPage() {
       filtered = filtered.filter(item => item.branch === branchFilter);
     }
     
-    // Sort by outward date in ascending order (oldest to newest)
+    // Sort by outward code in ascending sequential order (OUT-0001, OUT-0002, OUT-0003, etc.)
     filtered = filtered.sort((a, b) => {
-      const dateA: any = a.outwardDate;
-      const dateB: any = b.outwardDate;
+      const codeA = a.outwardCode || '';
+      const codeB = b.outwardCode || '';
       
-      // Handle string dates (YYYY-MM-DD format)
-      if (typeof dateA === 'string' && typeof dateB === 'string') {
-        return new Date(dateA).getTime() - new Date(dateB).getTime();
+      // Extract numeric part from outward code (e.g., "OUT-0001" -> 1)
+      const extractNumber = (code: string): number => {
+        const match = code.match(/OUT-(\d+)/i);
+        return match ? parseInt(match[1], 10) : 0;
+      };
+      
+      const numA = extractNumber(codeA);
+      const numB = extractNumber(codeB);
+      
+      // Sort by numeric value
+      if (numA !== numB) {
+        return numA - numB;
       }
       
-      // Handle Firebase Timestamp objects (fallback)
-      if (dateA?.toDate && dateB?.toDate) {
-        return dateA.toDate().getTime() - dateB.toDate().getTime();
-      }
-      
-      // Handle mixed or invalid dates
-      const timeA = typeof dateA === 'string' ? new Date(dateA).getTime() : (dateA?.toDate ? dateA.toDate().getTime() : new Date(dateA || 0).getTime());
-      const timeB = typeof dateB === 'string' ? new Date(dateB).getTime() : (dateB?.toDate ? dateB.toDate().getTime() : new Date(dateB || 0).getTime());
-      
-      return timeA - timeB;
+      // If numeric values are same or extraction failed, fall back to string comparison
+      return codeA.localeCompare(codeB);
     });
     
     return filtered;
@@ -729,20 +730,17 @@ export default function OutwardReportsPage() {
   const goToLastPage = () => setCurrentPage(totalPages);
   const goToPage = (page: number) => setCurrentPage(page);
 
-  // Export filtered data to CSV with complete parameter structure
+  // Export filtered data to CSV - Following inward section logic for multiple vehicle entries
   const exportToCSV = () => {
     console.log('CSV Export Debug:');
     console.log('- outwardData length:', outwardData.length);
     console.log('- filteredData length:', filteredData.length);
     console.log('- loading state:', loading);
-    console.log('- First outwardData item:', outwardData[0]);
-    console.log('- First filteredData item:', filteredData[0]);
     
     if (filteredData.length === 0) {
       console.log('No filtered data to export');
       if (outwardData.length > 0) {
         console.log('But outwardData has', outwardData.length, 'items - using that instead');
-        // Use outwardData as fallback
         return exportDataArray(outwardData);
       }
       return;
@@ -754,60 +752,122 @@ export default function OutwardReportsPage() {
   const exportDataArray = (dataArray: OutwardReportData[]) => {
     console.log('Exporting data array with', dataArray.length, 'items');
     
+    // Define CSV headers
     const headers = [
       'Outward Date', 'Outward Code', 'SR/WR Number', 'State', 'Branch', 'Location',
       'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address',
-      'Client Code', 'Client Name', 'Commodity', 'Variety', 'Vehicle Number', 'CAD Number',
-      'Gatepass Number', 'Weighbridge Name', 'Weighbridge Slip Number', 'Gross Weight (MT)',
-      'Tare Weight (MT)', 'Net Weight (MT)', 'Total Outward Bags', 'Stack Number',
-      'Stack Outward Bags', 'DO Code'
+      'Client Code', 'Client Name', 'Commodity', 'Variety', 'DO Code',
+      // Vehicle-specific columns
+      'Vehicle Number', 'CAD Number', 'Gatepass Number', 'Weighbridge Name', 'Weighbridge Slip Number',
+      'Gross Weight (MT)', 'Tare Weight (MT)', 'Net Weight (MT)', 'Total Outward Bags',
+      'Stack Details'
     ];
     
-    const csvRows = dataArray.map((row, index) => {
-      console.log(`Processing row ${index + 1}:`, row.id, row.outwardDate, row.outwardCode);
-      return [
-        row.outwardDate || '',
-        row.outwardCode || '',
-        row.srWrNumber || '',
-        row.state || '',
-        row.branch || '',
-        row.location || '',
-        row.typeOfBusiness || '',
-        row.warehouseType || '',
-        row.warehouseCode || '',
-        row.warehouseName || '',
-        row.warehouseAddress || '',
-        row.clientCode || '',
-        row.clientName || '',
-        row.commodity || '',
-        row.variety || '',
-        row.vehicleNumber || '',
-        row.cadNumber || '',
-        row.gatepassNumber || '',
-        row.weighbridgeName || '',
-        row.weighbridgeSlipNumber || '',
-        row.grossWeight || '',
-        row.tareWeight || '',
-        row.netWeight || '',
-        row.totalOutwardBags || '',
-        row.stackNumber || '',
-        row.stackOutwardBags || '',
-        row.doCode || ''
-      ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(',');
-    });
+    // Helper function to safely escape CSV values
+    const escapeCsvValue = (value: any): string => {
+      if (value === null || value === undefined) return '';
+      const stringValue = String(value).replace(/"/g, '""'); // Escape double quotes
+      // Wrap in quotes if contains comma, newline, or double quote
+      if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
+        return `"${stringValue}"`;
+      }
+      return stringValue;
+    };
     
-    const csvContent = [headers.join(','), ...csvRows].join('\n');
+    // Function to create rows for multiple vehicle entries (following inward pattern)
+    // In outward, each document typically represents one vehicle/DO, but we group by SR/WR
+    const createDetailedRows = (dataToExport: OutwardReportData[]) => {
+      const detailedRows: string[] = [];
+      
+      // Group outward entries by SR/WR number to show all vehicles for each SR/WR
+      const groupedBySRWR = dataToExport.reduce((acc: any, row) => {
+        const srwr = row.srWrNumber || 'UNKNOWN';
+        if (!acc[srwr]) {
+          acc[srwr] = [];
+        }
+        acc[srwr].push(row);
+        return acc;
+      }, {});
+      
+      console.log('Grouped outward entries:', Object.keys(groupedBySRWR).length, 'SR/WR numbers');
+      
+      // Process each SR/WR group
+      Object.entries(groupedBySRWR).forEach(([srwr, entries]: [string, any]) => {
+        const vehicleEntries = entries as OutwardReportData[];
+        
+        // Create ONE row per vehicle entry (outward entry)
+        vehicleEntries.forEach((row) => {
+          // Combine stack entries into a single field
+          const stackDetails = (() => {
+            if (row.stackNumber && row.stackOutwardBags) {
+              const stackNos = row.stackNumber.split(',').map(s => s.trim());
+              const stackBags = row.stackOutwardBags.toString().split(',').map(s => s.trim());
+              
+              if (stackNos.length === stackBags.length) {
+                return stackNos.map((stackNo, idx) => 
+                  `${stackNo} (${stackBags[idx]} bags)`
+                ).join('; ');
+              }
+            }
+            return row.stackNumber ? `${row.stackNumber}: ${row.stackOutwardBags || 0} bags` : '';
+          })();
+          
+          const csvRow = [
+            // Common warehouse and client data (same for all entries in this SR/WR)
+            row.outwardDate || '',
+            row.outwardCode || '',
+            row.srWrNumber || '',
+            row.state || '',
+            row.branch || '',
+            row.location || '',
+            row.typeOfBusiness || '',
+            row.warehouseType || '',
+            row.warehouseCode || '',
+            row.warehouseName || '',
+            row.warehouseAddress || '',
+            row.clientCode || '',
+            row.clientName || '',
+            row.commodity || '',
+            row.variety || '',
+            row.doCode || '',
+            
+            // Vehicle-specific data (unique per outward entry)
+            row.vehicleNumber || '',
+            row.cadNumber || '',
+            row.gatepassNumber || '',
+            row.weighbridgeName || '',
+            row.weighbridgeSlipNumber || '',
+            row.grossWeight || '',
+            row.tareWeight || '',
+            row.netWeight || '',
+            row.totalOutwardBags || '',
+            stackDetails
+          ].map(escapeCsvValue).join(',');
+          
+          detailedRows.push(csvRow);
+        });
+      });
+      
+      return detailedRows;
+    };
+    
+    // Create CSV content with BOM for Excel UTF-8 support
+    const csvContent = [
+      headers.join(','),
+      ...createDetailedRows(dataArray)
+    ].join('\r\n');
+    
     console.log('Final CSV content preview:', csvContent.substring(0, 200) + '...');
     
-    // Create and download the CSV file
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    // Add BOM (Byte Order Mark) for proper UTF-8 encoding in Excel
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `outward_report_${startDate}_to_${endDate}.csv`;
-    document.body.appendChild(a); // Add to DOM for Firefox compatibility
+    a.download = `outward-report-${startDate}_to_${endDate}.csv`;
+    document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a); // Clean up
+    document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
     console.log('CSV file download initiated');
   };

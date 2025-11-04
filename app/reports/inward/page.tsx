@@ -50,6 +50,17 @@ interface InwardReportData {
   rate: string;
   aum: string;
   databaseLocation: string;
+  // Vehicle-related fields
+  inwardEntries?: any[] | null; // Array of vehicle entries for multiple vehicle data
+  vehicleNumber?: string;
+  getpassNumber?: string;
+  weightBridge?: string;
+  weightBridgeSlipNumber?: string;
+  grossWeight?: string;
+  tareWeight?: string;
+  netWeight?: string;
+  averageWeight?: string;
+  stacks?: any[];
   [key: string]: any;
 }
 
@@ -735,12 +746,30 @@ export default function InwardReportsPage() {
             aum: safeString(docData.totalValue), // Fetch from totalValue field in inward collection
             databaseLocation: docData.databaseLocation || '',
             
+            // Vehicle entries for multiple vehicle data - following inward section pattern
+            inwardEntries: docData.inwardEntries && Array.isArray(docData.inwardEntries) && docData.inwardEntries.length > 0
+              ? docData.inwardEntries
+              : null, // Null if no multiple vehicle entries exist
+            
+            // Single vehicle data (for backward compatibility when no inwardEntries)
+            vehicleNumber: docData.vehicleNumber || (docData.inwardEntries?.[0]?.vehicleNumber) || '',
+            getpassNumber: docData.getpassNumber || (docData.inwardEntries?.[0]?.getpassNumber) || '',
+            weightBridge: docData.weightBridge || (docData.inwardEntries?.[0]?.weightBridge) || '',
+            weightBridgeSlipNumber: docData.weightBridgeSlipNumber || (docData.inwardEntries?.[0]?.weightBridgeSlipNumber) || '',
+            grossWeight: docData.grossWeight || (docData.inwardEntries?.[0]?.grossWeight) || '',
+            tareWeight: docData.tareWeight || (docData.inwardEntries?.[0]?.tareWeight) || '',
+            netWeight: docData.netWeight || (docData.inwardEntries?.[0]?.netWeight) || '',
+            averageWeight: docData.averageWeight || (docData.inwardEntries?.[0]?.averageWeight) || '',
+            stacks: docData.stacks || (docData.inwardEntries?.[0]?.stacks) || [],
+            
             // Debug info (can be removed later)
             _debug: {
               roEntriesCount: roData?.roEntries?.length || 0,
               roCodes: roData?.roEntries?.map(entry => entry.roCode).join(', ') || 'None',
               doEntriesCount: doData?.doEntries?.length || 0,
-              doCodes: doData?.doEntries?.map(entry => entry.doCode).join(', ') || 'None'
+              doCodes: doData?.doEntries?.map(entry => entry.doCode).join(', ') || 'None',
+              hasMultipleVehicles: !!(docData.inwardEntries && Array.isArray(docData.inwardEntries) && docData.inwardEntries.length > 0),
+              vehicleEntriesCount: docData.inwardEntries?.length || 0
             }
           };
         });
@@ -817,63 +846,129 @@ export default function InwardReportsPage() {
     setCurrentPage(1);
   }, [searchTerm, warehouseFilter, clientFilter, itemsPerPage, startDate, endDate]);
 
-  // Export filtered data to CSV
+  // Export filtered data to CSV - Following inward section logic for multiple vehicle entries
   const exportToCSV = () => {
     if (filteredData.length === 0) return;
     
+    // Define CSV headers - matching the visible columns structure
     const headers = [
       'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code',
       'Warehouse Name', 'Warehouse Address', 'Client Code', 'Client Name', 'Commodity', 'Variety',
       'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code', 'CAD Number', 'Inward Date',
       'SR/WR Number', 'SR/WR Date', 'Funding SR/WR Date', 'SR Last Validity Date',
       'Total Bags', 'Total Qty(MT)', 'RO Bags', 'RO Qty (MT)', 'DO Bags', 'DO Qty (MT)',
-      'Balance Bags', 'Balance Qty (MT)', 'Insurance Managed by', 'Rate (Rs/MT)', 'AUM(Rs/MT)'
+      'Balance Bags', 'Balance Qty (MT)', 'Insurance Managed by', 'Rate (Rs/MT)', 'AUM(Rs/MT)',
+      // Additional vehicle-specific columns
+      'Vehicle Number', 'Gatepass Number', 'Weight Bridge', 'Weight Bridge Slip Number',
+      'Gross Weight (MT)', 'Tare Weight (MT)', 'Net Weight (MT)', 'Average Weight (MT)',
+      'Stack Details'
     ];
     
+    // Helper function to safely escape CSV values
+    const escapeCsvValue = (value: any): string => {
+      if (value === null || value === undefined) return '';
+      const stringValue = String(value).replace(/"/g, '""'); // Escape double quotes
+      // Wrap in quotes if contains comma, newline, or double quote
+      if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
+        return `"${stringValue}"`;
+      }
+      return stringValue;
+    };
+    
+    // Function to create rows for multiple vehicle entries (one row per vehicle entry)
+    // Following the exact same logic as inward section's handleExportCSV
+    const createDetailedRows = (dataToExport: InwardReportData[]) => {
+      const detailedRows: string[] = [];
+      
+      dataToExport.forEach((row) => {
+        // Check if we have multiple vehicle entries (inwardEntries array)
+        // This follows the same pattern as inward/page.tsx
+        const vehicleEntries = row.inwardEntries && Array.isArray(row.inwardEntries) && row.inwardEntries.length > 0
+          ? row.inwardEntries
+          : [null]; // If no vehicle entries, create one row with main data
+        
+        vehicleEntries.forEach((vehicleEntry: any) => {
+          // Create ONE row per vehicle entry with all details
+          const csvRow = [
+            // Main warehouse and client data (same for all vehicle entries)
+            row.state || '',
+            row.branch || '',
+            row.location || '',
+            row.typeOfBusiness || '',
+            row.warehouseType || '',
+            row.warehouseCode || '',
+            row.warehouseName || '',
+            row.warehouseAddress || '',
+            row.clientCode || '',
+            row.clientName || '',
+            row.commodity || '',
+            row.variety || '',
+            row.bankName || '',
+            row.bankBranchName || '',
+            row.bankState || '',
+            row.ifscCode || '',
+            row.cadNumber || '',
+            row.inwardDate || '',
+            row.srWrNumber || '',
+            row.srWrDate || '',
+            row.fundingSrWrDate || '',
+            row.srLastValidityDate || '',
+            row.totalBags || '',
+            row.totalQty || '',
+            row.roBags || '',
+            row.roQty || '',
+            row.doBags || '',
+            row.doQty || '',
+            row.balanceBags || '',
+            row.balanceQty || '',
+            row.insuranceManagedBy || '',
+            row.rate || '',
+            row.aum || '',
+            
+            // Vehicle-specific data (from vehicleEntry if available, otherwise from main row)
+            vehicleEntry ? (vehicleEntry.vehicleNumber || row.vehicleNumber || '') : (row.vehicleNumber || ''),
+            vehicleEntry ? (vehicleEntry.getpassNumber || row.getpassNumber || '') : (row.getpassNumber || ''),
+            vehicleEntry ? (vehicleEntry.weightBridge || row.weightBridge || '') : (row.weightBridge || ''),
+            vehicleEntry ? (vehicleEntry.weightBridgeSlipNumber || row.weightBridgeSlipNumber || '') : (row.weightBridgeSlipNumber || ''),
+            vehicleEntry ? (vehicleEntry.grossWeight || row.grossWeight || '') : (row.grossWeight || ''),
+            vehicleEntry ? (vehicleEntry.tareWeight || row.tareWeight || '') : (row.tareWeight || ''),
+            vehicleEntry ? (vehicleEntry.netWeight || row.netWeight || '') : (row.netWeight || ''),
+            vehicleEntry ? (vehicleEntry.averageWeight || row.averageWeight || '') : (row.averageWeight || ''),
+            
+            // Stack details - combine all stacks for this vehicle entry
+            (() => {
+              const stacks = vehicleEntry?.stacks && Array.isArray(vehicleEntry.stacks) && vehicleEntry.stacks.length > 0
+                ? vehicleEntry.stacks
+                : (row.stacks && Array.isArray(row.stacks) && row.stacks.length > 0 ? row.stacks : []);
+              
+              if (stacks.length > 0) {
+                return stacks.map((stack: any) => 
+                  `${stack.stackNumber || stack.stackNo || ''} (${stack.numberOfBags || stack.bags || 0} bags)`
+                ).join('; ');
+              }
+              return '';
+            })()
+          ].map(escapeCsvValue).join(',');
+          
+          detailedRows.push(csvRow);
+        });
+      });
+      
+      return detailedRows;
+    };
+    
+    // Create CSV content with BOM for Excel UTF-8 support
     const csvContent = [
       headers.join(','),
-      ...filteredData.map((row) => [
-        row.state || '',
-        row.branch || '',
-        row.location || '',
-        row.typeOfBusiness || '',
-        row.warehouseType || '',
-        row.warehouseCode || '',
-        row.warehouseName || '',
-        row.warehouseAddress || '',
-        row.clientCode || '',
-        row.clientName || '',
-        row.commodity || '',
-        row.variety || '',
-        row.bankName || '',
-        row.bankBranchName || '',
-        row.bankState || '',
-        row.ifscCode || '',
-        row.cadNumber || '',
-        row.inwardDate || '',
-        row.srWrNumber || '',
-        row.srWrDate || '',
-        row.fundingSrWrDate || '',
-        row.srLastValidityDate || '',
-        row.totalBags || '',
-        row.totalQty || '',
-        row.roBags || '',
-        row.roQty || '',
-        row.doBags || '',
-        row.doQty || '',
-        row.balanceBags || '',
-        row.balanceQty || '',
-        row.insuranceManagedBy || '',
-        row.rate || '',
-        row.aum || ''
-      ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(','))
-    ].join('\\n');
+      ...createDetailedRows(filteredData)
+    ].join('\r\n');
     
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    // Add BOM (Byte Order Mark) for proper UTF-8 encoding in Excel
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `inward-reports-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `stock-inward-report-${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
