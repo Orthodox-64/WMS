@@ -297,6 +297,10 @@ export default function InwardPage() {
   
   // Track if selected insurance is bank-funded (no amount validation needed)
   const [isBankFundedInsurance, setIsBankFundedInsurance] = useState(false);
+  
+  // Bank selection states (similar to insurance selection)
+  const [availableBanks, setAvailableBanks] = useState<any[]>([]);
+  const [selectedBank, setSelectedBank] = useState<any>(null);
 
   // Filter and sort inward data
   const filteredData = useMemo(() => {
@@ -1160,25 +1164,41 @@ export default function InwardPage() {
       return [];
     }
     
-    console.log('🔍 Filtering insurance by type:', selectedInsuranceInfoType);
-    console.log('📋 Available insurance entries:', insuranceEntries.map(ins => ({
+    console.log('🔍 ========== INSURANCE FILTERING DEBUG ==========');
+    console.log('🔍 Selected insurance type:', selectedInsuranceInfoType);
+    console.log('🏦 Selected bank:', selectedBank?.bankName || 'None');
+    console.log('📦 Base form commodity:', baseForm.commodity);
+    console.log('📋 Total insurance entries available:', insuranceEntries.length);
+    console.log('📋 All insurance entries:', insuranceEntries.map(ins => ({
       insuranceTakenBy: ins.insuranceTakenBy,
       insuranceId: ins.insuranceId,
+      insuranceCommodity: ins.insuranceCommodity,
       commodityName: ins.commodityName,
-      clientName: ins.clientName
+      clientName: ins.clientName,
+      selectedBankName: ins.selectedBankName
     })));
     
     let filtered = insuranceEntries.filter(ins => {
-      const match = (ins.insuranceTakenBy || '').toLowerCase() === selectedInsuranceInfoType.toLowerCase();
-      console.log('🔎 Comparing:', {
-        insuranceTakenBy: ins.insuranceTakenBy,
-        selectedType: selectedInsuranceInfoType,
-        match
+      const insuranceType = (ins.insuranceTakenBy || '').toLowerCase().replace(/\s+/g, '-'); // Normalize: convert spaces to hyphens
+      const selectedType = selectedInsuranceInfoType.toLowerCase().replace(/\s+/g, '-'); // Normalize: convert spaces to hyphens
+      const match = insuranceType === selectedType;
+      
+      console.log('🔎 Type comparison:', {
+        originalInsuranceTakenBy: ins.insuranceTakenBy,
+        normalizedInsuranceType: insuranceType,
+        originalSelectedType: selectedInsuranceInfoType,
+        normalizedSelectedType: selectedType,
+        match: match
       });
       return match;
     });
     
-    console.log('✅ Filtered insurance entries:', filtered.length);
+    console.log('✅ After type filter:', filtered.length, 'entries');
+    console.log('✅ Filtered entries:', filtered.map(ins => ({
+      insuranceTakenBy: ins.insuranceTakenBy,
+      insuranceId: ins.insuranceId,
+      selectedBankName: ins.selectedBankName
+    })));
     
     // Further filter by commodity if commodity is selected
     if (baseForm.commodity) {
@@ -1186,17 +1206,56 @@ export default function InwardPage() {
         const insuranceCommodities = (ins.insuranceCommodity || ins.commodityName || '').split(',').map((c: string) => c.trim().toLowerCase());
         const commodityMatch = insuranceCommodities.includes(baseForm.commodity.toLowerCase());
         console.log('🌾 Commodity filter:', {
+          insuranceCommodity: ins.insuranceCommodity,
+          commodityName: ins.commodityName,
           insuranceCommodities,
           searchCommodity: baseForm.commodity,
           match: commodityMatch
         });
         return commodityMatch;
       });
-      console.log('✅ After commodity filter:', filtered.length);
+      console.log('✅ After commodity filter:', filtered.length, 'entries');
     }
     
+    // Filter by selected bank for bank-funded insurance
+    const normalizedSelectedType = selectedInsuranceInfoType.toLowerCase().replace(/\s+/g, '-');
+    if (normalizedSelectedType === 'bank-funded') {
+      console.log('🏦 Bank-funded insurance selected - applying bank filter...');
+      if (!selectedBank || !selectedBank.bankName) {
+        console.log('⚠️ Bank-funded insurance selected but no bank chosen - showing no results');
+        return [];
+      }
+      
+      // Only show bank-funded insurance that matches the selected bank
+      // Use flexible matching: check if bank names match or if one contains the other
+      filtered = filtered.filter(ins => {
+        const insuranceBankName = (ins.selectedBankName || '').toLowerCase().trim();
+        const selectedBankName = selectedBank.bankName.toLowerCase().trim();
+        
+        // Check for exact match OR if one contains the other
+        const exactMatch = insuranceBankName === selectedBankName;
+        const insuranceContainsSelected = insuranceBankName.includes(selectedBankName);
+        const selectedContainsInsurance = selectedBankName.includes(insuranceBankName);
+        const bankMatch = exactMatch || insuranceContainsSelected || selectedContainsInsurance;
+        
+        console.log('🏦 Bank comparison:', {
+          insuranceBankName: ins.selectedBankName,
+          selectedBankName: selectedBank.bankName,
+          exactMatch,
+          insuranceContainsSelected,
+          selectedContainsInsurance,
+          finalMatch: bankMatch
+        });
+        return bankMatch;
+      });
+      console.log('✅ After bank filter:', filtered.length, 'entries');
+    }
+    
+    console.log('🏁 FINAL RESULT:', filtered.length, 'entries');
+    console.log('🔍 ========== END FILTERING DEBUG ==========');
+    
     return filtered;
-  }, [insuranceEntries, selectedInsuranceInfoType, baseForm.commodity]);
+  }, [insuranceEntries, selectedInsuranceInfoType, baseForm.commodity, selectedBank]);
 
   // Cross-module reflection - dispatch events when data changes
   const dispatchDataUpdate = useCallback(() => {
@@ -1363,6 +1422,80 @@ export default function InwardPage() {
       console.error('❌ Error fetching reservations:', error);
       setAvailableReservations([]);
       setSelectedReservation(null);
+    }
+  }, []);
+
+  // Fetch available banks for a warehouse from inspections collection
+  const fetchAvailableBanks = useCallback(async (warehouseCode: string) => {
+    if (!warehouseCode) {
+      console.log('❌ fetchAvailableBanks: Missing warehouse code');
+      setAvailableBanks([]);
+      setSelectedBank(null);
+      return;
+    }
+
+    console.log('🏦 Fetching banks for warehouse code:', warehouseCode);
+
+    try {
+      const inspectionsCollection = collection(db, 'inspections');
+      const q = query(inspectionsCollection, where('warehouseCode', '==', warehouseCode));
+      const querySnapshot = await getDocs(q);
+      
+      const banksSet = new Map<string, any>();
+      
+      querySnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        
+        // Create a unique key combining bankName + IFSC to avoid duplicates
+        const bankKey = `${data.bankName || ''}_${data.ifscCode || ''}`;
+        
+        if (data.bankName && !banksSet.has(bankKey)) {
+          banksSet.set(bankKey, {
+            bankName: data.bankName || '',
+            bankBranch: data.bankBranch || '',
+            bankState: data.bankState || '',
+            ifscCode: data.ifscCode || ''
+          });
+        }
+      });
+      
+      const banksArray = Array.from(banksSet.values());
+      console.log('✅ Found banks for warehouse:', banksArray.length);
+      console.log('📋 Banks data:', banksArray);
+      
+      setAvailableBanks(banksArray);
+      
+      // Auto-select if only one bank is available
+      if (banksArray.length === 1) {
+        console.log('🎯 Auto-selecting single bank:', banksArray[0]);
+        setSelectedBank(banksArray[0]);
+        // Auto-fill bank details
+        setBaseForm(f => ({
+          ...f,
+          bankName: banksArray[0].bankName,
+          bankBranch: banksArray[0].bankBranch,
+          bankState: banksArray[0].bankState,
+          ifscCode: banksArray[0].ifscCode
+        }));
+      } else if (banksArray.length === 0) {
+        // No banks found
+        console.log('⚠️ No banks found for warehouse');
+        setSelectedBank(null);
+        setBaseForm(f => ({
+          ...f,
+          bankName: '',
+          bankBranch: '',
+          bankState: '',
+          ifscCode: ''
+        }));
+      } else {
+        // Multiple banks - user needs to select
+        setSelectedBank(null);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching banks:', error);
+      setAvailableBanks([]);
+      setSelectedBank(null);
     }
   }, []);
 
@@ -2039,29 +2172,7 @@ export default function InwardPage() {
     });
 
     try {
-      // Debug: Let's see ALL insurance documents to understand the data structure
-      console.log('🔍 DEBUG: Fetching ALL insurance documents to check structure...');
-      const allInsuranceDocs = await getDocs(collection(db, 'insurance'));
-      console.log('📋 Total insurance documents:', allInsuranceDocs.docs.length);
-      
-      allInsuranceDocs.docs.forEach((doc, index) => {
-        const data = doc.data();
-        console.log(`Insurance Doc ${index + 1}:`, {
-          id: doc.id,
-          warehouseName: data.warehouseName,
-          state: data.state,
-          branch: data.branch,
-          location: data.location,
-          commodityName: data.commodityName,
-          varietyName: data.varietyName,
-          firePolicyAmount: data.firePolicyAmount,
-          firePolicyRemainingAmount: data.firePolicyRemainingAmount,
-          burglaryPolicyAmount: data.burglaryPolicyAmount,
-          burglaryPolicyRemainingAmount: data.burglaryPolicyRemainingAmount
-        });
-      });
-
-      // Try simpler query with just warehouse name and commodity
+      // Fetch ALL insurance documents matching warehouse and commodity
       const insuranceMasterCollection = collection(db, 'insurance');
       const simpleQuery = query(
         insuranceMasterCollection,
@@ -2069,63 +2180,87 @@ export default function InwardPage() {
         where('commodityName', '==', commodityName)
       );
       
-      console.log('📊 Executing simple query on insurance collection...');
+      console.log('📊 Executing query to fetch ALL insurances for warehouse + commodity...');
       const querySnapshot = await getDocs(simpleQuery);
       console.log('📊 Query result - Documents found:', querySnapshot.docs.length);
       
       if (!querySnapshot.empty) {
-        const insuranceMasterDoc = querySnapshot.docs[0];
-        const insuranceData = insuranceMasterDoc.data();
-        
-        console.log('✅ Found insurance data in master collection:', insuranceData);
-        
-        // Create insurance entry with current amounts from master collection
-        const insuranceEntry = {
-          id: `ins_master_${Date.now()}`,
-          insuranceId: insuranceData.insuranceCode || `INS_${form.warehouseName}_${Date.now()}`,
-          warehouseName: form.warehouseName,
-          state: form.state,
-          branch: form.branch,
-          location: form.location,
-          insuranceCommodity: commodityName,
-          varietyName: form.varietyName,
-          insuranceTakenBy: insuranceData.insuranceType || '',
-          clientName: insuranceData.clientName || '',
-          selectedBankName: insuranceData.bankFundedBy || '',
-          firePolicyCompanyName: insuranceData.firePolicyCompanyName || '',
-          firePolicyNumber: insuranceData.firePolicyNumber || '',
-          firePolicyAmount: insuranceData.firePolicyAmount || '0',
-          firePolicyStartDate: insuranceData.firePolicyStartDate || null,
-          firePolicyEndDate: insuranceData.firePolicyEndDate || null,
-          burglaryPolicyCompanyName: insuranceData.burglaryPolicyCompanyName || '',
-          burglaryPolicyNumber: insuranceData.burglaryPolicyNumber || '',
-          burglaryPolicyAmount: insuranceData.burglaryPolicyAmount || '0',
-          burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate || null,
-          burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate || null,
-          // Use remaining amounts from master collection (most up-to-date)
-          remainingFirePolicyAmount: insuranceData.firePolicyRemainingAmount || insuranceData.firePolicyAmount || '0',
-          remainingBurglaryPolicyAmount: insuranceData.burglaryPolicyRemainingAmount || insuranceData.burglaryPolicyAmount || '0'
-        };
+        // Create insurance entries for ALL matching documents
+        const allInsuranceEntries = querySnapshot.docs.map(insuranceMasterDoc => {
+          const insuranceData = insuranceMasterDoc.data();
+          
+          console.log('✅ Found insurance document:', {
+            docId: insuranceMasterDoc.id,
+            insuranceType: insuranceData.insuranceType,
+            bankFundedBy: insuranceData.bankFundedBy,
+            clientName: insuranceData.clientName,
+            commodityName: insuranceData.commodityName,
+            firePolicyAmount: insuranceData.firePolicyAmount,
+            burglaryPolicyAmount: insuranceData.burglaryPolicyAmount
+          });
+          
+          const entry = {
+            id: `ins_master_${insuranceMasterDoc.id}`,
+            insuranceId: insuranceData.insuranceCode || `INS_${form.warehouseName}_${Date.now()}`,
+            warehouseName: form.warehouseName,
+            state: form.state,
+            branch: form.branch,
+            location: form.location,
+            insuranceCommodity: commodityName,
+            varietyName: form.varietyName,
+            insuranceTakenBy: insuranceData.insuranceType || '',
+            clientName: insuranceData.clientName || '',
+            selectedBankName: insuranceData.bankFundedBy || '',
+            firePolicyCompanyName: insuranceData.firePolicyCompanyName || '',
+            firePolicyNumber: insuranceData.firePolicyNumber || '',
+            firePolicyAmount: insuranceData.firePolicyAmount || '0',
+            firePolicyStartDate: insuranceData.firePolicyStartDate || null,
+            firePolicyEndDate: insuranceData.firePolicyEndDate || null,
+            burglaryPolicyCompanyName: insuranceData.burglaryPolicyCompanyName || '',
+            burglaryPolicyNumber: insuranceData.burglaryPolicyNumber || '',
+            burglaryPolicyAmount: insuranceData.burglaryPolicyAmount || '0',
+            burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate || null,
+            burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate || null,
+            // Use remaining amounts from master collection (most up-to-date)
+            remainingFirePolicyAmount: insuranceData.firePolicyRemainingAmount || insuranceData.firePolicyAmount || '0',
+            remainingBurglaryPolicyAmount: insuranceData.burglaryPolicyRemainingAmount || insuranceData.burglaryPolicyAmount || '0'
+          };
+          
+          console.log('📦 Created insurance entry:', {
+            insuranceTakenBy: entry.insuranceTakenBy,
+            selectedBankName: entry.selectedBankName,
+            insuranceCommodity: entry.insuranceCommodity
+          });
+          
+          return entry;
+        });
 
-        setInsuranceEntries([insuranceEntry]);
-        console.log('✅ Insurance entries set from master collection:', [insuranceEntry]);
+        console.log(`✅ Total insurance entries created: ${allInsuranceEntries.length}`);
+        allInsuranceEntries.forEach((entry, idx) => {
+          console.log(`  ${idx + 1}. ${entry.insuranceTakenBy} - Bank: ${entry.selectedBankName || 'N/A'} - Commodity: ${entry.insuranceCommodity}`);
+        });
         
-        // Auto-fill form fields with current amounts
-        setBaseForm(f => ({
-          ...f,
-          insuranceManagedBy: insuranceData.insuranceType || '',
-          firePolicyNumber: insuranceData.firePolicyNumber || '',
-          firePolicyAmount: insuranceData.firePolicyRemainingAmount || insuranceData.firePolicyAmount || '',
-          firePolicyStart: insuranceData.firePolicyStartDate || '',
-          firePolicyEnd: insuranceData.firePolicyEndDate || '',
-          burglaryPolicyNumber: insuranceData.burglaryPolicyNumber || '',
-          burglaryPolicyAmount: insuranceData.burglaryPolicyRemainingAmount || insuranceData.burglaryPolicyAmount || '',
-          burglaryPolicyStart: insuranceData.burglaryPolicyStartDate || '',
-          burglaryPolicyEnd: insuranceData.burglaryPolicyEndDate || '',
-          firePolicyCompanyName: insuranceData.firePolicyCompanyName || '',
-          burglaryPolicyCompanyName: insuranceData.burglaryPolicyCompanyName || '',
-          bankFundedBy: insuranceData.bankFundedBy || '',
-        }));
+        setInsuranceEntries(allInsuranceEntries);
+        
+        // Auto-fill form fields with the first insurance entry (for backward compatibility)
+        if (allInsuranceEntries.length > 0) {
+          const firstInsurance = allInsuranceEntries[0];
+          setBaseForm(f => ({
+            ...f,
+            insuranceManagedBy: firstInsurance.insuranceTakenBy || '',
+            firePolicyNumber: firstInsurance.firePolicyNumber || '',
+            firePolicyAmount: firstInsurance.remainingFirePolicyAmount || '',
+            firePolicyStart: firstInsurance.firePolicyStartDate || '',
+            firePolicyEnd: firstInsurance.firePolicyEndDate || '',
+            burglaryPolicyNumber: firstInsurance.burglaryPolicyNumber || '',
+            burglaryPolicyAmount: firstInsurance.remainingBurglaryPolicyAmount || '',
+            burglaryPolicyStart: firstInsurance.burglaryPolicyStartDate || '',
+            burglaryPolicyEnd: firstInsurance.burglaryPolicyEndDate || '',
+            firePolicyCompanyName: firstInsurance.firePolicyCompanyName || '',
+            burglaryPolicyCompanyName: firstInsurance.burglaryPolicyCompanyName || '',
+            bankFundedBy: firstInsurance.selectedBankName || '',
+          }));
+        }
       } else {
         console.log('❌ No insurance data found in master collection, trying inspections as fallback...');
         
@@ -5581,6 +5716,13 @@ export default function InwardPage() {
     
     setSelectedInsuranceInfoIndex(idx);
     const ins = filteredInsuranceInfoEntries[idx];
+    
+    // Check if this is bank-funded insurance and set the flag
+    const insuranceType = (ins.insuranceTakenBy || '').toLowerCase().replace(/\s+/g, '-');
+    const isBankFunded = insuranceType === 'bank-funded' || insuranceType === 'bank';
+    setIsBankFundedInsurance(isBankFunded);
+    console.log('🏦 Insurance type selected:', ins.insuranceTakenBy, '- Is bank-funded:', isBankFunded);
+    
     // Also set selectedInsurance on the base form so checks use the selected entry
     setBaseForm(f => ({
       ...f,
@@ -5596,11 +5738,7 @@ export default function InwardPage() {
     console.log('Fire Policy Amount (raw):', ins?.firePolicyAmount, 'Type:', typeof ins?.firePolicyAmount);
     console.log('Burglary Policy Amount (raw):', ins?.burglaryPolicyAmount, 'Type:', typeof ins?.burglaryPolicyAmount);
     
-    // Check if this is bank-funded insurance - skip amount validation
-    const insuranceType = (ins.insuranceTakenBy || '').toLowerCase();
-    const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
-    setIsBankFundedInsurance(isBankFunded);
-    
+    // Skip amount fetching for bank-funded insurance
     if (isBankFunded) {
       console.log('🏦 Bank-funded insurance detected - skipping amount validation');
       setInitialRemainingFire('0');
@@ -7323,16 +7461,26 @@ export default function InwardPage() {
                     
                     const selectedWarehouse = filteredWarehouses.find((w: any) => w.warehouseName === warehouseName);
                     
+                    // Fetch available banks for this warehouse
+                    if (selectedWarehouse?.warehouseCode) {
+                      console.log('🔄 Fetching banks for warehouse code:', selectedWarehouse.warehouseCode);
+                      fetchAvailableBanks(selectedWarehouse.warehouseCode);
+                    } else {
+                      setAvailableBanks([]);
+                      setSelectedBank(null);
+                    }
+                    
                     setBaseForm(f => ({ 
                       ...f, 
                       warehouseName: warehouseName,
                       warehouseCode: selectedWarehouse?.warehouseCode || '',
                       warehouseAddress: selectedWarehouse?.warehouseInspectionData?.address || selectedWarehouse?.warehouseAddress || '',
                       businessType: selectedWarehouse?.businessType || '',
-                      bankName: selectedWarehouse?.bankName || '',
-                      bankBranch: selectedWarehouse?.bankBranch || '',
-                      bankState: selectedWarehouse?.bankState || '',
-                      ifscCode: selectedWarehouse?.ifscCode || '',
+                      // Don't auto-fill bank details here - they will be filled when user selects a bank
+                      bankName: '',
+                      bankBranch: '',
+                      bankState: '',
+                      ifscCode: '',
                       // Clear insurance data when warehouse changes
                       insuranceManagedBy: '',
                       firePolicyNumber: '',
@@ -7595,28 +7743,113 @@ export default function InwardPage() {
 
             {/* Bank Information */}
             <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold mb-6 text-orange-700">Bank Information (Auto-filled from Inspection)</h3>
+              <h3 className="text-lg font-semibold mb-6 text-orange-700">Bank Information (Select from Available Banks)</h3>
               
+              {/* Available Banks Selection Box */}
+              {availableBanks.length > 0 ? (
+                <div className="mb-6 p-4 border-2 border-blue-400 rounded-lg bg-blue-50 shadow-lg">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-lg font-bold text-blue-800 flex items-center gap-2">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                      </svg>
+                      Select Bank for this Warehouse
+                      <span className="text-sm font-normal text-blue-600">(Click a box to select)</span>
+                    </h4>
+                  </div>
+                  <div className="text-sm space-y-2">
+                    <div className="grid grid-cols-2 gap-2 mb-3 p-2 bg-white rounded border border-blue-200">
+                      <div><span className="font-medium text-blue-700">Warehouse Code:</span> <span className="text-orange-600">{form.warehouseCode || 'N/A'}</span></div>
+                      <div><span className="font-medium text-blue-700">Warehouse Name:</span> <span className="text-orange-600">{form.warehouseName || 'N/A'}</span></div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {availableBanks.map((bank, index) => {
+                        const isSelected = selectedBank && 
+                                         selectedBank.bankName === bank.bankName && 
+                                         selectedBank.ifscCode === bank.ifscCode;
+                        return (
+                          <div
+                            key={`${bank.bankName}-${bank.ifscCode}-${index}`}
+                            className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                              isSelected
+                                ? 'border-green-500 bg-green-50 shadow-md'
+                                : 'border-blue-200 bg-white hover:border-blue-400'
+                            }`}
+                            onClick={() => {
+                              console.log('🏦 Bank selected:', bank);
+                              setSelectedBank(bank);
+                              // Auto-fill bank details
+                              setBaseForm(f => ({
+                                ...f,
+                                bankName: bank.bankName,
+                                bankBranch: bank.bankBranch,
+                                bankState: bank.bankState,
+                                ifscCode: bank.ifscCode
+                              }));
+                              toast({
+                                title: "Bank Selected",
+                                description: `${bank.bankName} - ${bank.bankBranch} has been selected`,
+                                variant: "default",
+                              });
+                            }}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <div className="font-semibold text-blue-600 flex items-center gap-2">
+                                🏦 {bank.bankName}
+                                {isSelected && (
+                                  <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded">✓ Selected</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-xs space-y-1 mt-2">
+                              <div><strong>Branch:</strong> {bank.bankBranch || 'N/A'}</div>
+                              <div><strong>State:</strong> {bank.bankState || 'N/A'}</div>
+                              <div><strong>IFSC:</strong> {bank.ifscCode || 'N/A'}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {selectedBank && (
+                      <div className="mt-3 p-2 bg-green-100 rounded border border-green-300">
+                        <p className="text-xs text-green-800 font-semibold">
+                          ✅ Selected Bank: {selectedBank.bankName} - {selectedBank.bankBranch}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-6 p-4 border-2 border-gray-300 rounded-lg bg-gray-50">
+                  <p className="text-sm text-gray-600 text-center">
+                    ℹ️ No bank information available for this warehouse. Please select a warehouse first.
+                  </p>
+                </div>
+              )}
+              
+              {/* Bank Details Display (Read-only after selection) */}
               <div className="mb-6">
                 <Label className="block font-semibold mb-2">Bank Name</Label>
-                <Input value={form.bankName} readOnly placeholder="Auto-filled from inspection" />
+                <Input value={form.bankName} readOnly placeholder="Select a bank above" className="bg-gray-100" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
                   <Label className="block font-semibold mb-2">Bank Branch</Label>
-                  <Input value={form.bankBranch} readOnly placeholder="Auto-filled from inspection" />
+                  <Input value={form.bankBranch} readOnly placeholder="Auto-filled from selection" className="bg-gray-100" />
                 </div>
                 <div>
                   <Label className="block font-semibold mb-2">Bank State</Label>
-                  <Input value={form.bankState} readOnly placeholder="Auto-filled from inspection" />
+                  <Input value={form.bankState} readOnly placeholder="Auto-filled from selection" className="bg-gray-100" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <Label className="block font-semibold mb-2">IFSC Code</Label>
-                  <Input value={form.ifscCode} readOnly placeholder="Auto-filled from inspection" />
+                  <Input value={form.ifscCode} readOnly placeholder="Auto-filled from selection" className="bg-gray-100" />
                 </div>
               </div>
             </div>
@@ -7793,27 +8026,60 @@ export default function InwardPage() {
                 <h3 className="text-xl font-semibold mb-6 text-orange-700">Insurance Information (From Inspection Module)</h3>
                 
                 {/* Insurance Summary */}
-                {insuranceEntries.length > 0 && (
-                  <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
-                      <Lightbulb className="h-4 w-4" />
-                      Insurance Coverage Summary
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                      {insuranceEntries.map((entry, index) => (
-                        <div key={index} className="space-y-2">
-                          <div className="font-medium text-green-700">
-                            {entry.insuranceTakenBy} Insurance
+                {insuranceEntries.length > 0 && (() => {
+                  // Filter insurance entries for summary display based on selected bank
+                  const summaryInsurances = insuranceEntries.filter(entry => {
+                    const insuranceType = (entry.insuranceTakenBy || '').toLowerCase().replace(/\s+/g, '-');
+                    
+                    // For bank-funded insurance, only show if it matches the selected bank
+                    if (insuranceType === 'bank-funded') {
+                      if (!selectedBank || !selectedBank.bankName) {
+                        return false; // Don't show bank-funded if no bank selected
+                      }
+                      // Use flexible matching: check if bank names match or if one contains the other
+                      const insuranceBankName = (entry.selectedBankName || '').toLowerCase().trim();
+                      const selectedBankName = selectedBank.bankName.toLowerCase().trim();
+                      
+                      const exactMatch = insuranceBankName === selectedBankName;
+                      const insuranceContainsSelected = insuranceBankName.includes(selectedBankName);
+                      const selectedContainsInsurance = selectedBankName.includes(insuranceBankName);
+                      
+                      return exactMatch || insuranceContainsSelected || selectedContainsInsurance;
+                    }
+                    
+                    // Show all non-bank-funded insurances
+                    return true;
+                  });
+                  
+                  if (summaryInsurances.length === 0) {
+                    return null; // Don't show the green box if no insurances to display
+                  }
+                  
+                  return (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
+                        <Lightbulb className="h-4 w-4" />
+                        Insurance Coverage Summary
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        {summaryInsurances.map((entry, index) => (
+                          <div key={index} className="space-y-2">
+                            <div className="font-medium text-green-700">
+                              {entry.insuranceTakenBy} Insurance
+                              {entry.selectedBankName && (
+                                <span className="ml-2 text-xs text-green-600">({entry.selectedBankName})</span>
+                              )}
+                            </div>
+                            <div className="space-y-1 text-green-600">
+                              <div>🔥 Fire Policy: ₹{parseFloat(entry.remainingFirePolicyAmount || entry.firePolicyAmount || '0').toLocaleString()} remaining</div>
+                              <div>🛡️ Burglary Policy: ₹{parseFloat(entry.remainingBurglaryPolicyAmount || entry.burglaryPolicyAmount || '0').toLocaleString()} remaining</div>
+                            </div>
                           </div>
-                          <div className="space-y-1 text-green-600">
-                            <div>🔥 Fire Policy: ₹{parseFloat(entry.remainingFirePolicyAmount || entry.firePolicyAmount || '0').toLocaleString()} remaining</div>
-                            <div>🛡️ Burglary Policy: ₹{parseFloat(entry.remainingBurglaryPolicyAmount || entry.burglaryPolicyAmount || '0').toLocaleString()} remaining</div>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 
                                 {/* Insurance Type Selection for Information */}
                 <div className="mb-6">

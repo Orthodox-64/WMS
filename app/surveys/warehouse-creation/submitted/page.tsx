@@ -431,38 +431,20 @@ export default function SubmittedWarehousePage() {
       const validateInsurance = (warehouseData: any) => {
         const missingFields: string[] = [];
         
-        // Check if insurance data exists
-        if (!warehouseData.insuranceTakenBy) {
-          missingFields.push('Insurance Taken By');
+        // Check if at least one insurance entry exists (NEW CHECKBOX-BASED SYSTEM)
+        if (!warehouseData.insuranceEntries || warehouseData.insuranceEntries.length === 0) {
+          missingFields.push('At least one insurance must be selected');
+          return missingFields;
         }
-        
-        // If insurance is taken by someone other than bank, validate policy details
-        if (warehouseData.insuranceTakenBy && warehouseData.insuranceTakenBy !== 'bank') {
-          // Fire policy validation
-          if (!warehouseData.firePolicyCompanyName) missingFields.push('Fire Policy Company Name');
-          if (!warehouseData.firePolicyNumber) missingFields.push('Fire Policy Number');
-          if (!warehouseData.firePolicyAmount) missingFields.push('Fire Policy Amount');
-          if (!warehouseData.firePolicyStartDate) missingFields.push('Fire Policy Start Date');
-          if (!warehouseData.firePolicyEndDate) missingFields.push('Fire Policy End Date');
 
-          // Burglary policy validation
-          if (!warehouseData.burglaryPolicyCompanyName) missingFields.push('Burglary Policy Company Name');
-          if (!warehouseData.burglaryPolicyNumber) missingFields.push('Burglary Policy Number');
-          if (!warehouseData.burglaryPolicyAmount) missingFields.push('Burglary Policy Amount');
-          if (!warehouseData.burglaryPolicyStartDate) missingFields.push('Burglary Policy Start Date');
-          if (!warehouseData.burglaryPolicyEndDate) missingFields.push('Burglary Policy End Date');
-
-          // Client specific validation
-          if (warehouseData.insuranceTakenBy === 'client') {
-            if (!warehouseData.clientName) missingFields.push('Client Name');
-            if (!warehouseData.clientAddress) missingFields.push('Client Address');
+        // Validate each insurance entry
+        warehouseData.insuranceEntries.forEach((insurance: any, index: number) => {
+          // Only validate that insuranceTakenBy is present
+          // Since insurances come from master data, they should already have all required fields
+          if (!insurance.insuranceTakenBy) {
+            missingFields.push(`Insurance ${index + 1}: Insurance Taken By field is missing`);
           }
-        }
-
-        // Bank specific validation
-        if (warehouseData.insuranceTakenBy === 'bank' && !warehouseData.selectedBankName) {
-          missingFields.push('Bank Name');
-        }
+        });
 
         return missingFields;
       };

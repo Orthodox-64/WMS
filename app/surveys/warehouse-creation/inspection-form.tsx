@@ -1826,6 +1826,13 @@ export default function WarehouseInspectionForm({
   const handleInsuranceSelection = (insurance: any, isSelected: boolean) => {
     const insuranceId = insurance.id;
     
+    console.log('🎯 handleInsuranceSelection called:', {
+      isSelected,
+      insuranceId,
+      insuranceType: insurance.insuranceType,
+      rawInsuranceData: insurance
+    });
+    
     if (isSelected) {
       // Add to selected list
       setSelectedInsurancesForForm(prev => [...prev, insuranceId]);
@@ -1835,14 +1842,34 @@ export default function WarehouseInspectionForm({
       const randomSuffix = Math.random().toString(36).substr(2, 9);
       const newInsuranceId = `insurance_${timestamp}_${randomSuffix}`;
       
+      // Map insuranceType to insuranceTakenBy format
+      let insuranceTakenBy = '';
+      const insuranceType = (insurance.insuranceType || '').toLowerCase();
+      
+      console.log('📝 Insurance type from DB:', insuranceType);
+      
+      if (insuranceType === 'client') {
+        insuranceTakenBy = 'client';
+      } else if (insuranceType === 'agrogreen') {
+        insuranceTakenBy = 'agrogreen';
+      } else if (insuranceType === 'warehouse-owner') {
+        insuranceTakenBy = 'warehouse owner';
+      } else if (insuranceType === 'bank' || insuranceType === 'bank-funded') {
+        insuranceTakenBy = 'bank';
+      } else {
+        insuranceTakenBy = insurance.insuranceType || '';
+      }
+      
+      console.log('✅ Mapped insuranceTakenBy:', insuranceTakenBy);
+      
       const newInsuranceEntry: InsuranceEntry = {
         id: newInsuranceId,
         insuranceId: insurance.id, // Link to the source insurance
-        insuranceTakenBy: insurance.insuranceTakenBy || insurance.insuranceType || '',
-        insuranceCommodity: insurance.insuranceCommodity || insurance.commodity || insurance.commodityName || '',
+        insuranceTakenBy: insuranceTakenBy,
+        insuranceCommodity: insurance.commodityName || insurance.commodity || insurance.commodities || insurance.insuranceCommodity || '',
         clientName: insurance.clientName || '',
         clientAddress: insurance.clientAddress || '',
-        selectedBankName: insurance.selectedBankName || insurance.bankFundedBy || '',
+        selectedBankName: insurance.bankFundedBy || insurance.selectedBankName || '',
         firePolicyCompanyName: insurance.firePolicyCompanyName || '',
         firePolicyNumber: insurance.firePolicyNumber || '',
         firePolicyAmount: insurance.firePolicyAmount || '',
@@ -1853,12 +1880,14 @@ export default function WarehouseInspectionForm({
         burglaryPolicyAmount: insurance.burglaryPolicyAmount || '',
         burglaryPolicyStartDate: safeCreateDate(insurance.burglaryPolicyStartDate),
         burglaryPolicyEndDate: safeCreateDate(insurance.burglaryPolicyEndDate),
-        remainingFirePolicyAmount: insurance.remainingFirePolicyAmount || '',
-        remainingBurglaryPolicyAmount: insurance.remainingBurglaryPolicyAmount || '',
+        remainingFirePolicyAmount: insurance.remainingFirePolicyAmount || insurance.firePolicyRemainingAmount || '',
+        remainingBurglaryPolicyAmount: insurance.remainingBurglaryPolicyAmount || insurance.burglaryPolicyRemainingAmount || '',
         sourceDocumentId: insurance.sourceDocumentId || insurance.id,
         sourceCollection: insurance.sourceCollection || 'insurances',
         createdAt: new Date().toISOString(),
       };
+      
+      console.log('📦 New insurance entry created:', newInsuranceEntry);
       
       setFormData(prev => ({
         ...prev,
@@ -2626,39 +2655,36 @@ export default function WarehouseInspectionForm({
   const validateInsuranceForActivation = () => {
     const missingInsuranceFields: string[] = [];
 
-    // Insurance Taken By is required for activation
-    if (!formData.insuranceTakenBy) {
-      missingInsuranceFields.push('Insurance Taken By');
+    console.log('🔍 VALIDATION CHECK - formData.insuranceEntries:', formData.insuranceEntries);
+    console.log('🔍 VALIDATION CHECK - insuranceEntries length:', formData.insuranceEntries?.length);
+
+    // Check if at least one insurance entry exists
+    if (!formData.insuranceEntries || formData.insuranceEntries.length === 0) {
+      console.log('❌ VALIDATION FAILED: No insurance entries found');
+      missingInsuranceFields.push('At least one insurance must be selected');
+      return missingInsuranceFields;
     }
 
-    // If insurance is taken by someone other than bank, validate policy details
-    if (formData.insuranceTakenBy && formData.insuranceTakenBy !== 'bank') {
-      // Fire policy validation
-      if (!formData.firePolicyCompanyName) missingInsuranceFields.push('Fire Policy Company Name');
-      if (!formData.firePolicyNumber) missingInsuranceFields.push('Fire Policy Number');
-      if (!formData.firePolicyAmount) missingInsuranceFields.push('Fire Policy Amount');
-      if (!formData.firePolicyStartDate) missingInsuranceFields.push('Fire Policy Start Date');
-      if (!formData.firePolicyEndDate) missingInsuranceFields.push('Fire Policy End Date');
+    // Validate each insurance entry
+    formData.insuranceEntries.forEach((insurance: InsuranceEntry, index: number) => {
+      const insuranceLabel = `Insurance ${index + 1}`;
+      console.log(`🔍 Checking ${insuranceLabel}:`, {
+        insuranceTakenBy: insurance.insuranceTakenBy,
+        insuranceId: insurance.insuranceId,
+        id: insurance.id
+      });
 
-      // Burglary policy validation
-      if (!formData.burglaryPolicyCompanyName) missingInsuranceFields.push('Burglary Policy Company Name');
-      if (!formData.burglaryPolicyNumber) missingInsuranceFields.push('Burglary Policy Number');
-      if (!formData.burglaryPolicyAmount) missingInsuranceFields.push('Burglary Policy Amount');
-      if (!formData.burglaryPolicyStartDate) missingInsuranceFields.push('Burglary Policy Start Date');
-      if (!formData.burglaryPolicyEndDate) missingInsuranceFields.push('Burglary Policy End Date');
-
-      // Client specific validation
-      if (formData.insuranceTakenBy === 'client') {
-        if (!formData.clientName) missingInsuranceFields.push('Client Name');
-        if (!formData.clientAddress) missingInsuranceFields.push('Client Address');
+      // Only validate that insuranceTakenBy is present
+      // Since insurances come from master data, they should already have all required fields
+      if (!insurance.insuranceTakenBy) {
+        console.log(`❌ ${insuranceLabel}: insuranceTakenBy is missing!`);
+        missingInsuranceFields.push(`${insuranceLabel}: Insurance Taken By field is missing`);
+      } else {
+        console.log(`✅ ${insuranceLabel}: insuranceTakenBy = "${insurance.insuranceTakenBy}"`);
       }
+    });
 
-      // Bank specific validation
-      if (formData.insuranceTakenBy === 'bank' && !formData.selectedBankName) {
-        missingInsuranceFields.push('Bank Name');
-      }
-    }
-
+    console.log('🔍 VALIDATION RESULT - Missing fields:', missingInsuranceFields);
     return missingInsuranceFields;
   };
 
