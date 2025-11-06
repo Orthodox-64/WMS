@@ -2370,8 +2370,9 @@ export default function InwardPage() {
     const particulars = variety?.particulars || [];
     setCurrentEntryForm(f => ({
       ...f,
-      labResults: particulars.map((particular: any) => ({
-        parameterName: particular.particularName || '',
+      labResults: particulars.map((particular: any, idx: number) => ({
+        // Ensure a non-empty name gets stored (fallback to common alt field or generic label)
+        parameterName: particular?.particularName || particular?.name || `Parameter${idx + 1}`,
         value: ''
       })),
       labResultsValidation: Array(particulars.length).fill(true)
@@ -2788,6 +2789,31 @@ export default function InwardPage() {
     console.log('Initializing Firebase collection...');
     const inwardCollection = collection(db, 'inward');
     console.log('Firebase collection initialized:', inwardCollection);
+
+    // Normalize Lab Results to always store fetched parameter names (no generic Parameter1...)
+  const buildNormalizedLabResults = () => {
+      try {
+        const commodityObj = commodities.find((c: any) => c.commodityName === baseForm.commodity);
+        const varietyObj = commodityObj?.varieties?.find((v: any) => v.varietyName === baseForm.varietyName);
+  const particulars = varietyObj?.particulars || [];
+        const valuesArray = Array.isArray(currentEntryForm.labResults) ? currentEntryForm.labResults : [];
+
+        // Map by index to ensure the name comes from fetched particulars
+        return particulars.map((p: any, idx: number) => {
+          const src = valuesArray[idx];
+          const value = typeof src === 'object' && src !== null ? (src.value ?? '') : (src ?? '');
+          return {
+            // prefer explicit particularName, then common alt field 'name', then a generic label
+            parameterName: p?.particularName || p?.name || `Parameter${idx + 1}`,
+            value: value || ''
+          };
+        });
+      } catch (e) {
+        // Fallback to existing shape if anything unexpected occurs
+        return currentEntryForm.labResults || [];
+      }
+    };
+    const normalizedLabResults = buildNormalizedLabResults();
     
     if (isEditMode && editingRow) {
         // Update existing document
@@ -2908,7 +2934,7 @@ export default function InwardPage() {
             // Lab Parameters - stored at document level
             dateOfSampling: baseForm.dateOfSampling || '',
             dateOfTesting: baseForm.dateOfTesting || '',
-            labResults: currentEntryForm.labResults || [],
+            labResults: normalizedLabResults,
             // Keep the existing selectedInsurance without changes
             selectedInsurance: editingRow.selectedInsurance || null,
           };
@@ -3018,7 +3044,7 @@ export default function InwardPage() {
               // Lab Parameters - stored at document level
               dateOfSampling: baseForm.dateOfSampling || '',
               dateOfTesting: baseForm.dateOfTesting || '',
-              labResults: currentEntryForm.labResults || [],
+              labResults: normalizedLabResults,
               
               // Combined entries data (without lab parameters)
               inwardEntries: allEntries.map((entry, index) => {
@@ -4119,7 +4145,6 @@ export default function InwardPage() {
     { accessorKey: "weightBridge", header: "Weight Bridge" },
     { accessorKey: "weightBridgeSlipNumber", header: "Slip No." },
     { accessorKey: "cadNumber", header: "CAD Number" },
-    { accessorKey: "entryNumber", header: "Entry No." },
     { 
       accessorKey: "stacks",
       header: "Stack No(s)",
@@ -4149,7 +4174,6 @@ export default function InwardPage() {
     },
     // Business and Billing
     { accessorKey: "businessType", header: "Business Type" },
-    { accessorKey: "billingStatus", header: "Billing Status" },
     { accessorKey: "billingCycle", header: "Billing Cycle" },
     { accessorKey: "billingType", header: "Billing Type" },
     { accessorKey: "billingRate", header: "Billing Rate" },
@@ -4353,7 +4377,7 @@ export default function InwardPage() {
               const variety = commodity?.varieties?.find(v => v.varietyName === row.variety);
               const particulars = variety?.particulars || [];
               const index = value.indexOf(result);
-              const paramName = particulars[index]?.particularName || `Parameter${index + 1}`;
+              const paramName = particulars[index]?.particularName || particulars[index]?.name || `Parameter${index + 1}`;
               return `${paramName}-${result}`;
             }
             // Convert any remaining object to string to prevent React rendering error
@@ -4397,7 +4421,7 @@ export default function InwardPage() {
         
         vehicleEntries.forEach((vehicleEntry: any, vehicleIndex: number) => {
           // Create ONE row per vehicle entry with all stack details combined
-          const csvRow = visibleColumns.map(col => {
+          const csvRow = columns.map(col => {
             const { accessorKey } = col;
             let value;
             
@@ -4447,7 +4471,7 @@ export default function InwardPage() {
       return detailedRows;
     };
   
-    const csvHeaders = visibleColumns.map(c => (typeof c.header === 'string' ? c.header : c.accessorKey) || '').join(',');
+  const csvHeaders = columns.map(c => (typeof c.header === 'string' ? c.header : c.accessorKey) || '').join(',');
     const detailedRows = createDetailedRows(dataToExport);
     const csvRows = detailedRows.join('\r\n');
   
@@ -4579,7 +4603,7 @@ export default function InwardPage() {
     const particulars = variety?.particulars || [];
     
     return labResults.map((value: string, index: number) => ({
-      parameterName: particulars[index]?.particularName || `Parameter${index + 1}`,
+      parameterName: particulars[index]?.particularName || particulars[index]?.name || `Parameter${index + 1}`,
       value: value || ''
     }));
   };
@@ -4623,7 +4647,8 @@ export default function InwardPage() {
         isValid = false;
         toast({
           title: "Invalid Value",
-          description: `Value for ${particular.name} must be between ${minPercentage}% and ${maxPercentage}%.`,
+          description: `Value for ${particular.particularName || particular.name || `Parameter${index + 1}`}` +
+            ` must be between ${minPercentage}% and ${maxPercentage}%.`,
           variant: "destructive",
         });
       }
@@ -4632,7 +4657,7 @@ export default function InwardPage() {
     setCurrentEntryForm(f => {
       const updatedResults = [...(f.labResults || [])];
       updatedResults[index] = {
-        parameterName: particular.particularName || `Parameter${index + 1}`,
+        parameterName: particular.particularName || particular.name || `Parameter${index + 1}`,
         value: value
       };
       
@@ -6156,15 +6181,36 @@ export default function InwardPage() {
   )}
   // ... rest unchanged ...
 
-  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map(col => col.accessorKey));
+  // Columns to hide from the UI table but keep in CSV export
+  const hiddenUIColumnKeys = useMemo(
+    () => new Set([
+      "grossWeight",
+      "tareWeight",
+      "netWeight",
+      "averageWeight",
+      "vehicleNumber",
+      "getpassNumber",
+      "weightBridge",
+      "weightBridgeSlipNumber",
+    ]),
+    []
+  );
 
-  // Helper to get all column keys (excluding action/alert if you want to always show them)
-  const allColumnKeys = columns.map(col => col.accessorKey);
+  // Columns used for UI (excluded hidden ones)
+  const uiColumns = useMemo(
+    () => columns.filter(col => !hiddenUIColumnKeys.has(col.accessorKey)),
+    [columns, hiddenUIColumnKeys]
+  );
 
-  // Filter columns based on visibleColumnKeys
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => uiColumns.map(col => col.accessorKey));
+
+  // Helper to get all column keys for UI toggle
+  const allColumnKeys = useMemo(() => uiColumns.map(col => col.accessorKey), [uiColumns]);
+
+  // Filter UI columns based on visibleColumnKeys
   const visibleColumns = useMemo(() => {
-    return columns.filter(col => visibleColumnKeys.includes(col.accessorKey));
-  }, [columns, visibleColumnKeys]);
+    return uiColumns.filter(col => visibleColumnKeys.includes(col.accessorKey));
+  }, [uiColumns, visibleColumnKeys]);
 
   // Add state for CIR modal and logic for Approve, Reject, Resubmit
   const [showCIRModal, setShowCIRModal] = useState(false);
@@ -7347,7 +7393,7 @@ export default function InwardPage() {
                     Select All
                   </DropdownMenuCheckboxItem>
                   <DropdownMenuSeparator />
-                  {columns.map(col => (
+                  {uiColumns.map(col => (
                     <DropdownMenuCheckboxItem
                       key={col.accessorKey}
                       checked={visibleColumnKeys.includes(col.accessorKey)}
