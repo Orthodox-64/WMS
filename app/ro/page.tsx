@@ -487,7 +487,7 @@ export default function ReleaseOrderPage() {
         const srwrNo = `${receiptType}-${inward.inwardId || ''}-${inward.dateOfInward || ''}`;
         
         // Calculate remaining balance by checking existing release orders
-        // Only approved ROs should affect balance - rejected/resubmitted ROs don't reduce available inventory
+        // Pending and approved ROs should affect balance - rejected/resubmitted ROs don't reduce available inventory
         const existingReleaseOrders = releaseOrdersBySRWR[srwrNo] || [];
         
         // Start with total bags and quantity from inward
@@ -499,20 +499,20 @@ export default function ReleaseOrderPage() {
           console.log(`Found ${existingReleaseOrders.length} existing release orders for ${srwrNo}`);
           
           existingReleaseOrders.forEach((roItem: any) => {
-            // Only subtract quantities from approved ROs
-            // Rejected and resubmitted ROs should not affect available balance
+            // Subtract quantities from pending and approved ROs
+            // Only rejected and resubmitted ROs should not affect available balance
             const roStatus = (roItem.roStatus || 'pending').toLowerCase();
             
-            if (roStatus === 'approved' || roStatus === 'approve') {
+            if (roStatus === 'pending' || roStatus === 'approved' || roStatus === 'approve') {
               const releaseBags = Number(roItem.releaseBags || 0);
               const releaseQty = Number(roItem.releaseQuantity || 0);
               
-              console.log(`Subtracting approved RO ${roItem.roCode}: ${releaseBags} bags, ${releaseQty} quantity`);
+              console.log(`Subtracting RO ${roItem.roCode} (${roStatus}): ${releaseBags} bags, ${releaseQty} quantity`);
               
               balanceBags -= releaseBags;
               balanceQuantity -= releaseQty;
             } else {
-              console.log(`Skipping non-approved RO ${roItem.roCode} with status: ${roItem.roStatus}`);
+              console.log(`Skipping rejected/resubmitted RO ${roItem.roCode} with status: ${roItem.roStatus}`);
             }
           });
         }
@@ -1857,7 +1857,7 @@ export default function ReleaseOrderPage() {
                       <Button type="button" className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto" onClick={() => handleROStatusChange('rejected')} disabled={roStatusUpdating}>Reject</Button>
                     )}
                     {canResubmitReleaseOrder() && (
-                      <Button type="button" className="bg-yellow-500 hover:bg-yellow-600 text-white w-full sm:w-auto" onClick={() => handleROStatusChange('resubmitted')} disabled={roStatusUpdating}>Resubmit</Button>
+                     <div></div>
                     )}
                   </div>
                 )}

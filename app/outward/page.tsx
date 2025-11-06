@@ -257,17 +257,18 @@ export default function OutwardPage() {
             
             existingOutwards.forEach((outwardItem: any) => {
               const outwardStatus = (outwardItem.outwardStatus || 'pending').toLowerCase();
-              // Only subtract quantities from approved outwards
-              if (outwardStatus === 'approved' || outwardStatus === 'approve') {
+              // Subtract quantities from pending and approved outwards
+              // Only rejected and resubmitted outwards should not affect available balance
+              if (outwardStatus === 'pending' || outwardStatus === 'approved' || outwardStatus === 'approve') {
                 const outwardBags = Number(outwardItem.outwardBags || 0);
                 const outwardQty = Number(outwardItem.outwardQuantity || 0);
                 
-                console.log(`Subtracting APPROVED outward ${outwardItem.outwardCode}: ${outwardBags} bags, ${outwardQty} quantity`);
+                console.log(`Subtracting outward ${outwardItem.outwardCode} (${outwardStatus}): ${outwardBags} bags, ${outwardQty} quantity`);
                 
                 balanceBags -= outwardBags;
                 balanceQuantity -= outwardQty;
               } else {
-                console.log(`Skipping ${outwardStatus.toUpperCase()} outward ${outwardItem.outwardCode}: ${outwardItem.outwardBags} bags, ${outwardItem.outwardQuantity} quantity (NOT affecting balance)`);
+                console.log(`Skipping rejected/resubmitted outward ${outwardItem.outwardCode} (status: ${outwardStatus})`);
               }
             });
           }
@@ -2628,40 +2629,7 @@ export default function OutwardPage() {
                     >
                       Reject
                     </Button>
-                    <Button 
-                      onClick={async () => {
-                        const remarkInput = prompt('Enter resubmission remark (required):');
-                        if (!remarkInput || !remarkInput.trim()) {
-                          alert('Resubmission remark is required.');
-                          return;
-                        }
-                        setOutwardStatusUpdating(true);
-                        try {
-                          const outwardRef = doc(db, 'outwards', selectedOutward.id);
-                          await updateDoc(outwardRef, {
-                            outwardStatus: 'resubmitted',
-                            statusRemark: remarkInput.trim(),
-                            statusUpdatedBy: userRole,
-                            statusUpdatedAt: new Date().toISOString()
-                          });
-                          setShowOutwardDetails(false);
-                          
-                          // Reload list after status change
-                          const outwardCol = collection(db, 'outwards');
-                          const snap = await getDocs(outwardCol);
-                          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                          setOutwardEntries(data);
-                          setOutwardStatusUpdating(false);
-                        } catch (error) {
-                          console.error('Error updating outward status:', error);
-                          setOutwardStatusUpdating(false);
-                        }
-                      }}
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-6"
-                      disabled={outwardStatusUpdating}
-                    >
-                      Resubmit
-                    </Button>
+                  <div></div>
                   </>
                 )}
                 

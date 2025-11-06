@@ -534,17 +534,18 @@ export default function DeliveryOrderPage() {
           
           existingDOs.forEach((doItem: any) => {
             const doStatus = (doItem.doStatus || '').toString().toLowerCase().trim();
-            // Only subtract quantities from approved DOs
-            if (doStatus === 'approved' || doStatus === 'approve') {
+            // Subtract quantities from pending and approved DOs
+            // Only rejected and resubmitted DOs should not affect available balance
+            if (doStatus === 'pending' || doStatus === 'approved' || doStatus === 'approve') {
               const doBags = Number(doItem.doBags || 0);
               const doQty = Number(doItem.doQuantity || 0);
               
-              console.log(`Subtracting approved DO ${doItem.doCode}: ${doBags} bags, ${doQty} quantity`);
+              console.log(`Subtracting DO ${doItem.doCode} (${doStatus}): ${doBags} bags, ${doQty} quantity`);
               
               balanceBags -= doBags;
               balanceQuantity -= doQty;
             } else {
-              console.log(`Skipping non-approved DO ${doItem.doCode} (status: ${doStatus})`);
+              console.log(`Skipping rejected/resubmitted DO ${doItem.doCode} (status: ${doStatus})`);
             }
           });
         }
@@ -2255,14 +2256,7 @@ export default function DeliveryOrderPage() {
                               </Button>
                             )}
                             {canResubmitDeliveryOrder() && (
-                              <Button 
-                                type="button" 
-                                className="bg-orange-500 hover:bg-orange-600 text-white" 
-                                onClick={() => handleDOStatusChange('resubmitted')} 
-                                disabled={doStatusUpdating}
-                              >
-                                Resubmit
-                              </Button>
+                              <div></div>
                             )}
                           </div>
                         )}
