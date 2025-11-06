@@ -841,6 +841,21 @@ export default function InsuranceMasterPage() {
         selectedCommodities // Save multiple commodity selections
       };
 
+      // For client and agrogreen insurance, set warehouse/commodity fields to universal values
+      if (formData.insuranceType === 'client' || formData.insuranceType === 'agrogreen') {
+        insuranceDataToSave = {
+          ...insuranceDataToSave,
+          warehouseName: 'Universal', // Not tied to specific warehouse
+          warehouseCode: 'N/A',
+          state: 'All States',
+          branch: 'All Branches',
+          location: 'All Locations',
+          commodityName: 'All Commodities', // Not tied to specific commodity
+          varietyName: 'All Varieties',
+          selectedCommodities: [] // Clear commodity selections for universal insurance
+        };
+      }
+
       // For bank-funded insurance, clear policy fields and set them to N/A
       if (formData.insuranceType === 'bank-funded') {
         insuranceDataToSave = {
@@ -1367,98 +1382,121 @@ export default function InsuranceMasterPage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-
-              {/* Common Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">Warehouse Name <span className="text-red-500">*</span></Label>
-                  <Select
-                    value={formData.warehouseName || ''}
-                    onValueChange={(value) => handleInputChange('warehouseName', value)}
-                    required
-                  >
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500">
-                      <SelectValue placeholder="Select warehouse" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map(warehouse => (
-                        <SelectItem key={warehouse.id} value={warehouse.warehouseName}>
-                          {warehouse.warehouseName} ({warehouse.warehouseCode})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">Warehouse Code</Label>
-                  <Input
-                    value={formData.warehouseCode || ''}
-                    onChange={(e) => handleInputChange('warehouseCode', e.target.value)}
-                    className="border-orange-300 focus:border-orange-500"
-                    placeholder="Auto-filled from warehouse"
-                    readOnly
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">State</Label>
-                  <Input
-                    value={formData.state || ''}
-                    className="border-orange-300 focus:border-orange-500"
-                    placeholder="Auto-filled from warehouse"
-                    readOnly
-                  />
-                </div>
-              </div>
-
-              {/* Commodity Selection (Multiple selection support) */}
-              <div className="space-y-4">
-                <Label className="text-green-600 font-medium text-lg">Commodity & Variety Selection </Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-green-600 font-medium">Commodity <span className="text-red-500">*</span></Label>
-                    <Select
-                      value={formData.commodityName || ''}
-                      onValueChange={(value) => handleInputChange('commodityName', value)}
-                      required
-                    >
-                      <SelectTrigger className="border-orange-300 focus:border-orange-500">
-                        <SelectValue placeholder="Select commodity" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {commodities.map(commodity => (
-                          <SelectItem key={commodity.id} value={commodity.commodityName}>
-                            {commodity.commodityName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                
+                {/* Information based on insurance type */}
+                {formData.insuranceType === 'agrogreen' && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>ℹ️ Agrogreen Insurance:</strong> This insurance is <strong>universal</strong> and can be applied to any warehouse and commodity.
+                    </p>
                   </div>
-                </div>
-
-                {/* Selected commodities display */}
-                {selectedCommodities.length > 0 && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h4 className="text-blue-800 font-semibold mb-2">Selected Commodities & Varieties:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedCommodities.map((item, index) => (
-                        <div key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-                          <span>{item.commodityName}{item.varietyName ? ` - ${item.varietyName}` : ''}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleCommoditySelection(item.commodityName, item.varietyName)}
-                            className="text-blue-600 hover:text-blue-800"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                )}
+                
+                {formData.insuranceType === 'client' && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <p className="text-sm text-purple-800">
+                      <strong>ℹ️ Client Insurance:</strong> This insurance is <strong>shared</strong> across all warehouses that have the same client.
+                    </p>
                   </div>
                 )}
               </div>
+
+              {/* Common Fields - Only show for bank-funded and warehouse-owner */}
+              {(formData.insuranceType === 'bank-funded' || formData.insuranceType === 'warehouse-owner') && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-green-600 font-medium">Warehouse Name <span className="text-red-500">*</span></Label>
+                      <Select
+                        value={formData.warehouseName || ''}
+                        onValueChange={(value) => handleInputChange('warehouseName', value)}
+                        required
+                      >
+                        <SelectTrigger className="border-orange-300 focus:border-orange-500">
+                          <SelectValue placeholder="Select warehouse" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {warehouses.map(warehouse => (
+                            <SelectItem key={warehouse.id} value={warehouse.warehouseName}>
+                              {warehouse.warehouseName} ({warehouse.warehouseCode})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-green-600 font-medium">Warehouse Code</Label>
+                      <Input
+                        value={formData.warehouseCode || ''}
+                        onChange={(e) => handleInputChange('warehouseCode', e.target.value)}
+                        className="border-orange-300 focus:border-orange-500"
+                        placeholder="Auto-filled from warehouse"
+                        readOnly
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-green-600 font-medium">State</Label>
+                      <Input
+                        value={formData.state || ''}
+                        className="border-orange-300 focus:border-orange-500"
+                        placeholder="Auto-filled from warehouse"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Commodity Selection (Multiple selection support) - Only show for bank-funded and warehouse-owner */}
+              {(formData.insuranceType === 'bank-funded' || formData.insuranceType === 'warehouse-owner') && (
+                <div className="space-y-4">
+                  <Label className="text-green-600 font-medium text-lg">Commodity & Variety Selection </Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-green-600 font-medium">Commodity <span className="text-red-500">*</span></Label>
+                      <Select
+                        value={formData.commodityName || ''}
+                        onValueChange={(value) => handleInputChange('commodityName', value)}
+                        required
+                      >
+                        <SelectTrigger className="border-orange-300 focus:border-orange-500">
+                          <SelectValue placeholder="Select commodity" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {commodities.map(commodity => (
+                            <SelectItem key={commodity.id} value={commodity.commodityName}>
+                              {commodity.commodityName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Selected commodities display */}
+                  {selectedCommodities.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="text-blue-800 font-semibold mb-2">Selected Commodities & Varieties:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedCommodities.map((item, index) => (
+                          <div key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                            <span>{item.commodityName}{item.varietyName ? ` - ${item.varietyName}` : ''}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCommoditySelection(item.commodityName, item.varietyName)}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Bank Funded Specific Fields */}
               {formData.insuranceType === 'bank-funded' && (
@@ -1847,72 +1885,91 @@ export default function InsuranceMasterPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {/* Information based on insurance type */}
+                {formData.insuranceType === 'agrogreen' && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>ℹ️ Agrogreen Insurance:</strong> This insurance is <strong>universal</strong> and can be applied to any warehouse and commodity.
+                    </p>
+                  </div>
+                )}
+                
+                {formData.insuranceType === 'client' && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <p className="text-sm text-purple-800">
+                      <strong>ℹ️ Client Insurance:</strong> This insurance is <strong>shared</strong> across all warehouses that have the same client.
+                    </p>
+                  </div>
+                )}
               </div>
 
-              {/* Common Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">Warehouse Name <span className="text-red-500">*</span></Label>
-                  <Select
-                    value={formData.warehouseName || ''}
-                    onValueChange={(value) => handleInputChange('warehouseName', value)}
-                    required
-                  >
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500">
-                      <SelectValue placeholder="Select warehouse" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map(warehouse => (
-                        <SelectItem key={warehouse.id} value={warehouse.warehouseName}>
-                          {warehouse.warehouseName} ({warehouse.warehouseCode})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">Commodity <span className="text-red-500">*</span></Label>
-                  <Select
-                    value={formData.commodityName || ''}
-                    onValueChange={(value) => handleInputChange('commodityName', value)}
-                    required
-                  >
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500">
-                      <SelectValue placeholder="Select commodity" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {commodities.map(commodity => (
-                        <SelectItem key={commodity.id} value={commodity.commodityName}>
-                          {commodity.commodityName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-green-600 font-medium">Variety <span className="text-red-500">*</span></Label>
-                  <Select
-                    value={formData.varietyName || ''}
-                    onValueChange={(value) => handleInputChange('varietyName', value)}
-                    required
-                  >
-                    <SelectTrigger className="border-orange-300 focus:border-orange-500">
-                      <SelectValue placeholder="Select variety" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {commodities
-                        .find(c => c.commodityName === formData.commodityName)
-                        ?.varieties?.map(variety => (
-                          <SelectItem key={variety.varietyId} value={variety.varietyName}>
-                            {variety.varietyName}
+              {/* Common Fields - Only show for bank-funded and warehouse-owner */}
+              {(formData.insuranceType === 'bank-funded' || formData.insuranceType === 'warehouse-owner') && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-green-600 font-medium">Warehouse Name <span className="text-red-500">*</span></Label>
+                    <Select
+                      value={formData.warehouseName || ''}
+                      onValueChange={(value) => handleInputChange('warehouseName', value)}
+                      required
+                    >
+                      <SelectTrigger className="border-orange-300 focus:border-orange-500">
+                        <SelectValue placeholder="Select warehouse" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses.map(warehouse => (
+                          <SelectItem key={warehouse.id} value={warehouse.warehouseName}>
+                            {warehouse.warehouseName} ({warehouse.warehouseCode})
                           </SelectItem>
-                        )) || []}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-green-600 font-medium">Commodity <span className="text-red-500">*</span></Label>
+                    <Select
+                      value={formData.commodityName || ''}
+                      onValueChange={(value) => handleInputChange('commodityName', value)}
+                      required
+                    >
+                      <SelectTrigger className="border-orange-300 focus:border-orange-500">
+                        <SelectValue placeholder="Select commodity" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {commodities.map(commodity => (
+                          <SelectItem key={commodity.id} value={commodity.commodityName}>
+                            {commodity.commodityName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-green-600 font-medium">Variety <span className="text-red-500">*</span></Label>
+                    <Select
+                      value={formData.varietyName || ''}
+                      onValueChange={(value) => handleInputChange('varietyName', value)}
+                      required
+                    >
+                      <SelectTrigger className="border-orange-300 focus:border-orange-500">
+                        <SelectValue placeholder="Select variety" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {commodities
+                          .find(c => c.commodityName === formData.commodityName)
+                          ?.varieties?.map(variety => (
+                            <SelectItem key={variety.varietyId} value={variety.varietyName}>
+                              {variety.varietyName}
+                            </SelectItem>
+                          )) || []}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Bank Funded Specific Fields */}
               {formData.insuranceType === 'bank-funded' && (

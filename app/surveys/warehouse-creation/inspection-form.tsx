@@ -548,6 +548,7 @@ export default function WarehouseInspectionForm({
     bank: any[];
   }>({ client: [], agrogreen: [], warehouseOwner: [], bank: [] });
   const [selectedCommodityFilter, setSelectedCommodityFilter] = useState<string>('');
+  const [selectedClientFilter, setSelectedClientFilter] = useState<string>(''); // New state for client filter
   const [selectedInsurancesForForm, setSelectedInsurancesForForm] = useState<string[]>([]); // Track selected insurance IDs
 
   // Insurance popup state
@@ -1169,21 +1170,79 @@ export default function WarehouseInspectionForm({
 
       try {
         console.log('🔍 Loading all insurances for warehouse code:', formData.warehouseCode);
+        console.log('🔍 Selected client filter:', selectedClientFilter);
 
-        // Query insurance collection ONLY by warehouse code (unique identifier)
-        const insuranceQuery = query(
+        // 1. Query warehouse-specific insurances (bank-funded and warehouse-owner)
+        const warehouseInsuranceQuery = query(
           collection(db, 'insurance'),
           where('warehouseCode', '==', formData.warehouseCode)
         );
 
-        const insuranceDocs = await getDocs(insuranceQuery);
-        const insurances = insuranceDocs.docs.map(doc => ({
+        const warehouseInsuranceDocs = await getDocs(warehouseInsuranceQuery);
+        const warehouseInsurances = warehouseInsuranceDocs.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
 
-        console.log('✅ Found insurances for warehouse code', formData.warehouseCode, ':', insurances);
-        setAllAvailableInsurances(insurances);
+        console.log('✅ Found warehouse-specific insurances:', warehouseInsurances.length);
+
+        // 2. Query universal agrogreen insurances
+        const agrogreenQuery = query(
+          collection(db, 'insurance'),
+          where('insuranceType', '==', 'agrogreen')
+        );
+
+        const agrogreenDocs = await getDocs(agrogreenQuery);
+        const agrogreenInsurances = agrogreenDocs.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        console.log('✅ Found agrogreen universal insurances:', agrogreenInsurances.length);
+
+        // 3. Query client insurances based on selected client filter or formData.clientName
+        let clientInsurances: any[] = [];
+        const clientToFilter = selectedClientFilter || formData.clientName;
+        
+        if (clientToFilter) {
+          const clientQuery = query(
+            collection(db, 'insurance'),
+            where('insuranceType', '==', 'client'),
+            where('clientName', '==', clientToFilter)
+          );
+
+          const clientDocs = await getDocs(clientQuery);
+          clientInsurances = clientDocs.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          console.log('✅ Found client insurances for', clientToFilter, ':', clientInsurances.length);
+        } else {
+          // If no specific client selected, fetch all client insurances
+          const allClientQuery = query(
+            collection(db, 'insurance'),
+            where('insuranceType', '==', 'client')
+          );
+
+          const allClientDocs = await getDocs(allClientQuery);
+          clientInsurances = allClientDocs.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          console.log('✅ Found all client insurances:', clientInsurances.length);
+        }
+
+        // Combine all insurances
+        const allInsurances = [
+          ...warehouseInsurances,
+          ...agrogreenInsurances,
+          ...clientInsurances
+        ];
+
+        console.log('✅ Total insurances available:', allInsurances.length);
+        setAllAvailableInsurances(allInsurances);
       } catch (error) {
         console.error('❌ Error loading warehouse insurances:', error);
         setAllAvailableInsurances([]);
@@ -1191,7 +1250,7 @@ export default function WarehouseInspectionForm({
     };
 
     loadAllWarehouseInsurances();
-  }, [formData.warehouseCode]); // Only depend on warehouseCode (unique)
+  }, [formData.warehouseCode, formData.clientName, selectedClientFilter]); // Depend on warehouseCode, clientName, and selectedClientFilter
 
   // Load insurance banks when needed - filtered by warehouse
   useEffect(() => {
@@ -4106,6 +4165,34 @@ export default function WarehouseInspectionForm({
                   <div><span className="font-medium text-blue-700">Warehouse Name:</span> <span className="text-orange-600">{formData.warehouseName || 'N/A'}</span></div>
                 </div>
                 
+                {/* Client Selection Dropdown for filtering insurances */}
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-300 rounded">
+                  <Label className="text-blue-700 font-medium mb-2 block">Select Client to View Insurances</Label>
+                  <Select
+                    value={selectedClientFilter || "ALL_CLIENTS"}
+                    onValueChange={(value) => setSelectedClientFilter(value === "ALL_CLIENTS" ? "" : value)}
+                  >
+                    <SelectTrigger className="border-blue-300 bg-white">
+                      <SelectValue placeholder="Select a client to filter insurances" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL_CLIENTS">All Clients (Show All)</SelectItem>
+                      {clientsData
+                        .filter(client => client.firmName) // Only show clients with firm names
+                        .map(client => (
+                          <SelectItem key={client.id} value={client.firmName}>
+                            {client.firmName}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedClientFilter && selectedClientFilter !== "ALL_CLIENTS" && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Showing insurances for: <strong>{selectedClientFilter}</strong>
+                    </p>
+                  )}
+                </div>
+                
                 {/* Show available insurances based on allAvailableInsurances */}
                 {(() => {
                   if (allAvailableInsurances.length === 0) {
@@ -4117,7 +4204,7 @@ export default function WarehouseInspectionForm({
                     );
                   }
                   
-                  // Group insurances by type
+                  // Group insurances by type (no additional client filtering needed as it's done in the query)
                   const groupedInsurances: {[key: string]: any[]} = {
                     'client': [],
                     'agrogreen': [],
@@ -4184,10 +4271,15 @@ export default function WarehouseInspectionForm({
                   return (
                     <div className="space-y-3">
                       <div className="text-xs text-gray-600 mb-2">
-                        <strong>Total: {allAvailableInsurances.length} insurance(s) found for this warehouse</strong>
+                        <strong>Total: {allAvailableInsurances.length} insurance(s) found</strong>
+                        {selectedClientFilter && (
+                          <span className="ml-2 text-purple-600">
+                            | Client: <strong>{selectedClientFilter}</strong>
+                          </span>
+                        )}
                         {formData.insuranceCommodity && (
                           <span className="ml-2 text-blue-600">
-                            | Filtering by: <strong>{formData.insuranceCommodity}</strong>
+                            | Commodity: <strong>{formData.insuranceCommodity}</strong>
                             {!hasFilteredMatches && <span className="text-red-600 font-semibold"> (No matches - showing all)</span>}
                           </span>
                         )}
