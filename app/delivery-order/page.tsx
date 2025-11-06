@@ -154,13 +154,18 @@ export default function DeliveryOrderPage() {
   };
   
   const getBalanceQty = (row: any) => {
-    if (typeof row.balanceQuantity === 'number') return row.balanceQuantity;
-    if (row.balanceQuantity && !isNaN(Number(row.balanceQuantity))) return Number(row.balanceQuantity);
-    // Use releaseQuantity instead of totalQuantity for balance calculation
-    if (typeof row.releaseQuantity === 'number' && typeof row.doQuantity === 'number') {
-      return row.releaseQuantity - row.doQuantity;
+    let balance;
+    if (typeof row.balanceQuantity === 'number') {
+      balance = row.balanceQuantity;
+    } else if (row.balanceQuantity && !isNaN(Number(row.balanceQuantity))) {
+      balance = Number(row.balanceQuantity);
+    } else if (typeof row.releaseQuantity === 'number' && typeof row.doQuantity === 'number') {
+      // Use releaseQuantity instead of totalQuantity for balance calculation
+      balance = row.releaseQuantity - row.doQuantity;
+    } else {
+      return '';
     }
-    return '';
+    return typeof balance === 'number' ? balance.toFixed(3) : balance;
   };
 
   // Group deliveryOrders by srwrNo, show only latest per group
@@ -420,11 +425,11 @@ export default function DeliveryOrderPage() {
       do_item.clientCode || '',
       do_item.clientAddress || '',
       do_item.totalBags || '',
-      do_item.totalQuantity || '',
-      do_item.releaseBags || '',
-      do_item.releaseQuantity || '',
+      typeof do_item.totalQuantity === 'number' ? do_item.totalQuantity.toFixed(3) : (do_item.totalQuantity || ''),
+      do_item.isDirectDO ? '-' : (do_item.releaseBags || ''),
+      do_item.isDirectDO ? '-' : (typeof do_item.releaseQuantity === 'number' ? do_item.releaseQuantity.toFixed(3) : (do_item.releaseQuantity || '')),
       do_item.doBags || '',
-      do_item.doQuantity || '',
+      typeof do_item.doQuantity === 'number' ? do_item.doQuantity.toFixed(3) : (do_item.doQuantity || ''),
       getBalanceBags(do_item),
       getBalanceQty(do_item),
       normalizeStatusText(do_item.doStatus || 'pending'),
@@ -573,9 +578,10 @@ export default function DeliveryOrderPage() {
       
       console.log(`Found ${roData.length} ROs with positive balance`);
       
-      // Fetch all inward entries first
+      // Fetch all inward entries first - ONLY APPROVED SR/WR entries for Direct DO
       const inwardCol = collection(db, 'inward');
-      const inwardSnap = await getDocs(inwardCol);
+      const inwardQ = query(inwardCol, where('srwrStatus', '==', 'approved'));
+      const inwardSnap = await getDocs(inwardQ);
   const allInwardEntries: any[] = inwardSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       
       // Fetch all inspection entries to check for bank details
@@ -1398,11 +1404,11 @@ export default function DeliveryOrderPage() {
                       <td className="px-2 py-1 border">{do_item.clientCode}</td>
                       <td className="px-2 py-1 border">{do_item.clientAddress}</td>
                       <td className="px-2 py-1 border">{do_item.totalBags}</td>
-                      <td className="px-2 py-1 border">{do_item.totalQuantity}</td>
-                      <td className="px-2 py-1 border">{do_item.releaseBags}</td>
-                      <td className="px-2 py-1 border">{do_item.releaseQuantity}</td>
+                      <td className="px-2 py-1 border">{typeof do_item.totalQuantity === 'number' ? do_item.totalQuantity.toFixed(3) : do_item.totalQuantity}</td>
+                      <td className="px-2 py-1 border">{do_item.isDirectDO ? '-' : do_item.releaseBags}</td>
+                      <td className="px-2 py-1 border">{do_item.isDirectDO ? '-' : (typeof do_item.releaseQuantity === 'number' ? do_item.releaseQuantity.toFixed(3) : do_item.releaseQuantity)}</td>
                       <td className="px-2 py-1 border">{do_item.doBags || ''}</td>
-                      <td className="px-2 py-1 border">{do_item.doQuantity || ''}</td>
+                      <td className="px-2 py-1 border">{typeof do_item.doQuantity === 'number' ? do_item.doQuantity.toFixed(3) : (do_item.doQuantity || '')}</td>
                       <td className="px-2 py-1 border">{getBalanceBags(do_item)}</td>
                       <td className="px-2 py-1 border">{getBalanceQty(do_item)}</td>
                       <td className="px-2 py-1 border">
@@ -1731,15 +1737,15 @@ export default function DeliveryOrderPage() {
                     </div>
                     <div>
                       <Label className="text-green-800 font-medium">INWARD QUANTITY (MT)</Label>
-                      <Input value={selectedRO.totalQuantity || ''} readOnly className="bg-white border-green-100" />
+                      <Input value={typeof selectedRO.totalQuantity === 'number' ? selectedRO.totalQuantity.toFixed(3) : (selectedRO.totalQuantity || '')} readOnly className="bg-white border-green-100" />
                     </div>
                     <div>
                       <Label className="text-green-800 font-medium">RELEASE RO BAGS</Label>
-                      <Input value={selectedRO.releaseBags || ''} readOnly className="bg-white border-green-100" />
+                      <Input value={selectedRO.isDirectDO ? '-' : (selectedRO.releaseBags || '')} readOnly className="bg-white border-green-100" />
                     </div>
                     <div>
                       <Label className="text-green-800 font-medium">RELEASE RO QUANTITY (MT)</Label>
-                      <Input value={selectedRO.releaseQuantity || ''} readOnly className="bg-white border-green-100" />
+                      <Input value={selectedRO.isDirectDO ? '-' : (typeof selectedRO.releaseQuantity === 'number' ? selectedRO.releaseQuantity.toFixed(3) : (selectedRO.releaseQuantity || ''))} readOnly className="bg-white border-green-100" />
                     </div>
 
                     {/* Input fields */}
@@ -1972,11 +1978,11 @@ export default function DeliveryOrderPage() {
                     { label: 'Client Code', value: selectedDO.clientCode },
                     { label: 'Client Address', value: selectedDO.clientAddress },
                     { label: 'Inward Bags', value: selectedDO.totalBags },
-                    { label: 'Inward Quantity (MT)', value: selectedDO.totalQuantity },
-                    { label: 'Release RO Bags', value: selectedDO.releaseBags },
-                    { label: 'Release RO Quantity (MT)', value: selectedDO.releaseQuantity },
+                    { label: 'Inward Quantity (MT)', value: typeof selectedDO.totalQuantity === 'number' ? selectedDO.totalQuantity.toFixed(3) : selectedDO.totalQuantity },
+                    { label: 'Release RO Bags', value: selectedDO.isDirectDO ? '-' : selectedDO.releaseBags },
+                    { label: 'Release RO Quantity (MT)', value: selectedDO.isDirectDO ? '-' : (typeof selectedDO.releaseQuantity === 'number' ? selectedDO.releaseQuantity.toFixed(3) : selectedDO.releaseQuantity) },
                     { label: 'DO Bags', value: selectedDO.doBags },
-                    { label: 'DO Quantity (MT)', value: selectedDO.doQuantity },
+                    { label: 'DO Quantity (MT)', value: typeof selectedDO.doQuantity === 'number' ? selectedDO.doQuantity.toFixed(3) : selectedDO.doQuantity },
                     { label: 'Balance Bags', value: getBalanceBags(selectedDO) },
                     { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedDO) },
                   ].map((f, idx) => (
@@ -2065,11 +2071,11 @@ export default function DeliveryOrderPage() {
                                 { label: 'Client Code', value: selectedDO.clientCode },
                                 { label: 'Client Address', value: selectedDO.clientAddress },
                                 { label: 'Inward Bags', value: selectedDO.totalBags },
-                                { label: 'Inward Quantity (MT)', value: selectedDO.totalQuantity },
-                                { label: 'Release RO Bags', value: selectedDO.releaseBags },
-                                { label: 'Release RO Quantity (MT)', value: selectedDO.releaseQuantity },
+                                { label: 'Inward Quantity (MT)', value: typeof selectedDO.totalQuantity === 'number' ? selectedDO.totalQuantity.toFixed(3) : selectedDO.totalQuantity },
+                                { label: 'Release RO Bags', value: selectedDO.isDirectDO ? '-' : selectedDO.releaseBags },
+                                { label: 'Release RO Quantity (MT)', value: selectedDO.isDirectDO ? '-' : (typeof selectedDO.releaseQuantity === 'number' ? selectedDO.releaseQuantity.toFixed(3) : selectedDO.releaseQuantity) },
                                 { label: 'DO Bags', value: selectedDO.doBags },
-                                { label: 'DO Quantity (MT)', value: selectedDO.doQuantity },
+                                { label: 'DO Quantity (MT)', value: typeof selectedDO.doQuantity === 'number' ? selectedDO.doQuantity.toFixed(3) : selectedDO.doQuantity },
                                 { label: 'Balance Bags', value: getBalanceBags(selectedDO) },
                                 { label: 'Balance Quantity (MT)', value: getBalanceQty(selectedDO) }
                               ].map(field => `
