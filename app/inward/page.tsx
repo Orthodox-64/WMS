@@ -64,6 +64,15 @@ function normalizeDate(val: any) {
   return '';
 }
 
+// Get today's date in YYYY-MM-DD (local) to store the SR Generation Date as the day of approval
+function todayYYYYMMDD() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${da}`;
+}
+
 // Add this helper at the top-level scope:
 function parseDDMMYYYY(dateStr: string): Date | null {
   if (!dateStr) return null;
@@ -770,6 +779,10 @@ export default function InwardPage() {
               selectedInsurance: data.selectedInsurance,
               status: data.status,
               cirStatus: data.cirStatus || 'Pending',
+              // Persisted approval metadata
+              hologramNumber: data.hologramNumber || '',
+              srGenerationDate: data.srGenerationDate || '',
+              srGenerationDateISO: data.srGenerationDateISO || '',
               
               // Combined entry data - show first entry's data as primary
               vehicleNumber: data.inwardEntries[0]?.vehicleNumber || '-',
@@ -1276,17 +1289,22 @@ export default function InwardPage() {
     }
 
     try {
+      const srDateOnly = todayYYYYMMDD();
+      const srDateISO = new Date().toISOString();
       const docRef = doc(db, 'inward', row.id);
       await updateDoc(docRef, {
         status: 'approved',
         hologramNumber: hologramNumber,
-        srGenerationDate: new Date().toISOString(),
-        approvedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        // Store the SR Generation Date as the approval day (YYYY-MM-DD) and keep ISO for auditing
+        srGenerationDate: srDateOnly,
+        srGenerationDateISO: srDateISO,
+        approvedAt: srDateISO,
+        updatedAt: srDateISO
       });
 
       setIsFormApproved(true);
-      setSrGenerationDate(new Date().toLocaleDateString());
+      // Reflect immediately in UI using normalized DD-MM-YYYY
+      setSrGenerationDate(normalizeDate(srDateOnly));
       
       toast({
         title: "Success",
@@ -6086,7 +6104,7 @@ export default function InwardPage() {
         <StorageReceipt
           data={{
             srNo: generateSRNo(selectedRowForSR),
-            srGenerationDate: srGenerationDate || '-',
+            srGenerationDate: (selectedRowForSR?.srGenerationDate ? normalizeDate(selectedRowForSR.srGenerationDate) : (srGenerationDate || '-')),
             dateOfIssue: selectedRowForSR?.dateOfInward || '',
             baseReceiptNo: selectedRowForSR?.baseReceiptNo || selectedRowForSR?.bankReceipt || '-',
             cadNo: selectedRowForSR?.cadNo || selectedRowForSR?.cadNumber || '',
@@ -6116,7 +6134,7 @@ export default function InwardPage() {
             remarks: selectedRowForSR?.remarks || '-',
             marketRate: selectedRowForSR?.marketRate || '',
             valueOfCommodity: selectedRowForSR?.totalValue || '',
-            hologramNumber: hologramNumber || '',
+            hologramNumber: selectedRowForSR?.hologramNumber || hologramNumber || '',
             insuranceDetails: [
               (() => {
                 // Prefer the inspection insurance entry that matches the saved selectedInsurance on the inward row
@@ -9218,7 +9236,11 @@ export default function InwardPage() {
                 </div>
                 <div className="flex-1">
                   <Label className="font-semibold">{selectedRowForSR.receiptType === 'WR' ? 'WR Generation Date' : 'SR Generation Date'}</Label>
-                  <Input value={selectedRowForSR.srGenerationDate || ''} readOnly placeholder="Auto-set on Approve" />
+                  <Input
+                    value={selectedRowForSR?.srGenerationDate ? normalizeDate(selectedRowForSR.srGenerationDate) : (srGenerationDate || '')}
+                    readOnly
+                    placeholder="Auto-set on Approve"
+                  />
                 </div>
                 <div className="flex-1">
                   <Label className="font-semibold">CAD No</Label>
@@ -9759,8 +9781,8 @@ export default function InwardPage() {
                   <div ref={printableReceiptRef}>
                     <PrintableWarehouseReceipt
                       selectedRowForSR={selectedRowForSR}
-                      hologramNumber={hologramNumber}
-                      srGenerationDate={srGenerationDate}
+                      hologramNumber={selectedRowForSR?.hologramNumber || hologramNumber}
+                      srGenerationDate={selectedRowForSR?.srGenerationDate ? normalizeDate(selectedRowForSR.srGenerationDate) : srGenerationDate}
                       getSelectedVarietyParticulars={getSelectedVarietyParticulars}
                       inspectionInsuranceData={inspectionInsuranceData}
                     />
@@ -9770,7 +9792,7 @@ export default function InwardPage() {
                     <StorageReceipt
                       data={{
                         srNo: generateSRNo(selectedRowForSR),
-                        srGenerationDate: srGenerationDate || '-',
+                        srGenerationDate: (selectedRowForSR?.srGenerationDate ? normalizeDate(selectedRowForSR.srGenerationDate) : (srGenerationDate || '-')),
                         dateOfIssue: selectedRowForSR?.dateOfInward || '',
                         baseReceiptNo: selectedRowForSR?.baseReceiptNo || selectedRowForSR?.bankReceipt || '-',
                         cadNo: selectedRowForSR?.cadNo || selectedRowForSR?.cadNumber || '',
@@ -9800,7 +9822,7 @@ export default function InwardPage() {
                         remarks: selectedRowForSR?.remarks || '-',
                         marketRate: selectedRowForSR?.marketRate || '',
                         valueOfCommodity: selectedRowForSR?.totalValue || '',
-                        hologramNumber: hologramNumber || '',
+                        hologramNumber: selectedRowForSR?.hologramNumber || hologramNumber || '',
                         insuranceDetails: [
                           {
                             policyNo: inspectionInsuranceData[0]?.firePolicyNumber || '-',

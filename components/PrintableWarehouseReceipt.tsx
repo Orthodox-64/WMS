@@ -34,9 +34,100 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
     return matched?.clientAddress || selectedRowForSR?.clientAddress || '';
   };
 
+  // Resolve matched insurance item once for reuse
+  const getMatchedInsurance = () => {
+    const sel = selectedRowForSR?.selectedInsurance;
+    let matched: any = null;
+    try {
+      if (sel && inspectionInsuranceData && inspectionInsuranceData.length) {
+        matched =
+          inspectionInsuranceData.find(
+            (i: any) =>
+              i.insuranceId === sel.insuranceId &&
+              i.insuranceTakenBy === sel.insuranceTakenBy
+          ) || null;
+      }
+    } catch (e) {
+      matched = null;
+    }
+    return matched || inspectionInsuranceData[0] || null;
+  };
+
+  // Helper to find actual lab result by parameter name or index
+  const getActualLabResult = (name: string, index: number) => {
+    const list: any[] = selectedRowForSR?.labResults || [];
+    if (!list?.length) return '';
+    const byName = list.find((lr: any) => lr?.parameterName === name);
+    if (byName) return byName?.actual ?? byName?.value ?? '';
+    const byIndex = list[index];
+    return byIndex?.actual ?? byIndex?.value ?? '';
+  };
+  const matchedInsurance = getMatchedInsurance();
+
+  // Common input style: slightly more top bias and tighter line height to avoid clipping in PDF
+  const inputBaseStyle: React.CSSProperties = {
+    backgroundColor: '#f9f9f9',
+    border: '1px solid #d1d5db',
+    padding: '6px 12px 4px 12px',
+    lineHeight: 1.1,
+  };
+
+  // Robust number-to-words (Indian system) helper
+  const numberToWordsIndian = (num: number) => {
+    if (isNaN(num as any)) return '';
+    if (num === 0) return 'zero';
+    const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+      'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+    const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    const toWordsBelowThousand = (n: number) => {
+      let s = '';
+      const hundred = Math.floor(n / 100);
+      const rest = n % 100;
+      if (hundred) s += ones[hundred] + ' hundred';
+      if (rest) {
+        if (s) s += ' ';
+        if (rest < 20) s += ones[rest];
+        else {
+          s += tens[Math.floor(rest / 10)];
+          if (rest % 10) s += '-' + ones[rest % 10];
+        }
+      }
+      return s.trim();
+    };
+    // Indian groups: crore, lakh, thousand, hundred
+    const crore = Math.floor(num / 10000000);
+    num %= 10000000;
+    const lakh = Math.floor(num / 100000);
+    num %= 100000;
+    const thousand = Math.floor(num / 1000);
+    num %= 1000;
+    const rest = Math.floor(num);
+    const parts: string[] = [];
+    if (crore) parts.push(toWordsBelowThousand(crore) + ' crore');
+    if (lakh) parts.push(toWordsBelowThousand(lakh) + ' lakh');
+    if (thousand) parts.push(toWordsBelowThousand(thousand) + ' thousand');
+    if (rest) parts.push(toWordsBelowThousand(rest));
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  };
+
+  // Compute Value of Commodities (in words)
+  const parseNum = (x: any) => {
+    if (x === null || x === undefined) return NaN;
+    const n = typeof x === 'string' ? x.replace(/[^0-9.\-]/g, '') : x;
+    return parseFloat(n as any);
+  };
+  const qty = parseNum(selectedRowForSR?.totalQuantity);
+  const rate = parseNum(selectedRowForSR?.marketRate);
+  const explicitValue = parseNum((selectedRowForSR as any)?.valueOfCommodities ?? (selectedRowForSR as any)?.totalValue);
+  const computedValue = !isNaN(explicitValue) ? explicitValue : (!isNaN(qty) && !isNaN(rate) ? qty * rate : NaN);
+  const valueWords = !isNaN(computedValue)
+    ? `Rupees ${numberToWordsIndian(Math.round(computedValue))} only`
+    : '';
+
   return (
     <div style={{ 
-      maxWidth: '1200px', 
+      width: '794px',
+      maxWidth: '794px', 
       margin: '0 auto',
       backgroundColor: 'white',
       padding: '20px',
@@ -52,6 +143,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
         marginBottom: '32px',
         marginTop: '8px'
       }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img 
           src="/Group 86.png" 
           alt="Agrogreen Logo" 
@@ -99,7 +191,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
       {/* Form Content */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         {/* First Row */}
-        <div style={{ display: 'flex', gap: '16px' }}>
+        <div style={{ display: 'flex', gap: '16px', breakInside: 'avoid' }}>
           <div style={{ flex: 1 }}>
             <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
               {selectedRowForSR?.receiptType === 'WR' ? 'WR No' : 'SR No'}
@@ -107,11 +199,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <Input 
               value={selectedRowForSR?.srNo || `${selectedRowForSR?.receiptType === 'WR' ? 'WR' : 'SR'}-${selectedRowForSR?.inwardId || 'XXX'}-${selectedRowForSR?.dateOfInward ? selectedRowForSR.dateOfInward.replace(/-/g, '') : ''}`}
               readOnly 
-              style={{ 
-                backgroundColor: '#f9f9f9',
-                border: '1px solid #d1d5db',
-                padding: '8px 12px'
-              }}
+              style={inputBaseStyle}
             />
           </div>
           <div style={{ flex: 1 }}>
@@ -119,13 +207,9 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               {selectedRowForSR?.receiptType === 'WR' ? 'WR Generation Date' : 'SR Generation Date'}
             </Label>
             <Input 
-              value={srGenerationDate || 'Auto-set on Approve'} 
+              value={srGenerationDate || ''} 
               readOnly
-              style={{ 
-                backgroundColor: '#f9f9f9',
-                border: '1px solid #d1d5db',
-                padding: '8px 12px'
-              }}
+              style={inputBaseStyle}
             />
           </div>
           <div style={{ flex: 1 }}>
@@ -133,32 +217,23 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <Input 
               value={selectedRowForSR?.cadNumber || ''} 
               readOnly
-              style={{ 
-                backgroundColor: '#f9f9f9',
-                border: '1px solid #d1d5db',
-                padding: '8px 12px'
-              }}
+              style={inputBaseStyle}
             />
           </div>
         </div>
 
         {/* Date of Deposit */}
-        <div>
+  <div style={{ breakInside: 'avoid' }}>
           <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Date of deposite</Label>
           <Input 
             value={selectedRowForSR?.dateOfInward || ''} 
             readOnly
-            style={{ 
-              backgroundColor: '#f9f9f9',
-              border: '1px solid #d1d5db',
-              padding: '8px 12px',
-              width: '300px'
-            }}
+            style={{ ...inputBaseStyle, width: '300px' }}
           />
         </div>
 
         {/* Bank Details Section */}
-        <div>
+  <div style={{ breakInside: 'avoid' }}>
           <h3 style={{ color: '#16a34a', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
             Bank Details
           </h3>
@@ -168,11 +243,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.bankName || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -180,11 +251,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.bankBranch || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -192,18 +259,14 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.ifscCode || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
         </div>
 
         {/* Warehouse Details Section */}
-        <div>
+  <div style={{ breakInside: 'avoid' }}>
           <h3 style={{ color: '#ea580c', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
             Warehouse Details
           </h3>
@@ -213,11 +276,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.warehouseName || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -225,11 +284,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.warehouseCode || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -237,18 +292,14 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.warehouseAddress || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
         </div>
 
         {/* Client Details Section */}
-        <div>
+  <div style={{ breakInside: 'avoid' }}>
           <h3 style={{ color: '#16a34a', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
             Client Details
           </h3>
@@ -258,11 +309,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.client || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -270,11 +317,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.clientCode || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -282,11 +325,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={getClientAddress()} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
@@ -303,11 +342,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.commodity || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -315,11 +350,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.varietyName || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
@@ -330,11 +361,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.totalBags || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -342,11 +369,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.totalQuantity || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
@@ -357,11 +380,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.totalValue || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -369,11 +388,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.marketRate || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
@@ -384,23 +399,15 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.bankReceipt || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Value of Commodities (in words)</Label>
               <Input 
-                value="nine thousand nine hundred ninety only" 
+                value={valueWords} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
@@ -415,25 +422,17 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Validity Start Date</Label>
               <Input 
-                value="Auto-set on Approve" 
+                value={srGenerationDate || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Validity End Date</Label>
               <Input 
-                value="27-07-2025" 
+                value={selectedRowForSR?.validityEndDate || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
@@ -441,14 +440,9 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
           <div style={{ marginBottom: '16px' }}>
             <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Hologram No</Label>
             <Input 
-              value={hologramNumber || 'Enter Hologram'} 
+              value={hologramNumber || ''} 
               readOnly
-              style={{ 
-                backgroundColor: '#f9f9f9',
-                border: '1px solid #d1d5db',
-                padding: '8px 12px',
-                width: '300px'
-              }}
+              style={{ ...inputBaseStyle, width: '300px' }}
             />
           </div>
         </div>
@@ -474,99 +468,39 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <h3 style={{ color: '#ea580c', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
               {selectedRowForSR.billingStatus === 'Reservation' ? 'Reservation Details' : 'Billing Details'}
             </h3>
-            
-            {/* Show Reservation fields if billingStatus is "Reservation" */}
             {selectedRowForSR.billingStatus === 'Reservation' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
                 <div>
                   <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Reservation Rate (Rs/MT)</Label>
-                  <Input 
-                    value={selectedRowForSR.reservationRate || '-'} 
-                    readOnly
-                    style={{ 
-                      backgroundColor: '#f9f9f9',
-                      border: '1px solid #d1d5db',
-                      padding: '8px 12px'
-                    }}
-                  />
+                  <Input value={selectedRowForSR.reservationRate || '-'} readOnly style={inputBaseStyle} />
                 </div>
                 <div>
                   <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Reservation Quantity (MT)</Label>
-                  <Input 
-                    value={selectedRowForSR.reservationQty || '-'} 
-                    readOnly
-                    style={{ 
-                      backgroundColor: '#f9f9f9',
-                      border: '1px solid #d1d5db',
-                      padding: '8px 12px'
-                    }}
-                  />
+                  <Input value={selectedRowForSR.reservationQty || '-'} readOnly style={inputBaseStyle} />
                 </div>
                 <div>
                   <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Reservation Start Date</Label>
-                  <Input 
-                    value={selectedRowForSR.reservationStart || '-'} 
-                    readOnly
-                    style={{ 
-                      backgroundColor: '#f9f9f9',
-                      border: '1px solid #d1d5db',
-                      padding: '8px 12px'
-                    }}
-                  />
+                  <Input value={selectedRowForSR.reservationStart || '-'} readOnly style={inputBaseStyle} />
                 </div>
                 <div>
                   <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Reservation End Date</Label>
-                  <Input 
-                    value={selectedRowForSR.reservationEnd || '-'} 
-                    readOnly
-                    style={{ 
-                      backgroundColor: '#f9f9f9',
-                      border: '1px solid #d1d5db',
-                      padding: '8px 12px'
-                    }}
-                  />
+                  <Input value={selectedRowForSR.reservationEnd || '-'} readOnly style={inputBaseStyle} />
                 </div>
               </div>
             )}
-            
-            {/* Show Billing fields if billingStatus is "Post Reservation" */}
             {selectedRowForSR.billingStatus === 'Post Reservation' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
                 <div>
                   <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Billing Cycle</Label>
-                  <Input 
-                    value={selectedRowForSR.billingCycle || '-'} 
-                    readOnly
-                    style={{ 
-                      backgroundColor: '#f9f9f9',
-                      border: '1px solid #d1d5db',
-                      padding: '8px 12px'
-                    }}
-                  />
+                  <Input value={selectedRowForSR.billingCycle || '-'} readOnly style={inputBaseStyle} />
                 </div>
                 <div>
                   <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Billing Type</Label>
-                  <Input 
-                    value={selectedRowForSR.billingType || '-'} 
-                    readOnly
-                    style={{ 
-                      backgroundColor: '#f9f9f9',
-                      border: '1px solid #d1d5db',
-                      padding: '8px 12px'
-                    }}
-                  />
+                  <Input value={selectedRowForSR.billingType || '-'} readOnly style={inputBaseStyle} />
                 </div>
                 <div>
                   <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Billing Rate (Rs/MT)</Label>
-                  <Input 
-                    value={selectedRowForSR.billingRate || '-'} 
-                    readOnly
-                    style={{ 
-                      backgroundColor: '#f9f9f9',
-                      border: '1px solid #d1d5db',
-                      padding: '8px 12px'
-                    }}
-                  />
+                  <Input value={selectedRowForSR.billingRate || '-'} readOnly style={inputBaseStyle} />
                 </div>
               </div>
             )}
@@ -574,169 +508,58 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
         )}
 
         {/* Insurance Details Section */}
-        <div style={{ marginTop: '30px' }}>
+        <div style={{ marginTop: '30px', breakInside: 'avoid' }}>
           <h3 style={{ color: '#ea580c', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
             Insurance Details
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Insurance Taken By</Label>
-              <Input 
-                value="client" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={matchedInsurance?.insuranceTakenBy || selectedRowForSR?.selectedInsurance?.insuranceTakenBy || selectedRowForSR?.insuranceTakenBy || '-'} readOnly style={inputBaseStyle} />
             </div>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Commodity</Label>
-              <Input 
-                value="mycom" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={matchedInsurance?.commodityName || selectedRowForSR?.commodity || ''} readOnly style={inputBaseStyle} />
             </div>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Client Name</Label>
-              <Input 
-                value={selectedRowForSR?.client || ''} 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
-            </div>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Client Address</Label>
-              <Input 
-                value={getClientAddress()} 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy Company</Label>
-              <Input 
-                value="pol1" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={matchedInsurance?.firePolicyCompanyName || matchedInsurance?.firePolicyCompany || selectedRowForSR?.firePolicyCompanyName || '-'} readOnly style={inputBaseStyle} />
             </div>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy Number</Label>
-              <Input 
-                value="23456" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={matchedInsurance?.firePolicyNumber || '-'} readOnly style={inputBaseStyle} />
             </div>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy Amount</Label>
-              <Input 
-                value="₹2950050.00" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={matchedInsurance?.firePolicyAmount || matchedInsurance?.fireSumInsured || '-'} readOnly style={inputBaseStyle} />
             </div>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy End Date</Label>
-              <Input 
-                value="27-07-2025" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={(matchedInsurance?.firePolicyEndDate || matchedInsurance?.firePolicyEndOn || '-') as string} readOnly style={inputBaseStyle} />
             </div>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Burglary Policy Company</Label>
-              <Input 
-                value="pol2" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={matchedInsurance?.burglaryPolicyCompanyName || matchedInsurance?.burglaryPolicyCompany || selectedRowForSR?.burglaryPolicyCompanyName || '-'} readOnly style={inputBaseStyle} />
             </div>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Burglary Policy Number</Label>
-              <Input 
-                value="4567" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={matchedInsurance?.burglaryPolicyNumber || '-'} readOnly style={inputBaseStyle} />
             </div>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Burglary Policy Amount</Label>
-              <Input 
-                value="₹1950050.00" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={matchedInsurance?.burglaryPolicyAmount || matchedInsurance?.burglarySumInsured || '-'} readOnly style={inputBaseStyle} />
             </div>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Burglary Policy End Date</Label>
-              <Input 
-                value="27-07-2025" 
-                readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
-              />
+              <Input value={(matchedInsurance?.burglaryPolicyEndDate || matchedInsurance?.burglaryPolicyEndOn || '-') as string} readOnly style={inputBaseStyle} />
             </div>
           </div>
         </div>
@@ -747,7 +570,8 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
           justifyContent: 'flex-end', 
           alignItems: 'flex-end', 
           marginTop: '40px',
-          marginBottom: '20px'
+          marginBottom: '20px',
+          breakInside: 'avoid'
         }}>
           <div style={{ textAlign: 'right', marginRight: '20px' }}>
             <div style={{ 
@@ -780,10 +604,8 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
           </div>
         </div>
 
-
-
-        {/* Force page break with large margin */}
-        <div style={{ marginTop: '150vh' }}>
+  {/* Proper page break to next sheet */}
+  <div style={{ pageBreakBefore: 'always' }}>
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -791,6 +613,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             justifyContent: 'center',
             marginBottom: '32px'
           }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src="/Group 86.png" 
               alt="Agrogreen Logo" 
@@ -836,17 +659,13 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
           </div>
 
           {/* Test Certificate Fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Client Name</Label>
               <Input 
                 value={selectedRowForSR?.client || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -854,26 +673,18 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.commodity || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Commodity Variety Name</Label>
               <Input 
                 value={selectedRowForSR?.varietyName || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -881,26 +692,18 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={getClientAddress()} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Warehouse Name</Label>
               <Input 
                 value={selectedRowForSR?.warehouseName || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -908,26 +711,18 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.warehouseAddress || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Total Number of Bags</Label>
               <Input 
                 value={selectedRowForSR?.totalBags || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -935,26 +730,18 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.cadNumber || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Date of Sampling</Label>
               <Input 
                 value={selectedRowForSR?.dateOfSampling || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
             <div>
@@ -962,11 +749,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input 
                 value={selectedRowForSR?.dateOfTesting || ''} 
                 readOnly
-                style={{ 
-                  backgroundColor: '#f9f9f9',
-                  border: '1px solid #d1d5db',
-                  padding: '8px 12px'
-                }}
+                style={inputBaseStyle}
               />
             </div>
           </div>
@@ -1032,36 +815,44 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style={{ 
-                    border: '1px solid #ea580c', 
-                    padding: '8px', 
-                    textAlign: 'center' 
-                  }}>
-                    Moisture
-                  </td>
-                  <td style={{ 
-                    border: '1px solid #ea580c', 
-                    padding: '8px', 
-                    textAlign: 'center' 
-                  }}>
-                    0
-                  </td>
-                  <td style={{ 
-                    border: '1px solid #ea580c', 
-                    padding: '8px', 
-                    textAlign: 'center' 
-                  }}>
-                    15
-                  </td>
-                  <td style={{ 
-                    border: '1px solid #ea580c', 
-                    padding: '8px', 
-                    textAlign: 'center' 
-                  }}>
-                    1
-                  </td>
-                </tr>
+                {(particulars || []).map((p: any, idx: number) => {
+                  const pname = p?.particularName || p?.name || `Parameter ${idx + 1}`;
+                  const min = p?.minPercent ?? p?.minPercentage ?? p?.minValue ?? p?.min ?? '';
+                  const max = p?.maxPercent ?? p?.maxPercentage ?? p?.maxValue ?? p?.max ?? '';
+                  const actual = getActualLabResult(pname, idx);
+                  return (
+                    <tr key={`${pname}-${idx}`}>
+                      <td style={{ 
+                        border: '1px solid #ea580c', 
+                        padding: '8px', 
+                        textAlign: 'center' 
+                      }}>
+                        {pname}
+                      </td>
+                      <td style={{ 
+                        border: '1px solid #ea580c', 
+                        padding: '8px', 
+                        textAlign: 'center' 
+                      }}>
+                        {min}
+                      </td>
+                      <td style={{ 
+                        border: '1px solid #ea580c', 
+                        padding: '8px', 
+                        textAlign: 'center' 
+                      }}>
+                        {max}
+                      </td>
+                      <td style={{ 
+                        border: '1px solid #ea580c', 
+                        padding: '8px', 
+                        textAlign: 'center' 
+                      }}>
+                        {actual}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
