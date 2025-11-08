@@ -10518,9 +10518,9 @@ export default function InwardPage() {
                       {canRejectCIR() && (
                         <Button onClick={handleCIRReject} className="bg-red-600 hover:bg-red-700 text-white" disabled={!cirRemarks.trim()}>Reject</Button>
                       )}
-                      {canResubmitCIR() && (
+                      {/* {canResubmitCIR() && (
                         <Button onClick={handleCIRResubmit} className="bg-yellow-400 hover:bg-yellow-500 text-white" disabled={!cirRemarks.trim()}>Resubmit</Button>
-                      )}
+                      )} */}
                     </>
                   ) : (
                     <div className="flex flex-col items-center text-gray-500">
