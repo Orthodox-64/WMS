@@ -108,8 +108,8 @@ export default function OutwardPage() {
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   
   // Form fields
-  const [outwardBags, setOutwardBags] = React.useState('');
-  const [outwardQty, setOutwardQty] = React.useState('');
+  const [outwardBags, setOutwardBags] = React.useState(''); // READ-ONLY: AUTO-CALCULATED sum of all vehicle entries' Total Bags Outward
+  const [outwardQty, setOutwardQty] = React.useState(''); // INPUT: Single quantity field for entire outward (filled once at end)
   const [vehicleNumber, setVehicleNumber] = React.useState('');
   const [gatepass, setGatepass] = React.useState('');
   const [weighbridgeName, setWeighbridgeName] = React.useState('');
@@ -117,11 +117,11 @@ export default function OutwardPage() {
   const [grossWeight, setGrossWeight] = React.useState('');
   const [tareWeight, setTareWeight] = React.useState('');
   const [netWeight, setNetWeight] = React.useState('');
-  const [totalBagsOutward, setTotalBagsOutward] = React.useState('');
+  const [totalBagsOutward, setTotalBagsOutward] = React.useState(''); // INPUT: Target bags for current vehicle entry (per vehicle)
   const [stackEntries, setStackEntries] = React.useState<any[]>([]);
   const [fileAttachments, setFileAttachments] = React.useState<File[]>([]);
-  // Track entries added in this session for multi-vehicle flow
-  const [sessionEntries, setSessionEntries] = React.useState<any[]>([]);
+  // Track vehicle entries added in this session (not yet submitted)
+  const [vehicleEntries, setVehicleEntries] = React.useState<any[]>([]);
   
   // Status variables
   const [isUploading, setIsUploading] = React.useState(false);
@@ -339,106 +339,57 @@ export default function OutwardPage() {
     return '';
   };
   
-  // Helper function to calculate total bags from stack entries
-  const calculateTotalBags = (entries: any[]) => {
-    // Calculate total bags from stack entries
-    const totalBags = entries.reduce((sum, stack) => sum + (Number(stack.bags) || 0), 0);
-    
-    // Update the outward bags total
+  // Helper function to calculate cumulative total bags from all vehicle entries
+  const calculateCumulativeBags = React.useCallback(() => {
+    const totalBags = vehicleEntries.reduce((sum, entry) => sum + (Number(entry.totalBagsOutward) || 0), 0);
     setOutwardBags(totalBags.toString());
-    setTotalBagsOutward(totalBags.toString());
-    
-    console.log(`Updated total bags: ${totalBags}`);
-  };
+    console.log(`Cumulative Outward Bags: ${totalBags}`);
+  }, [vehicleEntries]);
+  
+  // Update cumulative bags whenever vehicle entries change
+  React.useEffect(() => {
+    calculateCumulativeBags();
+  }, [calculateCumulativeBags]);
 
-  // Centralized submit handler to support Submit and Add Entry flows
-  const handleOutwardSubmit = React.useCallback(async (options?: { stayOpen?: boolean }) => {
-    const stayOpen = !!options?.stayOpen;
+  // Add vehicle entry (similar to inward's add entry logic)
+  const handleAddVehicleEntry = React.useCallback(async () => {
     setFormError(null);
 
-    if (!selectedDO && !isEditMode) {
-      setFormError('Please select a DO');
-      return;
-    }
-
-    // Require at least one attachment: either existing or newly added
-    const hasAnyAttachment = (existingAttachmentUrls && existingAttachmentUrls.length > 0) || (fileAttachments.length > 0);
-    if (!hasAnyAttachment) {
-      setFormError('Please upload at least one attachment');
-      return;
-    }
-
-    // Validate outward bags and quantity
-    const obBags = Number(outwardBags);
-    const oQuantity = Number(outwardQty);
-  const balanceBags = currentBalanceBags || 0;
-  const balanceQty = currentBalanceQty || 0;
-
-    if (balanceBags <= 0 || balanceQty <= 0) {
-      setFormError('No remaining balance available for this Delivery Order');
-      return;
-    }
-    if (isNaN(obBags) || obBags <= 0) {
-      setFormError('Please enter valid number of bags');
+    // Validate total bags outward (target for this vehicle)
+    const targetBags = Number(totalBagsOutward);
+    if (isNaN(targetBags) || targetBags <= 0) {
+      setFormError('Please enter valid Total Bags Outward for this vehicle');
       return;
     }
     
-    // Validate that outward bags is a whole number
-    if (!Number.isInteger(obBags)) {
-      setFormError('Outward Bags must be a whole number (no decimals allowed).');
-      return;
-    }
-    if (isNaN(oQuantity) || oQuantity <= 0) {
-      setFormError('Please enter valid quantity');
+    if (!Number.isInteger(targetBags)) {
+      setFormError('Total Bags Outward must be a whole number');
       return;
     }
 
-    // Check stack entries total: must equal outwardBags
+    // Validate stack entries sum equals target
     const totalStackBags = stackEntries.reduce((sum, stack) => sum + Number(stack.bags || 0), 0);
     
-    // Validate that all stack bags are whole numbers
     for (let i = 0; i < stackEntries.length; i++) {
       const stackBags = Number(stackEntries[i].bags || 0);
       if (!Number.isInteger(stackBags)) {
-        setFormError(`Stack ${i + 1} bags must be a whole number (no decimals allowed).`);
+        setFormError(`Stack ${i + 1} bags must be a whole number`);
         return;
       }
     }
     
-    if (totalStackBags !== obBags) {
-      setFormError(`Total stack bags (${totalStackBags}) must match outward bags (${obBags})`);
-      return;
-    }
-    if (obBags > balanceBags) {
-      setFormError(`Cannot release more than available balance bags (${balanceBags})`);
-      return;
-    }
-    if (oQuantity > balanceQty) {
-      setFormError(`Cannot release more than available balance quantity (${balanceQty})`);
-      return;
-    }
-    if (!vehicleNumber.trim()) {
-      setFormError('Vehicle number is required');
-      return;
-    }
-    if (!gatepass.trim()) {
-      setFormError('Gatepass is required');
-      return;
-    }
-    if (!weighbridgeName.trim()) {
-      setFormError('Weighbridge name is required');
-      return;
-    }
-    if (!weighbridgeSlipNo.trim()) {
-      setFormError('Weighbridge slip number is required');
+    if (totalStackBags !== targetBags) {
+      setFormError(`Sum of stack bags (${totalStackBags}) must equal Total Bags Outward (${targetBags})`);
       return;
     }
 
+    // Vehicle fields and attachments are optional - user can add entry with or without them
+
     try {
       setIsUploading(true);
-      let createdOutwardForSession: any = null;
-      let attachmentUrls: string[] = [...(existingAttachmentUrls || [])];
-      let hasUploadErrors = false;
+      
+      // Upload attachments for this vehicle entry
+      let attachmentUrls: string[] = [];
       if (fileAttachments.length > 0) {
         for (const file of fileAttachments) {
           try {
@@ -447,28 +398,138 @@ export default function OutwardPage() {
               attachmentUrls.push(result.secure_url);
             }
           } catch (uploadError) {
-            hasUploadErrors = true;
+            console.error('Error uploading file:', uploadError);
           }
-        }
-        if (hasUploadErrors && attachmentUrls.length < fileAttachments.length) {
-          alert(`Some files failed to upload. ${attachmentUrls.length} of ${fileAttachments.length} were successful.`);
         }
       }
 
-      // Prepare new balances (balance is available balance shown in the form)
-      const newBalanceBags = balanceBags - obBags;
-      const newBalanceQty = balanceQty - oQuantity;
+      // Create vehicle entry object (WITHOUT outwardQuantity - that's filled at document level)
+      const vehicleEntry = {
+        entryNumber: vehicleEntries.length + 1,
+        vehicleNumber,
+        gatepass,
+        weighbridgeName,
+        weighbridgeSlipNo,
+        grossWeight: parseFloat(grossWeight) || 0,
+        tareWeight: parseFloat(tareWeight) || 0,
+        netWeight: parseFloat(netWeight) || 0,
+        totalBagsOutward: targetBags,
+        stackEntries: stackEntries.map(stack => ({
+          stackNo: stack.stackNo,
+          bags: Number(stack.bags),
+          commodityName: stack.commodityName,
+          varietyName: stack.varietyName
+        })),
+        attachmentUrls,
+        remark: remark || ''
+      };
+
+      // Add to vehicle entries list
+      setVehicleEntries(prev => [...prev, vehicleEntry]);
+
+      // Update stack balances for next entry
+      const updatedStacks = stackEntries.map((stack: any) => {
+        const usedBags = Number(stack.bags || 0);
+        const currentAvailable = Number(stack.inwardBags || 0);
+        const newAvailable = Math.max(0, currentAvailable - usedBags);
+        
+        return {
+          stackNo: stack.stackNo,
+          bags: '', // Reset for next entry
+          inwardBags: newAvailable, // Updated available
+          balanceBags: newAvailable,
+          commodityName: stack.commodityName,
+          varietyName: stack.varietyName
+        };
+      });
+      setStackEntries(updatedStacks);
+
+      // Update DO balance for next entry (only bags, not quantity yet)
+      const newBalanceBags = (currentBalanceBags || 0) - targetBags;
+      setCurrentBalanceBags(newBalanceBags);
+
+      // Reset vehicle-specific fields for next entry
+      setTotalBagsOutward('');
+      setVehicleNumber('');
+      setGatepass('');
+      setWeighbridgeName('');
+      setWeighbridgeSlipNo('');
+      setGrossWeight('');
+      setTareWeight('');
+      setNetWeight('');
+      setFileAttachments([]);
+      setRemark('');
+
+      setIsUploading(false);
+      alert(`✅ Vehicle entry ${vehicleEntry.entryNumber} added! Remaining balance: ${newBalanceBags} bags`);
+      
+    } catch (error: any) {
+      console.error('Error adding vehicle entry:', error);
+      setFormError(`Error: ${error?.message || 'Unknown error'}`);
+      setIsUploading(false);
+    }
+  }, [
+    totalBagsOutward, stackEntries, vehicleNumber, gatepass, 
+    weighbridgeName, weighbridgeSlipNo, grossWeight, tareWeight, netWeight,
+    fileAttachments, remark, vehicleEntries, currentBalanceBags
+  ]);
+
+  // Centralized submit handler - creates ONE outward document with multiple vehicle entries
+  const handleOutwardSubmit = React.useCallback(async () => {
+    setFormError(null);
+
+    if (!selectedDO && !isEditMode) {
+      setFormError('Please select a DO');
+      return;
+    }
+
+    // For new outward: Must have at least one vehicle entry
+    if (!isEditMode && vehicleEntries.length === 0) {
+      setFormError('Please add at least one vehicle entry before submitting');
+      return;
+    }
+
+    // Validate outward quantity (filled once for entire outward)
+    const oQuantity = Number(outwardQty);
+    if (isNaN(oQuantity) || oQuantity <= 0) {
+      setFormError('Please enter valid Outward Quantity (MT)');
+      return;
+    }
+
+    // Get cumulative bags from all vehicle entries
+    const obBags = Number(outwardBags); // Auto-calculated from vehicle entries
+  const balanceQty = currentBalanceQty || 0;
+
+    if (balanceQty <= 0) {
+      setFormError('No remaining balance quantity available for this Delivery Order');
+      return;
+    }
+    
+    if (oQuantity > balanceQty) {
+      setFormError(`Cannot release more than available balance quantity (${balanceQty.toFixed(3)} MT)`);
+      return;
+    }
+
+    try {
+      setIsUploading(true);
 
       // Get next outward code number
-  const outwardCol = collection(db, 'outwards');
-  const outwardSnap = await getDocs(outwardCol);
-  const outwardCount = outwardSnap.size;
-  const newOutwardCode = `OUT-${String(outwardCount + 1).padStart(4, '0')}`;
+      const outwardCol = collection(db, 'outwards');
+      const outwardSnap = await getDocs(outwardCol);
+      const outwardCount = outwardSnap.size;
+      const newOutwardCode = `OUT-${String(outwardCount + 1).padStart(4, '0')}`;
 
-      const finalTotalBagsOutward = obBags;
+      // Combine all stack entries from all vehicle entries
+      const allStackEntries = vehicleEntries.flatMap(entry => entry.stackEntries);
+      
+      // Calculate final balance
+      // Note: currentBalanceBags is ALREADY updated after each vehicle entry, so just use it directly!
+      // Quantity is deducted now at final submit (not per vehicle)
+      const finalBalanceBags = currentBalanceBags || 0;
+      const finalBalanceQty = (currentBalanceQty || 0) - oQuantity;
 
       if (isEditMode && editingOutward) {
-        // Update existing outward document
+        // Update existing outward document (edit mode)
         const updatedData = {
           // Keep the same outwardCode and identifiers
           outwardCode: editingOutward.outwardCode,
@@ -495,27 +556,16 @@ export default function OutwardPage() {
           // DO data (unchanged in edit mode)
           doBags: editingOutward.doBags,
           doQuantity: editingOutward.doQuantity,
-          // Outward specific data
+          // Outward specific data - cumulative from all vehicle entries
           outwardBags: obBags,
           outwardQuantity: oQuantity,
-          vehicleNumber,
-          gatepass,
-          weighbridgeName,
-          weighbridgeSlipNo,
-          grossWeight: parseFloat(grossWeight) || 0,
-          tareWeight: parseFloat(tareWeight) || 0,
-          netWeight: parseFloat(netWeight) || 0,
-          totalBagsOutward: finalTotalBagsOutward,
-          // Stack entries
-          stackEntries: stackEntries.map(stack => ({
-            stackNo: stack.stackNo,
-            bags: Number(stack.bags),
-            balanceBags: Number((stack.inwardBags || 0) - (Number(stack.bags) || 0))
-          })),
+          // Array of vehicle entries
+          outwardEntries: vehicleEntries,
+          // Combined stack entries from all vehicles
+          stackEntries: allStackEntries,
           // Updated balances
-          balanceBags: newBalanceBags,
-          balanceQuantity: newBalanceQty,
-          attachmentUrls,
+          balanceBags: finalBalanceBags,
+          balanceQuantity: finalBalanceQty,
           remark,
           // Keep status as resubmitted for review
           outwardStatus: 'resubmitted',
@@ -525,8 +575,10 @@ export default function OutwardPage() {
 
         const outwardRef = doc(db, 'outwards', editingOutward.id);
         await updateDoc(outwardRef, updatedData);
+        
+        alert('✅ Outward updated successfully!');
       } else {
-        // Create new outward document
+        // Create new outward document with all vehicle entries
         const outwardData = {
           outwardCode: newOutwardCode,
           srwrNo: selectedDO.srwrNo,
@@ -552,27 +604,16 @@ export default function OutwardPage() {
           // DO data
           doBags: selectedDO.doBags,
           doQuantity: selectedDO.doQuantity,
-          // Outward specific data
+          // Outward specific data - cumulative from all vehicle entries
           outwardBags: obBags,
           outwardQuantity: oQuantity,
-          vehicleNumber,
-          gatepass,
-          weighbridgeName,
-          weighbridgeSlipNo,
-          grossWeight: parseFloat(grossWeight) || 0,
-          tareWeight: parseFloat(tareWeight) || 0,
-          netWeight: parseFloat(netWeight) || 0,
-          totalBagsOutward: finalTotalBagsOutward,
-          // Stack entries
-          stackEntries: stackEntries.map(stack => ({
-            stackNo: stack.stackNo,
-            bags: Number(stack.bags),
-            balanceBags: Number((stack.inwardBags || 0) - (Number(stack.bags) || 0))
-          })),
-          // Balance and other data
-          balanceBags: newBalanceBags,
-          balanceQuantity: newBalanceQty,
-          attachmentUrls,
+          // Array of vehicle entries (each vehicle's details)
+          outwardEntries: vehicleEntries,
+          // Combined stack entries from all vehicles
+          stackEntries: allStackEntries,
+          // Final balance after all vehicles
+          balanceBags: finalBalanceBags,
+          balanceQuantity: finalBalanceQty,
           remark,
           outwardStatus: 'pending',
           createdAt: new Date().toISOString(),
@@ -580,58 +621,17 @@ export default function OutwardPage() {
         } as any;
 
         await addDoc(collection(db, 'outwards'), outwardData);
-        createdOutwardForSession = outwardData;
+        
+        alert(`✅ Outward created successfully with ${vehicleEntries.length} vehicle(s)!`);
       }
 
-      // Update list and/or session state
+      // Update list and close modal
       setSubmitSuccess(true);
       setIsUploading(false);
-
-  if (!isEditMode && stayOpen) {
-        // Keep modal open for next vehicle, update balances and reset per-vehicle fields
-    setSessionEntries(prev => [{ ...createdOutwardForSession, id: `session-${prev.length + 1}` }, ...prev]);
-        setCurrentBalanceBags(newBalanceBags);
-        setCurrentBalanceQty(newBalanceQty);
-        
-        // Show success message for multi-vehicle entry
-        alert(`✅ Vehicle entry added successfully! Continuing with next vehicle. Balance: ${newBalanceBags} bags / ${newBalanceQty} MT`);
-
-        // Prepare next stacks with updated available (use balanceBags from last entry)
-        const nextStacks = stackEntries.map((stack: any) => {
-          const inward = Number(stack.inwardBags || 0);
-          const outB = Number(stack.bags || 0);
-          const newAvail = Math.max(0, inward - outB);
-          return {
-            stackNo: stack.stackNo,
-            bags: '',
-            inwardBags: newAvail,
-            balanceBags: newAvail,
-            commodityName: stack.commodityName,
-            varietyName: stack.varietyName
-          };
-        });
-        setStackEntries(nextStacks);
-
-        // Reset vehicle-specific inputs
-        setOutwardBags('');
-        setOutwardQty('');
-        setVehicleNumber('');
-        setGatepass('');
-        setWeighbridgeName('');
-        setWeighbridgeSlipNo('');
-        setGrossWeight('');
-        setTareWeight('');
-        setNetWeight('');
-        setTotalBagsOutward('');
-        setFileAttachments([]);
-        setRemark('');
-        return; // stay in modal
-      }
-
-  // Close modal on normal submit or after edit
-  setShowAddModal(false);
-  // Reset form
-  setSelectedDO(null);
+      
+      // Close modal and reset all state
+      setShowAddModal(false);
+      setSelectedDO(null);
       setOutwardBags('');
       setOutwardQty('');
       setVehicleNumber('');
@@ -644,15 +644,17 @@ export default function OutwardPage() {
       setTotalBagsOutward('');
       setStackEntries([]);
       setFileAttachments([]);
-  setExistingAttachmentUrls([]);
+      setExistingAttachmentUrls([]);
       setRemark('');
-      setSessionEntries([]);
+      setVehicleEntries([]); // Clear vehicle entries
       setWarehouseType('');
       setTypeOfBusiness('');
       setCommodityName('');
       setVarietyName('');
-  setIsEditMode(false);
-  setEditingOutward(null);
+      setIsEditMode(false);
+      setEditingOutward(null);
+      setCurrentBalanceBags(0);
+      setCurrentBalanceQty(0);
 
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error: any) {
@@ -660,13 +662,9 @@ export default function OutwardPage() {
       setFormError(`An error occurred: ${error?.message || 'Unknown error'}. Please try again.`);
       setIsUploading(false);
     }
-  }, [selectedDO, fileAttachments, existingAttachmentUrls, isEditMode, editingOutward, outwardBags, outwardQty, currentBalanceBags, currentBalanceQty, stackEntries, vehicleNumber, gatepass, weighbridgeName, weighbridgeSlipNo, grossWeight, tareWeight, netWeight, remark, userRole]);
+  }, [selectedDO, isEditMode, editingOutward, vehicleEntries, outwardBags, outwardQty, currentBalanceBags, currentBalanceQty, remark, userRole, warehouseType, typeOfBusiness, commodityName, varietyName, totalBagsOutward, vehicleNumber, gatepass, weighbridgeName, weighbridgeSlipNo]);
 
-  // Function to add new outward entry (keeps modal open for multi-vehicle entry)
-  const addNewOutwardEntry = React.useCallback(() => {
-    setContinuousEntry(true);
-    handleOutwardSubmit({ stayOpen: true });
-  }, [handleOutwardSubmit]);
+  // Note: addNewOutwardEntry removed - now using handleAddVehicleEntry for multiple vehicles
 
   // Group outward entries by srwrNo, show only latest per group
   const [expandedRows, setExpandedRows] = React.useState<{ [key: string]: boolean }>({});
@@ -1232,104 +1230,84 @@ export default function OutwardPage() {
                       </tr>
                       
                       {/* Expanded row for vehicle-wise entries */}
-                      {expandedRows[outward.srwrNo] && groupedOutwards[outward.srwrNo] && groupedOutwards[outward.srwrNo].length > 1 && (
+                      {expandedRows[outward.srwrNo] && outward.outwardEntries && outward.outwardEntries.length > 0 && (
                         <tr>
                           <td colSpan={30} className="p-0">
-                            <div className="bg-blue-50 p-4 border-l-4 border-blue-400">
+                            <div className="bg-orange-50 p-4 border-l-4 border-orange-400">
                               <div className="flex items-center gap-2 mb-3">
-                                <div className="text-sm font-medium">Vehicle-wise Outward Entries for SR/WR: {outward.srwrNo}</div>
-                                <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-                                  {groupedOutwards[outward.srwrNo].length} vehicle{groupedOutwards[outward.srwrNo].length === 1 ? '' : 's'}
+                                <div className="text-sm font-medium text-orange-700">Vehicle Entries for Outward: {outward.outwardCode}</div>
+                                <div className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
+                                  {outward.outwardEntries.length} vehicle{outward.outwardEntries.length === 1 ? '' : 's'}
                                 </div>
                               </div>
                               <div className="overflow-x-auto">
-                                <table className="w-full border text-xs bg-white rounded">
-                                  <thead className="bg-blue-100">
+                                <table className="w-full border-collapse text-xs bg-white rounded">
+                                  <thead className="bg-orange-600 text-white">
                                     <tr>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Date</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Outward Code</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Vehicle Number</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Gate Pass</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Outward Bags</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Outward Qty (MT)</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Gross Weight (MT)</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Net Weight (MT)</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Balance Bags</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Balance Qty (MT)</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Status</th>
-                                      <th className="px-2 py-2 border text-blue-700 font-semibold">Actions</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-left">Entry #</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-left">Vehicle Number</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-left">Gate Pass</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-left">Weighbridge Name</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-left">Weighbridge Slip No.</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-right">Gross Weight (MT)</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-right">Tare Weight (MT)</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-right">Net Weight (MT)</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-left">Stack Details</th>
+                                      <th className="border border-orange-700 px-3 py-2 text-right font-semibold">Outward Bags</th>
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {groupedOutwards[outward.srwrNo]
-                                      .map((entry, idx) => (
-                                        <tr key={entry.outwardCode} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-blue-25'} hover:bg-blue-50`}>
-                                          <td className="px-2 py-2 border text-center">{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : ''}</td>
-                                          <td className="px-2 py-2 border text-center font-medium text-blue-600">{entry.outwardCode}</td>
-                                          <td className="px-2 py-2 border text-center font-medium">{entry.vehicleNumber}</td>
-                                          <td className="px-2 py-2 border text-center">{entry.gatepass}</td>
-                                          <td className="px-2 py-2 border text-center font-medium">{entry.outwardBags}</td>
-                                          <td className="px-2 py-2 border text-center font-medium">{entry.outwardQuantity}</td>
-                                          <td className="px-2 py-2 border text-center">{entry.grossWeight || '-'}</td>
-                                          <td className="px-2 py-2 border text-center">{entry.netWeight || '-'}</td>
-                                          <td className="px-2 py-2 border text-center text-green-600 font-medium">{getBalanceBags(entry)}</td>
-                                          <td className="px-2 py-2 border text-center text-green-600 font-medium">{getBalanceQty(entry)}</td>
-                                          <td className="px-2 py-2 border text-center">
-                                            <span className={getStatusStyling(entry.outwardStatus || 'pending')}>
-                                              {normalizeStatusText(entry.outwardStatus || 'pending')}
-                                            </span>
-                                          </td>
-                                          <td className="px-2 py-2 border text-center">
-                                            <div className="flex items-center justify-center gap-1">
-                                              <Button 
-                                                variant="ghost" 
-                                                size="sm" 
-                                                className="p-1 hover:bg-blue-100" 
-                                                title="View Details" 
-                                                onClick={() => { 
-                                                  setSelectedOutward(entry); 
-                                                  setShowOutwardDetails(true); 
-                                                }}
-                                              >
-                                                <Eye className="h-4 w-4 text-blue-600" />
-                                              </Button>
-                                              {Array.isArray(entry.attachmentUrls) && entry.attachmentUrls.length > 0 && (
-                                                <a 
-                                                  href={entry.attachmentUrls[0]} 
-                                                  target="_blank" 
-                                                  rel="noopener noreferrer" 
-                                                  className="p-1 text-orange-600 hover:bg-orange-100 rounded"
-                                                  title="View Attachment"
-                                                >
-                                                  📎
-                                                </a>
-                                              )}
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      ))}
+                                    {outward.outwardEntries.map((entry: any, idx: number) => (
+                                      <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-orange-25'} hover:bg-orange-50`}>
+                                        <td className="border border-orange-300 px-3 py-2 font-medium text-orange-700">{entry.entryNumber}</td>
+                                        <td className="border border-orange-300 px-3 py-2 font-medium">{entry.vehicleNumber || '-'}</td>
+                                        <td className="border border-orange-300 px-3 py-2">{entry.gatepass || '-'}</td>
+                                        <td className="border border-orange-300 px-3 py-2">{entry.weighbridgeName || '-'}</td>
+                                        <td className="border border-orange-300 px-3 py-2">{entry.weighbridgeSlipNo || '-'}</td>
+                                        <td className="border border-orange-300 px-3 py-2 text-right">{entry.grossWeight?.toFixed(3) || '0.000'}</td>
+                                        <td className="border border-orange-300 px-3 py-2 text-right">{entry.tareWeight?.toFixed(3) || '0.000'}</td>
+                                        <td className="border border-orange-300 px-3 py-2 text-right">{entry.netWeight?.toFixed(3) || '0.000'}</td>
+                                        <td className="border border-orange-300 px-3 py-2">
+                                          {entry.stackEntries && entry.stackEntries.length > 0 ? (
+                                            entry.stackEntries.map((stack: any, sIdx: number) => (
+                                              <span key={sIdx}>
+                                                Stack {stack.stackNo} - {stack.bags}
+                                                {sIdx < entry.stackEntries.length - 1 ? ', ' : ''}
+                                              </span>
+                                            ))
+                                          ) : '-'}
+                                        </td>
+                                        <td className="border border-orange-300 px-3 py-2 text-right font-bold text-orange-700">{entry.totalBagsOutward}</td>
+                                      </tr>
+                                    ))}
                                   </tbody>
+                                  <tfoot className="bg-gray-100">
+                                    <tr>
+                                      <td colSpan={9} className="border border-gray-400 px-3 py-2 text-right font-bold text-gray-700">Total Outward Bags:</td>
+                                      <td className="border border-gray-400 px-3 py-2 text-right font-bold text-orange-700 text-sm">{outward.outwardBags}</td>
+                                    </tr>
+                                  </tfoot>
                                 </table>
                               </div>
                               
                               {/* Summary Section */}
-                              <div className="mt-3 p-3 bg-blue-100 rounded border">
-                                <div className="text-sm font-medium text-blue-700 mb-2">Summary for SR/WR: {outward.srwrNo}</div>
+                              <div className="mt-3 p-3 bg-orange-100 rounded border border-orange-300">
+                                <div className="text-sm font-medium text-orange-700 mb-2">Summary for Outward: {outward.outwardCode}</div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                                   <div>
-                                    <span className="text-blue-600 font-medium">Total Vehicles:</span>
-                                    <div className="font-bold">{groupedOutwards[outward.srwrNo].length}</div>
+                                    <span className="text-orange-600 font-medium">Total Vehicles:</span>
+                                    <div className="font-bold">{outward.outwardEntries.length}</div>
                                   </div>
                                   <div>
-                                    <span className="text-blue-600 font-medium">Total Bags Released:</span>
-                                    <div className="font-bold">{groupedOutwards[outward.srwrNo].reduce((sum, e) => sum + Number(e.outwardBags || 0), 0)}</div>
+                                    <span className="text-orange-600 font-medium">Total Bags Released:</span>
+                                    <div className="font-bold">{outward.outwardBags}</div>
                                   </div>
                                   <div>
-                                    <span className="text-blue-600 font-medium">Total Quantity Released:</span>
-                                    <div className="font-bold">{groupedOutwards[outward.srwrNo].reduce((sum, e) => sum + Number(e.outwardQuantity || 0), 0).toFixed(2)} MT</div>
+                                    <span className="text-orange-600 font-medium">Total Quantity Released:</span>
+                                    <div className="font-bold">{Number(outward.outwardQuantity || 0).toFixed(3)} MT</div>
                                   </div>
                                   <div>
-                                    <span className="text-blue-600 font-medium">Current Balance:</span>
+                                    <span className="text-orange-600 font-medium">Current Balance:</span>
                                     <div className="font-bold text-green-600">{getBalanceBags(outward)} bags / {getBalanceQty(outward)} MT</div>
                                   </div>
                                 </div>
@@ -1384,16 +1362,16 @@ export default function OutwardPage() {
             <DialogTitle className="text-lg sm:text-xl text-left text-orange-600 font-bold">
               <div className="flex items-center gap-2">
                 {isEditMode ? 'Edit Outward Entry (Resubmission)' : 'New Outward Entry'}
-                {sessionEntries.length > 0 && (
+                {vehicleEntries.length > 0 && (
                   <div className="bg-green-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
-                    Multi-Vehicle Mode ({sessionEntries.length} vehicle{sessionEntries.length === 1 ? '' : 's'} added)
+                    {vehicleEntries.length} vehicle{vehicleEntries.length === 1 ? '' : 's'} added
                   </div>
                 )}
               </div>
             </DialogTitle>
           </DialogHeader>
           
-          <form onSubmit={async (e) => { e.preventDefault(); await handleOutwardSubmit({ stayOpen: false }); }} className="max-h-[calc(95vh-120px)] overflow-y-auto p-1 sm:p-2">
+          <form onSubmit={async (e) => { e.preventDefault(); await handleOutwardSubmit(); }} className="max-h-[calc(95vh-120px)] overflow-y-auto p-1 sm:p-2">
             {formError && <div className="bg-red-100 p-2 sm:p-3 mb-4 text-red-600 rounded-md text-center font-medium text-sm sm:text-base">{formError}</div>}
             
             <div className="space-y-4 sm:space-y-5 pt-2 sm:pt-4">
@@ -1968,37 +1946,20 @@ export default function OutwardPage() {
 
                   {/* Outward entry input fields */}
                   <div>
-                    <Label htmlFor="outwardBags" className="text-green-600 font-medium">OUTWARD BAGS</Label>
+                    <Label htmlFor="outwardBags" className="text-green-600 font-medium">OUTWARD BAGS (Cumulative)</Label>
                     <Input
                       id="outwardBags"
-                      type="number"
+                      type="text"
                       value={outwardBags}
-                      onChange={(e) => {
-                        const newValue = e.target.value;
-                        // Only allow whole numbers (no decimals)
-                        if (newValue === '' || /^\d+$/.test(newValue)) {
-                          setOutwardBags(newValue);
-                          setTotalBagsOutward(newValue);
-                          // If user entered exactly the remaining balance bags, auto-set quantity too
-                          if (Number(newValue) === currentBalanceBags) {
-                            setOutwardQty(currentBalanceQty?.toString() || "0");
-                          }
-                        }
-                      }}
-                      min="0"
-                      step="1"
-                      required
-                      className="bg-white border-orange-200"
-                      onKeyDown={(e) => {
-                        // Prevent decimal point entry
-                        if (e.key === '.' || e.key === ',') {
-                          e.preventDefault();
-                        }
-                      }}
+                      readOnly
+                      disabled
+                      className="bg-gray-100 border-orange-200 text-gray-700 font-semibold"
+                      placeholder="Auto-calculated from vehicle entries"
+                      title="This is auto-calculated as sum of all vehicle entries"
                     />
-                    {currentBalanceBags === 1 && (
+                    {vehicleEntries.length > 0 && (
                       <div className="text-xs text-blue-600 mt-1">
-                        This is the last bag - full remaining quantity will be used
+                        Sum of {vehicleEntries.length} vehicle entr{vehicleEntries.length === 1 ? 'y' : 'ies'}
                       </div>
                     )}
                   </div>
@@ -2012,36 +1973,37 @@ export default function OutwardPage() {
                       onChange={(e) => setOutwardQty(e.target.value)}
                       required
                       className="bg-white border-orange-200"
-                      // Auto-set to full remaining quantity if this is the last bag
-                      readOnly={Number(outwardBags) === currentBalanceBags}
+                      placeholder="e.g. 4.500"
                     />
-                    {Number(outwardBags) === currentBalanceBags && (
-                      <div className="text-xs text-blue-600 mt-1">
-                        Using full remaining quantity for last bag
-                      </div>
-                    )}
+                    <div className="text-xs text-gray-600 mt-1">
+                      Enter total quantity once at the end (not per vehicle)
+                    </div>
                   </div>
 
                   {/* Auto calculated balance fields */}
                   <div>
-                    <Label className="text-green-800 font-medium">BALANCE BAGS</Label>
+                    <Label className="text-green-800 font-medium">BALANCE BAGS (Remaining)</Label>
                     <Input 
-                      value={currentBalanceBags !== null && outwardBags ? 
-                        Math.max(0, Number(currentBalanceBags) - Number(outwardBags || 0)).toString() : 
-                        currentBalanceBags?.toString() || ''} 
+                      value={currentBalanceBags?.toString() || '0'} 
                       readOnly 
-                      className="bg-orange-50 border-orange-100"
+                      className="bg-orange-50 border-orange-100 font-semibold text-green-700"
+                      title="Updated after each vehicle entry is added"
                     />
+                    <div className="text-xs text-gray-600 mt-1">
+                      Initial: {selectedDO?.doBags || 0} | Used: {outwardBags || 0}
+                    </div>
                   </div>
                   <div>
                     <Label className="text-green-800 font-medium">BALANCE QUANTITY (MT)</Label>
                     <Input 
-                      value={currentBalanceQty !== null && outwardQty ? 
-                        Math.max(0, Number(currentBalanceQty) - Number(outwardQty || 0)).toFixed(2) : 
-                        currentBalanceQty?.toString() || ''} 
+                      value={currentBalanceQty !== null ? Number(currentBalanceQty).toFixed(3) : '0.000'} 
                       readOnly 
-                      className="bg-orange-50 border-orange-100"
+                      className="bg-orange-50 border-orange-100 font-semibold text-green-700"
+                      title="Will be deducted when final outward is submitted"
                     />
+                    <div className="text-xs text-gray-600 mt-1">
+                      Available for this outward
+                    </div>
                   </div>
                   
                   {/* Outward entry details */}
@@ -2054,9 +2016,8 @@ export default function OutwardPage() {
                           id="vehicleNumber"
                           value={vehicleNumber}
                           onChange={(e) => setVehicleNumber(e.target.value)}
-                          required
                           className="bg-white border-orange-200"
-                          placeholder="e.g. MH12AB1234"
+                          placeholder="e.g. MH12AB1234 "
                         />
                       </div>
                       <div>
@@ -2065,9 +2026,8 @@ export default function OutwardPage() {
                           id="gatepass"
                           value={gatepass}
                           onChange={(e) => setGatepass(e.target.value)}
-                          required
                           className="bg-white border-orange-200"
-                          placeholder="e.g. GP12345"
+                          placeholder="e.g. GP12345 "
                         />
                       </div>
                       <div>
@@ -2076,9 +2036,8 @@ export default function OutwardPage() {
                           id="weighbridgeName"
                           value={weighbridgeName}
                           onChange={(e) => setWeighbridgeName(e.target.value)}
-                          required
                           className="bg-white border-orange-200"
-                          placeholder="e.g. City Weighbridge"
+                          placeholder="e.g. City Weighbridge "
                         />
                       </div>
                       <div>
@@ -2087,9 +2046,8 @@ export default function OutwardPage() {
                           id="weighbridgeSlipNo"
                           value={weighbridgeSlipNo}
                           onChange={(e) => setWeighbridgeSlipNo(e.target.value)}
-                          required
                           className="bg-white border-orange-200"
-                          placeholder="e.g. WB98765"
+                          placeholder="e.g. WB98765 "
                         />
                       </div>
                       <div>
@@ -2098,7 +2056,6 @@ export default function OutwardPage() {
                           id="grossWeight"
                           value={grossWeight}
                           onChange={(e) => handleGrossWeightChange(e.target.value)}
-                          required
                           className="bg-white border-orange-200"
                           placeholder="e.g. 25.500"
                           type="text"
@@ -2110,9 +2067,8 @@ export default function OutwardPage() {
                           id="tareWeight"
                           value={tareWeight}
                           onChange={(e) => handleTareWeightChange(e.target.value)}
-                          required
                           className="bg-white border-orange-200"
-                          placeholder="e.g. 2.500"
+                          placeholder="e.g. 2.500 "
                           type="text"
                         />
                       </div>
@@ -2128,16 +2084,33 @@ export default function OutwardPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="totalBagsOutward" className="text-green-600 font-medium">TOTAL BAGS OUTWARD</Label>
+                        <Label htmlFor="totalBagsOutward" className="text-green-600 font-medium">TOTAL BAGS OUTWARD (for this vehicle)</Label>
                         <Input
                           id="totalBagsOutward"
-                          value={outwardBags}
-                          readOnly
-                          required
+                          type="number"
+                          value={totalBagsOutward}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            // Only allow whole numbers (no decimals)
+                            if (newValue === '' || /^\d+$/.test(newValue)) {
+                              setTotalBagsOutward(newValue);
+                            }
+                          }}
+                          min="0"
+                          step="1"
                           className="bg-white border-orange-200"
-                          placeholder="Auto filled from Outward Bags"
-                          type="text"
+                          placeholder="e.g. 5"
+                          onKeyDown={(e) => {
+                            // Prevent decimal point entry
+                            if (e.key === '.' || e.key === ',') {
+                              e.preventDefault();
+                            }
+                          }}
+                          title="Enter target bags for this vehicle entry"
                         />
+                        <div className="text-xs text-gray-600 mt-1">
+                          Stack bags below must sum to this value
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2210,8 +2183,7 @@ export default function OutwardPage() {
                                       
                                       setStackEntries(newEntries);
                                       
-                                      // Update total bags
-                                      calculateTotalBags(newEntries);
+                                      // Note: Total bags are now calculated from vehicleEntries, not stack entries
                                     }}
                                     className="bg-white"
                                     placeholder={`Max: ${entry.inwardBags || 0}`}
@@ -2377,21 +2349,50 @@ export default function OutwardPage() {
                     />
                   </div>
 
-                  {/* Session entries preview */}
-                  {sessionEntries.length > 0 && (
+                  {/* Vehicle entries preview - Table format */}
+                  {vehicleEntries.length > 0 && (
                     <div className="col-span-2 mt-4">
-                      <h3 className="text-green-700 font-semibold mb-2">Vehicle entries added in this session</h3>
-                      <div className="space-y-2 bg-green-50 p-3 rounded border border-green-200">
-                        {sessionEntries.map((se, idx) => (
-                          <div key={se.id || idx} className="text-sm flex flex-wrap gap-3">
-                            <span className="font-medium text-green-800">{se.outwardCode}</span>
-                            <span>Vehicle: {se.vehicleNumber}</span>
-                            <span>Gatepass: {se.gatepass}</span>
-                            <span>Bags: {se.outwardBags}</span>
-                            <span>Qty: {se.outwardQuantity}</span>
-                            <span>Status: {normalizeStatusText(se.outwardStatus)}</span>
-                          </div>
-                        ))}
+                      <h3 className="text-green-700 font-semibold mb-3 flex items-center gap-2">
+                        <span>Vehicle Entries Added ({vehicleEntries.length})</span>
+                        <span className="text-sm font-normal text-gray-600">- Total: {outwardBags} bags</span>
+                      </h3>
+                      <div className="bg-green-50 p-4 rounded border border-green-200 max-h-64 overflow-y-auto">
+                        <table className="w-full text-xs border-collapse">
+                          <thead className="bg-green-600 text-white sticky top-0">
+                            <tr>
+                              <th className="border border-green-700 px-2 py-2 text-left">Entry #</th>
+                              <th className="border border-green-700 px-2 py-2 text-left">Vehicle Number</th>
+                              <th className="border border-green-700 px-2 py-2 text-left">Gate Pass</th>
+                              <th className="border border-green-700 px-2 py-2 text-left">Weighbridge Name</th>
+                              <th className="border border-green-700 px-2 py-2 text-left">Weighbridge Slip No.</th>
+                              <th className="border border-green-700 px-2 py-2 text-right">Gross Weight (MT)</th>
+                              <th className="border border-green-700 px-2 py-2 text-right">Tare Weight (MT)</th>
+                              <th className="border border-green-700 px-2 py-2 text-right">Net Weight (MT)</th>
+                              <th className="border border-green-700 px-2 py-2 text-right font-semibold">Outward Bags</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {vehicleEntries.map((entry, idx) => (
+                              <tr key={idx} className="bg-white hover:bg-green-50">
+                                <td className="border border-green-200 px-2 py-2 font-medium text-green-800">{entry.entryNumber}</td>
+                                <td className="border border-green-200 px-2 py-2">{entry.vehicleNumber}</td>
+                                <td className="border border-green-200 px-2 py-2">{entry.gatepass}</td>
+                                <td className="border border-green-200 px-2 py-2">{entry.weighbridgeName}</td>
+                                <td className="border border-green-200 px-2 py-2">{entry.weighbridgeSlipNo}</td>
+                                <td className="border border-green-200 px-2 py-2 text-right">{entry.grossWeight.toFixed(3)}</td>
+                                <td className="border border-green-200 px-2 py-2 text-right">{entry.tareWeight.toFixed(3)}</td>
+                                <td className="border border-green-200 px-2 py-2 text-right">{entry.netWeight.toFixed(3)}</td>
+                                <td className="border border-green-200 px-2 py-2 text-right font-semibold text-orange-700">{entry.totalBagsOutward}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-gray-100">
+                            <tr>
+                              <td colSpan={8} className="border border-gray-300 px-2 py-2 text-right font-semibold">Total Outward Bags:</td>
+                              <td className="border border-gray-300 px-2 py-2 text-right font-bold text-orange-700 text-sm">{outwardBags}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
                       </div>
                     </div>
                   )}
@@ -2400,18 +2401,19 @@ export default function OutwardPage() {
             </div>
 
             <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0 mt-6 sm:mt-8 pt-4 border-t border-orange-100">
-              <Button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white px-4 sm:px-6 w-full sm:w-auto order-2 sm:order-1" disabled={isUploading}>
-                {isUploading ? (isEditMode ? 'Updating...' : 'Submitting...') : (isEditMode ? 'UPDATE' : 'SUBMIT')}
-              </Button>
-              {/* Add Entry button to keep modal open and continue with next vehicle */}
+              {/* Add Vehicle Entry button - adds vehicle temporarily and updates stack balances */}
               {!isEditMode && selectedDO && (
-                <Button type="button" onClick={() => handleOutwardSubmit({ stayOpen: true })} className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 w-full sm:w-auto order-3" disabled={isUploading}>
+                <Button type="button" onClick={handleAddVehicleEntry} className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 w-full sm:w-auto order-1" disabled={isUploading}>
                   <PlusCircle className="h-4 w-4 mr-2" />
-                  Add Entry
+                  Add Vehicle Entry
                 </Button>
               )}
+              {/* Submit button - creates final outward document with all vehicle entries */}
+              <Button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white px-4 sm:px-6 w-full sm:w-auto order-2" disabled={isUploading}>
+                {isUploading ? (isEditMode ? 'Updating...' : 'Submitting...') : (isEditMode ? 'UPDATE' : 'SUBMIT OUTWARD')}
+              </Button>
               <DialogClose asChild>
-                <Button type="button" variant="outline" className="border-orange-200 text-orange-800 hover:bg-orange-50 w-full sm:w-auto order-1 sm:order-2">Cancel</Button>
+                <Button type="button" variant="outline" className="border-orange-200 text-orange-800 hover:bg-orange-50 w-full sm:w-auto order-3">Cancel</Button>
               </DialogClose>
             </DialogFooter>
           </form>
@@ -2462,14 +2464,6 @@ export default function OutwardPage() {
                   { label: 'Outward Quantity (MT)', value: selectedOutward.outwardQuantity },
                   { label: 'Balance Bags', value: selectedOutward.balanceBags },
                   { label: 'Balance Quantity (MT)', value: selectedOutward.balanceQuantity },
-                  { label: 'Vehicle Number', value: selectedOutward.vehicleNumber },
-                  { label: 'Gate Pass', value: selectedOutward.gatepass },
-                  { label: 'Weighbridge Name', value: selectedOutward.weighbridgeName },
-                  { label: 'Weighbridge Slip No.', value: selectedOutward.weighbridgeSlipNo },
-                  { label: 'Gross Weight (MT)', value: selectedOutward.grossWeight },
-                  { label: 'Tare Weight (MT)', value: selectedOutward.tareWeight },
-                  { label: 'Net Weight (MT)', value: selectedOutward.netWeight },
-                  { label: 'Total Bags Outward', value: selectedOutward.totalBagsOutward },
                 ].map((f, idx) => (
                   <div key={idx} className="mb-3">
                     <div className="font-bold text-green-600 text-sm sm:text-base mb-1 mt-2 tracking-wide">{f.label}</div>
@@ -2477,76 +2471,109 @@ export default function OutwardPage() {
                   </div>
                 ))}
               </div>
-              {/* Vehicle-wise outward entries for this SR/WR */}
-              {groupedOutwards[selectedOutward.srwrNo] && groupedOutwards[selectedOutward.srwrNo].length > 0 && (
-                <div className="mt-6">
-                  <div className="font-bold text-orange-600 mb-2">Vehicle-wise Outward Entries</div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border text-xs">
-                      <thead className="bg-orange-100">
+              {/* Vehicle Entries Table - Shows all vehicles under this outward code */}
+              {selectedOutward.outwardEntries && selectedOutward.outwardEntries.length > 0 && (
+                <div className="mt-6 col-span-full">
+                  <div className="font-bold text-orange-600 text-lg mb-3 border-b border-orange-200 pb-2">
+                    Vehicle Entries ({selectedOutward.outwardEntries.length})
+                  </div>
+                  <div className="overflow-x-auto bg-orange-50 p-4 rounded-lg border border-orange-200">
+                    <table className="w-full border-collapse text-xs">
+                      <thead className="bg-orange-600 text-white">
                         <tr>
-                          <th className="px-2 py-1 border">Date</th>
-                          <th className="px-2 py-1 border">Outward Code</th>
-                          <th className="px-2 py-1 border">Vehicle</th>
-                          <th className="px-2 py-1 border">Gatepass</th>
-                          <th className="px-2 py-1 border">Bags</th>
-                          <th className="px-2 py-1 border">Qty (MT)</th>
-                          <th className="px-2 py-1 border">Net Wt (MT)</th>
-                          <th className="px-2 py-1 border">Status</th>
+                          <th className="border border-orange-700 px-3 py-2 text-left">Entry #</th>
+                          <th className="border border-orange-700 px-3 py-2 text-left">Vehicle Number</th>
+                          <th className="border border-orange-700 px-3 py-2 text-left">Gate Pass</th>
+                          <th className="border border-orange-700 px-3 py-2 text-left">Weighbridge Name</th>
+                          <th className="border border-orange-700 px-3 py-2 text-left">Weighbridge Slip No.</th>
+                          <th className="border border-orange-700 px-3 py-2 text-right">Gross Weight (MT)</th>
+                          <th className="border border-orange-700 px-3 py-2 text-right">Tare Weight (MT)</th>
+                          <th className="border border-orange-700 px-3 py-2 text-right">Net Weight (MT)</th>
+                          <th className="border border-orange-700 px-3 py-2 text-left">Stack Details</th>
+                          <th className="border border-orange-700 px-3 py-2 text-right font-semibold">Outward Bags</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {groupedOutwards[selectedOutward.srwrNo].map((entry: any) => (
-                          <tr key={entry.id || entry.outwardCode} className="even:bg-gray-50">
-                            <td className="px-2 py-1 border text-center">{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : ''}</td>
-                            <td className="px-2 py-1 border text-center">{entry.outwardCode}</td>
-                            <td className="px-2 py-1 border text-center">{entry.vehicleNumber}</td>
-                            <td className="px-2 py-1 border text-center">{entry.gatepass}</td>
-                            <td className="px-2 py-1 border text-center">{entry.outwardBags}</td>
-                            <td className="px-2 py-1 border text-center">{entry.outwardQuantity}</td>
-                            <td className="px-2 py-1 border text-center">{entry.netWeight}</td>
-                            <td className="px-2 py-1 border text-center">{normalizeStatusText(entry.outwardStatus || 'pending')}</td>
+                        {selectedOutward.outwardEntries.map((entry: any, idx: number) => (
+                          <tr key={idx} className="bg-white hover:bg-orange-50">
+                            <td className="border border-orange-300 px-3 py-2 font-medium text-orange-700">{entry.entryNumber}</td>
+                            <td className="border border-orange-300 px-3 py-2">{entry.vehicleNumber || '-'}</td>
+                            <td className="border border-orange-300 px-3 py-2">{entry.gatepass || '-'}</td>
+                            <td className="border border-orange-300 px-3 py-2">{entry.weighbridgeName || '-'}</td>
+                            <td className="border border-orange-300 px-3 py-2">{entry.weighbridgeSlipNo || '-'}</td>
+                            <td className="border border-orange-300 px-3 py-2 text-right">{entry.grossWeight?.toFixed(3) || '0.000'}</td>
+                            <td className="border border-orange-300 px-3 py-2 text-right">{entry.tareWeight?.toFixed(3) || '0.000'}</td>
+                            <td className="border border-orange-300 px-3 py-2 text-right">{entry.netWeight?.toFixed(3) || '0.000'}</td>
+                            <td className="border border-orange-300 px-3 py-2">
+                              {entry.stackEntries && entry.stackEntries.length > 0 ? (
+                                entry.stackEntries.map((stack: any, sIdx: number) => (
+                                  <span key={sIdx}>
+                                    Stack {stack.stackNo} - {stack.bags}
+                                    {sIdx < entry.stackEntries.length - 1 ? ', ' : ''}
+                                  </span>
+                                ))
+                              ) : '-'}
+                            </td>
+                            <td className="border border-orange-300 px-3 py-2 text-right font-bold text-orange-700">{entry.totalBagsOutward}</td>
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot className="bg-gray-100">
+                        <tr>
+                          <td colSpan={9} className="border border-gray-400 px-3 py-2 text-right font-bold text-gray-700">Total Outward Bags:</td>
+                          <td className="border border-gray-400 px-3 py-2 text-right font-bold text-orange-700 text-base">{selectedOutward.outwardBags}</td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </div>
               )}
               {/* Stack Entries */}
-              {selectedOutward.stackEntries && selectedOutward.stackEntries.length > 0 && (
-                <div style={{ marginTop: 24, gridColumn: '1 / -1' }}>
-                  <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Stack Details</div>
-                  <div style={{ background: '#f6fef9', borderRadius: 8, padding: '12px', border: '1px solid #e0f2e9' }}>
-                    {selectedOutward.stackEntries.map((stack: any, idx: number) => (
-                      <div key={idx} style={{ marginBottom: 8 }}>
-                        <strong>Stack {stack.stackNo}:</strong> {stack.bags} bags, Balance: {stack.balanceBags || 0} bags
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+
               {/* Attachments row below grid */}
               <div style={{ marginTop: 24 }}>
-                <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Attachment</div>
-                {Array.isArray(selectedOutward.attachmentUrls) && selectedOutward.attachmentUrls.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {selectedOutward.attachmentUrls.map((url: string, idx: number) => {
-                      const ext = url.split('.').pop()?.toLowerCase();
-                      let label = 'View File';
-                      if (ext === 'pdf') label = 'View PDF';
-                      else if (ext === 'docx') label = 'View DOCX';
-                      else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
-                      return (
-                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db', textDecoration: 'underline', fontSize: 15 }}>
-                          {label} {idx + 1}
-                        </a>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <span style={{ color: '#888', fontSize: 15 }}>No file</span>
-                )}
+                <div style={{ fontWeight: 700, color: '#1aad4b', fontSize: 16, marginBottom: 4, marginTop: 12, letterSpacing: 0.2 }}>Attachments</div>
+                {(() => {
+                  // Collect all attachments from vehicle entries
+                  const allAttachments: { url: string; vehicleNumber: string; entryNumber: number }[] = [];
+                  if (selectedOutward.outwardEntries && selectedOutward.outwardEntries.length > 0) {
+                    selectedOutward.outwardEntries.forEach((entry: any) => {
+                      if (entry.attachmentUrls && entry.attachmentUrls.length > 0) {
+                        entry.attachmentUrls.forEach((url: string) => {
+                          allAttachments.push({
+                            url,
+                            vehicleNumber: entry.vehicleNumber || 'N/A',
+                            entryNumber: entry.entryNumber
+                          });
+                        });
+                      }
+                    });
+                  }
+                  
+                  return allAttachments.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {allAttachments.map((attachment, idx) => {
+                        const ext = attachment.url.split('.').pop()?.toLowerCase();
+                        let label = 'View File';
+                        if (ext === 'pdf') label = 'View PDF';
+                        else if (ext === 'docx') label = 'View DOCX';
+                        else if (["jpg", "jpeg", "png"].includes(ext || '')) label = 'View Image';
+                        return (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ color: '#666', fontSize: 14 }}>
+                              Vehicle Entry #{attachment.entryNumber} ({attachment.vehicleNumber}):
+                            </span>
+                            <a href={attachment.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db', textDecoration: 'underline', fontSize: 15 }}>
+                              {label}
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <span style={{ color: '#888', fontSize: 15 }}>No attachments</span>
+                  );
+                })()}
               </div>
               {/* Remark section - positioned in left bottom corner */}
               <div style={{ marginTop: 24 }}>
@@ -2657,9 +2684,9 @@ export default function OutwardPage() {
                         tempContainer.style.padding = '36px';
                         document.body.appendChild(tempContainer);
 
-                        // Create the receipt HTML content
+                        // Create the receipt HTML content for Page 1
                         tempContainer.innerHTML = `
-                          <div id="printable-outward-receipt" style="width: 900px; margin: 0; background: #fff; border-radius: 16px; font-family: Arial, sans-serif; color: #222; padding: 36px;">
+                          <div id="printable-outward-receipt-page1" style="width: 900px; margin: 0; background: #fff; border-radius: 16px; font-family: Arial, sans-serif; color: #222; padding: 36px;">
                             <!-- Header with logo and address -->
                             <div style="text-align: center; margin-bottom: 8px;">
                               <img src="/Group 86.png" alt="Agrogreen Logo" style="width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 8px;" />
@@ -2704,72 +2731,6 @@ export default function OutwardPage() {
                               `).join('')}
                             </div>
                             
-                            ${selectedOutward.stackEntries && selectedOutward.stackEntries.length > 0 ? `
-                              <!-- Stack Details Section -->
-                              <div style="margin-top: 24px;">
-                                <div style="font-size: 18px; font-weight: 700; color: #1aad4b; margin-bottom: 12px; text-align: center;">Stack Details</div>
-                                <table style="width: 100%; border-collapse: collapse; border: 1px solid #e0f2e9; margin-bottom: 16px;">
-                                  <thead>
-                                    <tr style="background-color: #f6fef9;">
-                                      <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Stack No.</th>
-                                      <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Bags</th>
-                                      <th style="border: 1px solid #e0f2e9; padding: 8px; color: #1aad4b; font-weight: 700;">Balance Bags</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    ${selectedOutward.stackEntries.map((stack: any, index: number) => `
-                                      <tr style="background-color: ${index % 2 === 0 ? '#fff' : '#f9f9f9'};">
-                                        <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.stackNo}</td>
-                                        <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.bags}</td>
-                                        <td style="border: 1px solid #e0f2e9; padding: 8px; text-align: center;">${stack.balanceBags || 0}</td>
-                                      </tr>
-                                    `).join('')}
-                                  </tbody>
-                                </table>
-                              </div>
-                            ` : ''}
-
-                            ${entriesForSR && entriesForSR.length > 0 ? `
-                              <!-- Vehicle-wise Outward Entries Section -->
-                              <div style="margin-top: 24px;">
-                                <div style="font-size: 18px; font-weight: 700; color: #e67c1f; margin-bottom: 12px; text-align: center;">Vehicle-wise Outward Entries</div>
-                                <table style="width: 100%; border-collapse: collapse; border: 1px solid #fde7d2; margin-bottom: 16px;">
-                                  <thead>
-                                    <tr style="background-color: #fff7ed;">
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Date</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Outward Code</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Vehicle Number</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Gate Pass</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Weighbridge Name</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Weighbridge Slip No.</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Gross Weight (MT)</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Net Weight (MT)</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Tare Weight (MT)</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Outward Bags</th>
-                                      <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 14px;">Outward Quantity (MT)</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    ${entriesForSR.map((entry: any, idx: number) => `
-                                      <tr style="background-color: ${idx % 2 === 0 ? '#fff' : '#f9fafb'};">
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-GB') : '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.outwardCode || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.vehicleNumber || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.gatepass || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.weighbridgeName || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.weighbridgeSlipNo || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.grossWeight || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.netWeight || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.tareWeight || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.outwardBags || '-'}</td>
-                                        <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 13px;">${entry.outwardQuantity || '-'}</td>
-                                      </tr>
-                                    `).join('')}
-                                  </tbody>
-                                </table>
-                              </div>
-                            ` : ''}
-                            
                             <div style="font-size: 13px; color: #555; text-align: right; margin-top: 24px;">
                               <b>Generated on:</b> ${new Date().toLocaleString()}
                             </div>
@@ -2779,14 +2740,19 @@ export default function OutwardPage() {
                         // Wait for images to load
                         await new Promise(resolve => setTimeout(resolve, 1000));
                         
-                        // Get the rendered receipt
-                        const printableReceipt = tempContainer.querySelector('#printable-outward-receipt');
+                        // Get the rendered receipt for page 1
+                        const printableReceipt = tempContainer.querySelector('#printable-outward-receipt-page1');
                         if (!printableReceipt) {
                           throw new Error("Could not find printable receipt element");
                         }
                         
-                        // Create canvas with higher scale for better quality
-                        const canvas = await html2canvas(printableReceipt as HTMLElement, { 
+                        // Create PDF
+                        const pdf = new jsPDF('p', 'mm', 'a4');
+                        const pageWidth = pdf.internal.pageSize.getWidth();
+                        const pageHeight = pdf.internal.pageSize.getHeight();
+                        
+                        // Create canvas for page 1 with higher scale for better quality
+                        const canvas1 = await html2canvas(printableReceipt as HTMLElement, { 
                           scale: 2, 
                           useCORS: true, 
                           backgroundColor: '#fff',
@@ -2796,30 +2762,25 @@ export default function OutwardPage() {
                           height: printableReceipt.scrollHeight
                         });
                         
-                        // Create PDF with proper dimensions
-                        const pdf = new jsPDF('p', 'mm', 'a4');
-                        const pageWidth = pdf.internal.pageSize.getWidth();
-                        const pageHeight = pdf.internal.pageSize.getHeight();
-                        
                         // Calculate image dimensions to fit page width
                         const imgWidth = pageWidth;
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                        const imgHeight1 = (canvas1.height * imgWidth) / canvas1.width;
                         
-                        // Split across multiple pages if needed
-                        let heightLeft = imgHeight;
+                        // Split page 1 across multiple pages if needed
+                        let heightLeft = imgHeight1;
                         let position = 0;
                         let pageCount = 0;
                         
                         while (heightLeft > 0) {
                           // Add image to page
                           pdf.addImage(
-                            canvas.toDataURL('image/jpeg', 1.0),
+                            canvas1.toDataURL('image/jpeg', 1.0),
                             'JPEG',
                             0,
                             position,
                             imgWidth,
-                            imgHeight,
-                            `page-${pageCount}`,
+                            imgHeight1,
+                            `page1-${pageCount}`,
                             'FAST'
                           );
                           
@@ -2831,6 +2792,130 @@ export default function OutwardPage() {
                             pdf.addPage();
                             pageCount++;
                           }
+                        }
+                        
+                        // If there are vehicle entries, create page 2
+                        if (selectedOutward.outwardEntries && selectedOutward.outwardEntries.length > 0) {
+                          // Create page 2 content
+                          const tempContainer2 = document.createElement('div');
+                          tempContainer2.style.position = 'absolute';
+                          tempContainer2.style.top = '-9999px';
+                          tempContainer2.style.left = '-9999px';
+                          tempContainer2.style.width = '900px';
+                          tempContainer2.style.background = '#fff';
+                          document.body.appendChild(tempContainer2);
+                          
+                          tempContainer2.innerHTML = `
+                            <div id="printable-outward-receipt-page2" style="width: 900px; margin: 0; background: #fff; border-radius: 16px; font-family: Arial, sans-serif; color: #222; padding: 36px;">
+                              <!-- Header with logo and address -->
+                              <div style="text-align: center; margin-bottom: 24px;">
+                                <img src="/Group 86.png" alt="Agrogreen Logo" style="width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 8px;" />
+                                <div style="font-size: 28px; font-weight: 700; color: #e67c1f; letter-spacing: 0.5px; margin-bottom: 2px;">AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+                                <div style="font-size: 18px; font-weight: 500; color: #1aad4b; margin-bottom: 8px;">603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+                                <div style="font-size: 20px; font-weight: 700; color: #e67c1f; margin: 24px 0 16px 0; text-decoration: underline;">Vehicle-wise Outward Entries</div>
+                                <div style="font-size: 16px; color: #666; margin-bottom: 24px;">Outward Code: ${selectedOutward.outwardCode}</div>
+                              </div>
+                              
+                              <table style="width: 100%; border-collapse: collapse; border: 1px solid #fde7d2; margin-bottom: 16px;">
+                                <thead>
+                                  <tr style="background-color: #fff7ed;">
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Entry #</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Vehicle Number</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Gate Pass</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Weighbridge Name</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Weighbridge Slip No.</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Gross Weight (MT)</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Net Weight (MT)</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Tare Weight (MT)</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Stack Details</th>
+                                    <th style="border: 1px solid #fde7d2; padding: 8px; color: #e67c1f; font-weight: 700; font-size: 13px;">Outward Bags</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  ${selectedOutward.outwardEntries.map((entry: any, idx: number) => `
+                                    <tr style="background-color: ${idx % 2 === 0 ? '#fff' : '#f9fafb'};">
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">${entry.entryNumber || (idx + 1)}</td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">${entry.vehicleNumber || '-'}</td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">${entry.gatepass || '-'}</td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">${entry.weighbridgeName || '-'}</td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">${entry.weighbridgeSlipNo || '-'}</td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">${entry.grossWeight ? entry.grossWeight.toFixed(3) : '-'}</td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">${entry.netWeight ? entry.netWeight.toFixed(3) : '-'}</td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">${entry.tareWeight ? entry.tareWeight.toFixed(3) : '-'}</td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px;">
+                                        ${entry.stackEntries && entry.stackEntries.length > 0 
+                                          ? entry.stackEntries.map((stack: any, sIdx: number) => 
+                                              `Stack ${stack.stackNo} - ${stack.bags}${sIdx < entry.stackEntries.length - 1 ? ', ' : ''}`
+                                            ).join('') 
+                                          : '-'
+                                        }
+                                      </td>
+                                      <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-size: 12px; font-weight: 700;">${entry.totalBagsOutward || '-'}</td>
+                                    </tr>
+                                  `).join('')}
+                                </tbody>
+                                <tfoot>
+                                  <tr style="background-color: #f3f4f6;">
+                                    <td colspan="9" style="border: 1px solid #fde7d2; padding: 8px; text-align: right; font-weight: 700; font-size: 13px;">Total Outward Bags:</td>
+                                    <td style="border: 1px solid #fde7d2; padding: 8px; text-align: center; font-weight: 700; font-size: 14px; color: #e67c1f;">${selectedOutward.outwardBags}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                              
+                              <div style="font-size: 13px; color: #555; text-align: right; margin-top: 24px;">
+                                <b>Generated on:</b> ${new Date().toLocaleString()}
+                              </div>
+                            </div>
+                          `;
+                          
+                          // Wait for images to load
+                          await new Promise(resolve => setTimeout(resolve, 1000));
+                          
+                          const printableReceipt2 = tempContainer2.querySelector('#printable-outward-receipt-page2');
+                          if (printableReceipt2) {
+                            // Create canvas for page 2
+                            const canvas2 = await html2canvas(printableReceipt2 as HTMLElement, { 
+                              scale: 2, 
+                              useCORS: true, 
+                              backgroundColor: '#fff',
+                              logging: false,
+                              allowTaint: true,
+                              width: 900,
+                              height: printableReceipt2.scrollHeight
+                            });
+                            
+                            // Add new page to PDF
+                            pdf.addPage();
+                            
+                            const imgHeight2 = (canvas2.height * imgWidth) / canvas2.width;
+                            let heightLeft2 = imgHeight2;
+                            let position2 = 0;
+                            let page2Count = 0;
+                            
+                            while (heightLeft2 > 0) {
+                              if (page2Count > 0) {
+                                pdf.addPage();
+                              }
+                              
+                              pdf.addImage(
+                                canvas2.toDataURL('image/jpeg', 1.0),
+                                'JPEG',
+                                0,
+                                position2,
+                                imgWidth,
+                                imgHeight2,
+                                `page2-${page2Count}`,
+                                'FAST'
+                              );
+                              
+                              heightLeft2 -= pageHeight;
+                              position2 -= pageHeight;
+                              page2Count++;
+                            }
+                          }
+                          
+                          // Clean up page 2 container
+                          document.body.removeChild(tempContainer2);
                         }
                         
                         // Save PDF

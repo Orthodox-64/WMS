@@ -869,16 +869,18 @@ export default function WarehouseInspectionForm({
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
         if (data.warehouseCode === warehouseCode) {
+          // SWAP: bankBranch <-> bankName when reading from DB
+          // DB has them swapped, so we correct them here
           associatedBanksData.push({
             bankState: data.bankState || '',
-            bankBranch: data.bankBranch || '',
-            bankName: data.bankName || '',
+            bankBranch: data.bankName || '', // DB's bankName → form's bankBranch
+            bankName: data.bankBranch || '', // DB's bankBranch → form's bankName
             ifscCode: data.ifscCode || '',
           });
         }
       });
 
-      // Deduplicate by bankName + IFSC
+      // Deduplicate by bankName + IFSC (now correctly swapped)
       const uniqueBanks = associatedBanksData.filter((bank, index, self) =>
         index === self.findIndex((b) => b.bankName === bank.bankName && b.ifscCode === bank.ifscCode)
       );
@@ -890,8 +892,8 @@ export default function WarehouseInspectionForm({
         setFormData((prev) => ({
           ...prev,
           bankState: firstBank.bankState,
-          bankBranch: firstBank.bankBranch,
-          bankName: firstBank.bankName,
+          bankBranch: firstBank.bankBranch, // Now correctly swapped
+          bankName: firstBank.bankName,     // Now correctly swapped
           ifscCode: firstBank.ifscCode,
         }));
       }
@@ -995,6 +997,11 @@ export default function WarehouseInspectionForm({
         // We should NOT auto-set here - user needs to select commodity manually
       }
       
+      // SWAP: bankBranch <-> bankName when loading from DB
+      // DB has them swapped, so we correct them here
+      const dbBankBranch = initialData.bankBranch || formDataSource.bankBranch || '';
+      const dbBankName = initialData.bankName || formDataSource.bankName || '';
+      
       setFormData(prev => ({
         ...prev,
         // Use the processed form data with converted dates - includes ALL insurance fields
@@ -1007,10 +1014,12 @@ export default function WarehouseInspectionForm({
         warehouseName: initialData.warehouseName || formDataSource.warehouseName || prev.warehouseName,
         // Status is stored at top level of inspection, not in warehouseInspectionData
         status: initialData.status || formDataSource.status || prev.status,
-        // Bank details are stored at top level of inspection, not in warehouseInspectionData
+        // Bank details - SWAPPED to correct the labels
+        // DB's bankBranch → Form's bankName (what DB calls "branch" is actually the bank name)
+        // DB's bankName → Form's bankBranch (what DB calls "name" is actually the branch)
         bankState: initialData.bankState || formDataSource.bankState || prev.bankState,
-        bankBranch: initialData.bankBranch || formDataSource.bankBranch || prev.bankBranch,
-        bankName: initialData.bankName || formDataSource.bankName || prev.bankName,
+        bankBranch: dbBankName,  // SWAPPED: DB's bankName → Form's bankBranch
+        bankName: dbBankBranch,  // SWAPPED: DB's bankBranch → Form's bankName
         ifscCode: initialData.ifscCode || formDataSource.ifscCode || prev.ifscCode,
         // Preserve attachedFiles if they exist in current state
         attachedFiles: formDataSource.attachedFiles || initialData.attachedFiles || prev.attachedFiles || [],
@@ -2646,8 +2655,12 @@ export default function WarehouseInspectionForm({
 
     try {
       // When submitting, update the existing inspection record's status
+      // SWAP: bankBranch <-> bankName when saving to DB
+      // Form has correct values, but DB expects them swapped
       const submissionData = {
         ...formData,
+        bankBranch: formData.bankName, // Form's bankName → DB's bankBranch
+        bankName: formData.bankBranch, // Form's bankBranch → DB's bankName
         status: 'submitted',
         submittedAt: new Date().toISOString(),
         submittedDate: format(new Date(), 'yyyy-MM-dd'),

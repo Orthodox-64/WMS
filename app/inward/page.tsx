@@ -252,6 +252,8 @@ export default function InwardPage() {
   const [inwardEntries, setInwardEntries] = useState<any[]>([]);
   const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
   const [insuranceEntries, setInsuranceEntries] = useState<any[]>([]);
+  const [agrogreenInsurance, setAgrogreenInsurance] = useState<any>(null);
+  const [actualBankBranch, setActualBankBranch] = useState<string>('');
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingRow, setEditingRow] = useState<any>(null);
   const [showSRForm, setShowSRForm] = useState(false);
@@ -293,9 +295,8 @@ export default function InwardPage() {
   const [selectedInsuranceType, setSelectedInsuranceType] = useState<string>('all');
 
   // Add state for insurance information section
-  const [selectedInsuranceInfoType, setSelectedInsuranceInfoType] = useState<string>('');
-  const [selectedInsuranceInfoIndex, setSelectedInsuranceInfoIndex] = useState<number | null>(null);
   const [insuranceReadOnly, setInsuranceReadOnly] = useState(false);
+  const [selectedInsuranceForInward, setSelectedInsuranceForInward] = useState<any>(null);
 
   // In the InwardPage component, add state for 'your insurance' data
   const [yourInsurance, setYourInsurance] = useState<any>(null);
@@ -1295,6 +1296,92 @@ export default function InwardPage() {
           console.log('✅ Found client insurances:', clientDocs.size);
         }
         
+        // Fetch bank-funded insurances (filtered by warehouse)
+        if (form.warehouseName) {
+          const bankFundedQuery = query(
+            collection(db, 'insurance'),
+            where('insuranceType', '==', 'bank-funded'),
+            where('warehouseName', '==', form.warehouseName)
+          );
+          const bankFundedDocs = await getDocs(bankFundedQuery);
+          console.log('🏦 Searching for bank-funded insurance for warehouse:', form.warehouseName);
+          console.log('🏦 Found bank-funded insurances:', bankFundedDocs.size);
+          
+          bankFundedDocs.forEach(doc => {
+            const data = doc.data();
+            console.log('🏦 Bank-funded insurance data:', {
+              insuranceCode: data.insuranceCode,
+              commodityName: data.commodityName,
+              selectedBankName: data.selectedBankName,
+              warehouseName: data.warehouseName
+            });
+            universalInsurances.push({
+              id: doc.id,
+              insuranceId: data.insuranceCode || doc.id,
+              insuranceTakenBy: 'bank-funded',
+              insuranceCommodity: data.commodityName || '',
+              commodityName: data.commodityName || '',
+              selectedBankName: data.selectedBankName || '', // CRITICAL for matching
+              firePolicyCompanyName: data.firePolicyCompanyName || '',
+              firePolicyNumber: data.firePolicyNumber || '',
+              firePolicyAmount: data.firePolicyAmount || '0',
+              firePolicyStartDate: data.firePolicyStartDate || null,
+              firePolicyEndDate: data.firePolicyEndDate || null,
+              burglaryPolicyCompanyName: data.burglaryPolicyCompanyName || '',
+              burglaryPolicyNumber: data.burglaryPolicyNumber || '',
+              burglaryPolicyAmount: data.burglaryPolicyAmount || '0',
+              burglaryPolicyStartDate: data.burglaryPolicyStartDate || null,
+              burglaryPolicyEndDate: data.burglaryPolicyEndDate || null,
+              remainingFirePolicyAmount: data.firePolicyAmount || '0',
+              remainingBurglaryPolicyAmount: data.burglaryPolicyAmount || '0',
+              createdAt: data.createdAt || new Date(),
+              isUniversal: false  // NOT universal - warehouse-specific!
+            });
+          });
+        }
+        
+        // Fetch warehouse-owner insurances (filtered by warehouse)
+        if (form.warehouseName) {
+          const warehouseOwnerQuery = query(
+            collection(db, 'insurance'),
+            where('insuranceType', '==', 'warehouse-owner'),
+            where('warehouseName', '==', form.warehouseName)
+          );
+          const warehouseOwnerDocs = await getDocs(warehouseOwnerQuery);
+          console.log('🏢 Searching for warehouse-owner insurance for warehouse:', form.warehouseName);
+          console.log('🏢 Found warehouse-owner insurances:', warehouseOwnerDocs.size);
+          
+          warehouseOwnerDocs.forEach(doc => {
+            const data = doc.data();
+            console.log('🏢 Warehouse-owner insurance data:', {
+              insuranceCode: data.insuranceCode,
+              commodityName: data.commodityName,
+              warehouseName: data.warehouseName
+            });
+            universalInsurances.push({
+              id: doc.id,
+              insuranceId: data.insuranceCode || doc.id,
+              insuranceTakenBy: 'warehouse-owner',
+              insuranceCommodity: data.commodityName || '',
+              commodityName: data.commodityName || '',
+              firePolicyCompanyName: data.firePolicyCompanyName || '',
+              firePolicyNumber: data.firePolicyNumber || '',
+              firePolicyAmount: data.firePolicyAmount || '0',
+              firePolicyStartDate: data.firePolicyStartDate || null,
+              firePolicyEndDate: data.firePolicyEndDate || null,
+              burglaryPolicyCompanyName: data.burglaryPolicyCompanyName || '',
+              burglaryPolicyNumber: data.burglaryPolicyNumber || '',
+              burglaryPolicyAmount: data.burglaryPolicyAmount || '0',
+              burglaryPolicyStartDate: data.burglaryPolicyStartDate || null,
+              burglaryPolicyEndDate: data.burglaryPolicyEndDate || null,
+              remainingFirePolicyAmount: data.firePolicyAmount || '0',
+              remainingBurglaryPolicyAmount: data.burglaryPolicyAmount || '0',
+              createdAt: data.createdAt || new Date(),
+              isUniversal: false  // NOT universal - warehouse-specific!
+            });
+          });
+        }
+        
         // Merge universal insurances with existing inspection insurances
         if (universalInsurances.length > 0) {
           setInsuranceEntries(prev => {
@@ -1314,14 +1401,10 @@ export default function InwardPage() {
     fetchUniversalInsurances();
   }, [form.warehouseName, form.client, selectedBank]); // Re-run when warehouse, client, OR bank changes
 
-  // Filter insurance entries for information section based on selected type and commodity
+  // Filter insurance entries - NO LONGER USED (replaced with checkbox system)
+  // Kept for backward compatibility with old code paths that won't be executed
   const filteredInsuranceInfoEntries = useMemo(() => {
-    if (!selectedInsuranceInfoType) {
-      return [];
-    }
-    
-    console.log('🔍 ========== INSURANCE FILTERING DEBUG ==========');
-    console.log('🔍 Selected insurance type:', selectedInsuranceInfoType);
+    return [];
     console.log('🏦 Selected bank:', selectedBank?.bankName || 'None');
     console.log('� Form client:', form.client);
     console.log('�📦 Base form commodity:', baseForm.commodity);
@@ -1447,9 +1530,7 @@ export default function InwardPage() {
     
     console.log('🏁 FINAL RESULT:', filtered.length, 'entries');
     console.log('🔍 ========== END FILTERING DEBUG ==========');
-    
-    return filtered;
-  }, [insuranceEntries, selectedInsuranceInfoType, baseForm.commodity, selectedBank]);
+  }, []);
 
   // Cross-module reflection - dispatch events when data changes
   const dispatchDataUpdate = useCallback(() => {
@@ -1645,13 +1726,18 @@ export default function InwardPage() {
       querySnapshot.docs.forEach(doc => {
         const data = doc.data();
         
-        // Create a unique key combining bankName + IFSC to avoid duplicates
-        const bankKey = `${data.bankName || ''}_${data.ifscCode || ''}`;
+        // SWAP: bankBranch <-> bankName when reading from DB
+        // DB has them swapped, so we correct them here
+        const correctBankName = data.bankBranch || ''; // DB's bankBranch → actual bank name
+        const correctBankBranch = data.bankName || ''; // DB's bankName → actual branch name
         
-        if (data.bankName && !banksSet.has(bankKey)) {
+        // Create a unique key combining bankName + IFSC to avoid duplicates
+        const bankKey = `${correctBankName}_${data.ifscCode || ''}`;
+        
+        if (correctBankName && !banksSet.has(bankKey)) {
           banksSet.set(bankKey, {
-            bankName: data.bankName || '',
-            bankBranch: data.bankBranch || '',
+            bankName: correctBankName,      // Now correct: "Main bank"
+            bankBranch: correctBankBranch,  // Now correct: "Main branch"
             bankState: data.bankState || '',
             ifscCode: data.ifscCode || ''
           });
@@ -1782,7 +1868,8 @@ export default function InwardPage() {
               commodityName: data.commodityName,
               clientName: data.clientName,
               selectedCommodities: data.selectedCommodities,
-              insuranceType: data.insuranceType
+              insuranceType: data.insuranceType,
+              selectedBankName: data.selectedBankName
             });
             return {
               insuranceId: data.insuranceCode || doc.id,
@@ -1792,8 +1879,21 @@ export default function InwardPage() {
               firePolicyRemainingAmount: data.firePolicyRemainingAmount,
               burglaryPolicyRemainingAmount: data.burglaryPolicyRemainingAmount,
               commodityName: data.commodityName,
+              insuranceCommodity: data.commodityName, // Also set this for consistency
               clientName: data.clientName,
-              selectedCommodities: data.selectedCommodities // Include this field!
+              selectedCommodities: data.selectedCommodities,
+              selectedBankName: data.selectedBankName, // CRITICAL: Include bank name for bank-funded insurance!
+              // Include all insurance policy fields
+              firePolicyCompanyName: data.firePolicyCompanyName,
+              firePolicyNumber: data.firePolicyNumber,
+              firePolicyAmount: data.firePolicyAmount,
+              remainingFirePolicyAmount: data.firePolicyRemainingAmount,
+              firePolicyStartDate: data.firePolicyStartDate,
+              burglaryPolicyCompanyName: data.burglaryPolicyCompanyName,
+              burglaryPolicyNumber: data.burglaryPolicyNumber,
+              burglaryPolicyAmount: data.burglaryPolicyAmount,
+              remainingBurglaryPolicyAmount: data.burglaryPolicyRemainingAmount,
+              burglaryPolicyStartDate: data.burglaryPolicyStartDate
             };
           });
         } else {
@@ -2147,6 +2247,68 @@ export default function InwardPage() {
     return fw;
   }, [warehouses, form.location]);
 
+  // Check for Agrogreen insurance in inspections collection
+  useEffect(() => {
+    const checkAgrogreenInsurance = async () => {
+      if (!form.warehouseName) {
+        setAgrogreenInsurance(null);
+        setActualBankBranch('');
+        return;
+      }
+      try {
+        console.log('🌱 Checking Agrogreen insurance for warehouse:', form.warehouseName);
+        const inspectionsCollection = collection(db, 'inspections');
+        const inspectionQuery = query(
+          inspectionsCollection,
+          where('warehouseName', '==', form.warehouseName),
+          where('status', 'in', ['activated', 'reactivate'])
+        );
+        const inspectionSnapshot = await getDocs(inspectionQuery);
+        console.log('🌱 Found inspections:', inspectionSnapshot.docs.length);
+        let foundAgrogreen: any = null;
+        let foundBankBranch: string = '';
+        
+        inspectionSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const warehouseData = data.warehouseInspectionData;
+          console.log('🌱 Inspection data:', {
+            warehouseName: data.warehouseName,
+            hasInspectionData: !!warehouseData,
+            insuranceTakenBy: warehouseData?.insuranceTakenBy,
+            bankBranch: warehouseData?.bankBranch
+          });
+          
+          // Extract actual bank branch name from inspections
+          if (warehouseData && warehouseData.bankBranch) {
+            foundBankBranch = warehouseData.bankBranch;
+            console.log('✅ Found actual bank branch from inspections:', foundBankBranch);
+          }
+          
+          // Check if insuranceTakenBy is 'agrogreen'
+          if (warehouseData && warehouseData.insuranceTakenBy?.toLowerCase() === 'agrogreen') {
+            console.log('✅ Inspection shows Agrogreen insurance for warehouse:', form.warehouseName);
+            // Mark that we should show Agrogreen insurance (data comes from universal fetch)
+            foundAgrogreen = { shouldShow: true };
+          }
+        });
+        
+        // Set the extracted bank branch for matching bank-funded insurance
+        if (foundBankBranch) {
+          setActualBankBranch(foundBankBranch);
+        }
+        
+        // Set agrogreen flag - actual insurance data is fetched in the universal insurances useEffect
+        console.log('🌱 Setting agrogreenInsurance state:', foundAgrogreen);
+        setAgrogreenInsurance(foundAgrogreen);
+      } catch (error) {
+        console.error('Error checking Agrogreen insurance:', error);
+        setAgrogreenInsurance(null);
+        setActualBankBranch('');
+      }
+    };
+    checkAgrogreenInsurance();
+  }, [form.warehouseName]);
+
   // Auto-fill warehouse code/address and business type
   useEffect(() => {
     if (form.warehouseName) {
@@ -2343,8 +2505,8 @@ export default function InwardPage() {
       marketRate: selectedCommodity?.rate ? selectedCommodity.rate.toString() : ''
     }));
     
-    // Fetch insurance data based on current selections
-    fetchInsuranceData(commodityName);
+    // DON'T fetch insurance again - it was already fetched for the warehouse
+    // Insurance filtering by commodity happens in the UI display logic
   };
 
   // Function to refresh insurance data after submission
@@ -2371,15 +2533,15 @@ export default function InwardPage() {
     });
 
     try {
-      // Fetch ALL insurance documents matching warehouse and commodity
+      // Fetch ALL insurance documents matching warehouse
+      // NOTE: We fetch by warehouse only (no commodity filter) because CLIENT insurance is universal
       const insuranceMasterCollection = collection(db, 'insurance');
       const simpleQuery = query(
         insuranceMasterCollection,
-        where('warehouseName', '==', form.warehouseName),
-        where('commodityName', '==', commodityName)
+        where('warehouseName', '==', form.warehouseName)
       );
       
-      console.log('📊 Executing query to fetch ALL insurances for warehouse + commodity...');
+      console.log('📊 Executing query to fetch ALL insurances for warehouse...');
       const querySnapshot = await getDocs(simpleQuery);
       console.log('📊 Query result - Documents found:', querySnapshot.docs.length);
       
@@ -2388,9 +2550,11 @@ export default function InwardPage() {
         const allInsuranceEntries = querySnapshot.docs.map(insuranceMasterDoc => {
           const insuranceData = insuranceMasterDoc.data();
           
-          console.log('✅ Found insurance document:', {
+          console.log('✅ RAW INSURANCE DOCUMENT DATA:', {
             docId: insuranceMasterDoc.id,
+            FULL_DATA: insuranceData,
             insuranceType: insuranceData.insuranceType,
+            insuranceTakenBy: insuranceData.insuranceTakenBy,
             bankFundedBy: insuranceData.bankFundedBy,
             clientName: insuranceData.clientName,
             commodityName: insuranceData.commodityName,
@@ -2405,11 +2569,12 @@ export default function InwardPage() {
             state: form.state,
             branch: form.branch,
             location: form.location,
-            insuranceCommodity: commodityName,
+            insuranceCommodity: insuranceData.commodityName || commodityName,
+            commodityName: insuranceData.commodityName || commodityName,
             varietyName: form.varietyName,
-            insuranceTakenBy: insuranceData.insuranceType || '',
+            insuranceTakenBy: insuranceData.insuranceTakenBy || insuranceData.insuranceType || '',
             clientName: insuranceData.clientName || '',
-            selectedBankName: insuranceData.bankFundedBy || '',
+            selectedBankName: insuranceData.bankFundedBy || insuranceData.selectedBankName || '',
             firePolicyCompanyName: insuranceData.firePolicyCompanyName || '',
             firePolicyNumber: insuranceData.firePolicyNumber || '',
             firePolicyAmount: insuranceData.firePolicyAmount || '0',
@@ -2874,18 +3039,16 @@ export default function InwardPage() {
     // --- Insurance selection validation ---
     let selectedInsuranceMeta = null;
     let debugSelectedInsurance = null;
-    if (selectedInsuranceInfoIndex !== null) {
-      const ins = filteredInsuranceInfoEntries[selectedInsuranceInfoIndex];
-      debugSelectedInsurance = ins;
+    if (selectedInsuranceForInward) {
+      debugSelectedInsurance = selectedInsuranceForInward;
       selectedInsuranceMeta = {
-        insuranceTakenBy: ins?.insuranceTakenBy,
-        insuranceId: ins?.insuranceId,
+        insuranceTakenBy: selectedInsuranceForInward?.insuranceTakenBy,
+        insuranceId: selectedInsuranceForInward?.insuranceId,
       };
-      console.log('🎯 INSURANCE META (from filteredInsuranceInfoEntries):', {
-        index: selectedInsuranceInfoIndex,
-        insuranceTakenBy: ins?.insuranceTakenBy,
-        insuranceId: ins?.insuranceId,
-        fullInsurance: ins
+      console.log('🎯 INSURANCE META (from selectedInsuranceForInward):', {
+        insuranceTakenBy: selectedInsuranceForInward?.insuranceTakenBy,
+        insuranceId: selectedInsuranceForInward?.insuranceId,
+        fullInsurance: selectedInsuranceForInward
       });
     } else if (selectedInsuranceIndex !== null) {
       const ins = insuranceEntries[selectedInsuranceIndex];
@@ -3487,8 +3650,8 @@ export default function InwardPage() {
     }
 
     // Also update if insurance is selected in information section
-    if (selectedInsuranceInfoIndex !== null && filteredInsuranceInfoEntries.length > 0 && selectedInsuranceInfoIndex < filteredInsuranceInfoEntries.length) {
-      const ins = filteredInsuranceInfoEntries[selectedInsuranceInfoIndex];
+    if (selectedInsuranceForInward) {
+      const ins = selectedInsuranceForInward;
       
       // Check if this is bank-funded insurance - skip amount updates
       const insuranceType = (ins.insuranceTakenBy || '').toLowerCase();
@@ -3619,10 +3782,10 @@ export default function InwardPage() {
       // ✅ UPDATE INSURANCE MASTER COLLECTION
       // Update the insurance master collection with deducted amounts
       try {
-        console.log('🔧 UPDATING INSURANCE MASTER COLLECTION (selectedInsuranceInfoIndex path)');
+        console.log('🔧 UPDATING INSURANCE MASTER COLLECTION (selectedInsuranceForInward path)');
         
         // Get the selected insurance info
-        const selectedInsurance = filteredInsuranceInfoEntries[selectedInsuranceInfoIndex];
+        const selectedInsurance = selectedInsuranceForInward;
         const selectedInsuranceId = selectedInsurance?.insuranceId;
         const selectedInsuranceType = (selectedInsurance?.insuranceTakenBy || '').toLowerCase().replace(/\s+/g, '-');
         
@@ -3828,8 +3991,7 @@ export default function InwardPage() {
     setFileAttachment(null);
     setSelectedInsuranceType('all');
     setSelectedInsuranceIndex(null);
-    setSelectedInsuranceInfoType('');
-    setSelectedInsuranceInfoIndex(null);
+    setSelectedInsuranceForInward(null);
     setRemainingFirePolicy('');
     setRemainingBurglaryPolicy('');
     setInitialRemainingFire('');
@@ -5224,7 +5386,7 @@ export default function InwardPage() {
                       ins.insuranceTakenBy === row.selectedInsurance.insuranceTakenBy
       );
       if (idx !== -1) {
-        setSelectedInsuranceInfoIndex(idx);
+        setSelectedInsuranceForInward(inspectionInsuranceEntries[idx]);
         setSelectedInsuranceIndex(idx);
         // Ensure baseForm.selectedInsurance reflects the auto-selected policy
         const matched = inspectionInsuranceEntries[idx];
@@ -5837,14 +5999,9 @@ export default function InwardPage() {
       return;
     }
     
-    setSelectedInsuranceInfoIndex(idx);
-    const ins = filteredInsuranceInfoEntries[idx];
-    
-    // Check if this is bank-funded insurance and set the flag
-    const insuranceType = (ins.insuranceTakenBy || '').toLowerCase().replace(/\s+/g, '-');
-    const isBankFunded = insuranceType === 'bank-funded' || insuranceType === 'bank';
-    setIsBankFundedInsurance(isBankFunded);
-    console.log('🏦 Insurance type selected:', ins.insuranceTakenBy, '- Is bank-funded:', isBankFunded);
+    // This function is no longer used with the new checkbox system
+    // Keeping for backward compatibility but it won't be called
+    return;
     
     // Also set selectedInsurance on the base form so checks use the selected entry
     setBaseForm(f => ({
@@ -6150,7 +6307,7 @@ export default function InwardPage() {
 
   // Recalculate remaining amounts when total value or initial amounts change
   useEffect(() => {
-    if (selectedInsuranceInfoIndex !== null && (initialRemainingFire || initialRemainingBurglary)) {
+    if (selectedInsuranceForInward && (initialRemainingFire || initialRemainingBurglary)) {
       const totalValue = parseFloat(baseForm.totalValue) || 0;
       const initialFire = parseFloat(initialRemainingFire) || 0;
       const initialBurglary = parseFloat(initialRemainingBurglary) || 0;
@@ -6161,7 +6318,55 @@ export default function InwardPage() {
       setRemainingFirePolicy(remainingFire >= 0 ? remainingFire.toFixed(2) : '0.00');
       setRemainingBurglaryPolicy(remainingBurglary >= 0 ? remainingBurglary.toFixed(2) : '0.00');
     }
-  }, [selectedInsuranceInfoIndex, initialRemainingFire, initialRemainingBurglary, baseForm.totalValue, isFireRemainingSource, isBurglaryRemainingSource]);
+  }, [selectedInsuranceForInward, initialRemainingFire, initialRemainingBurglary, baseForm.totalValue, isFireRemainingSource, isBurglaryRemainingSource]);
+
+  // Check for Agrogreen insurance when warehouse changes
+  useEffect(() => {
+    const checkAgrogreenInsurance = async () => {
+      if (!form.warehouseName) {
+        setAgrogreenInsurance(null);
+        return;
+      }
+      try {
+        const inspectionsCollection = collection(db, 'inspections');
+        const inspectionQuery = query(
+          inspectionsCollection,
+          where('warehouseName', '==', form.warehouseName),
+          where('status', 'in', ['activated', 'reactivate'])
+        );
+        const inspectionSnapshot = await getDocs(inspectionQuery);
+        let foundAgrogreen: any = null;
+        inspectionSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const warehouseData = data.warehouseInspectionData;
+          if (warehouseData && warehouseData.insuranceTakenBy?.toLowerCase() === 'agrogreen') {
+            foundAgrogreen = {
+              id: `agrogreen_${doc.id}`,
+              insuranceId: `AGROGREEN_${form.warehouseName}`,
+              insuranceTakenBy: 'Agrogreen',
+              firePolicyCompanyName: warehouseData.firePolicyCompanyName || '',
+              firePolicyNumber: warehouseData.firePolicyNumber || '',
+              firePolicyAmount: warehouseData.firePolicyAmount || '0',
+              remainingFirePolicyAmount: warehouseData.firePolicyAmount || '0',
+              firePolicyStartDate: warehouseData.firePolicyStartDate || null,
+              firePolicyEndDate: warehouseData.firePolicyEndDate || null,
+              burglaryPolicyCompanyName: warehouseData.burglaryPolicyCompanyName || '',
+              burglaryPolicyNumber: warehouseData.burglaryPolicyNumber || '',
+              burglaryPolicyAmount: warehouseData.burglaryPolicyAmount || '0',
+              remainingBurglaryPolicyAmount: warehouseData.burglaryPolicyAmount || '0',
+              burglaryPolicyStartDate: warehouseData.burglaryPolicyStartDate || null,
+              burglaryPolicyEndDate: warehouseData.burglaryPolicyEndDate || null,
+            };
+          }
+        });
+        setAgrogreenInsurance(foundAgrogreen);
+      } catch (error) {
+        console.error('Error checking Agrogreen insurance:', error);
+        setAgrogreenInsurance(null);
+      }
+    };
+    checkAgrogreenInsurance();
+  }, [form.warehouseName]);
 
   // ... inside InwardPage component, after other useState hooks ...
   const [isPrinting, setIsPrinting] = useState(false);
@@ -7644,8 +7849,7 @@ export default function InwardPage() {
                     // Reset insurance selections
                     setSelectedInsuranceType('all');
                     setSelectedInsuranceIndex(null);
-                    setSelectedInsuranceInfoType('');
-                    setSelectedInsuranceInfoIndex(null);
+                    setSelectedInsuranceForInward(null);
                     setInsuranceEntries([]);
                     
                     console.log('✅ Warehouse selected:', warehouseName);
@@ -8169,245 +8373,220 @@ export default function InwardPage() {
               <div className="border-t pt-6">
                 <h3 className="text-xl font-semibold mb-6 text-orange-700">Insurance Information (From Inspection Module)</h3>
                 
-                {/* Insurance Summary */}
+                {/* Debug Insurance Data */}
+                <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded text-xs">
+                  <p className="font-semibold text-purple-800">Insurance Debug:</p>
+                  <p>Total Insurances: {insuranceEntries.length}</p>
+                  <p>Client: {form.client}</p>
+                  <p>Commodity: {baseForm.commodity}</p>
+                  <p>Selected Bank: {selectedBank?.bankName || 'None selected'}</p>
+                  <p>Insurances: {insuranceEntries.map((e: any) => `${e.insuranceTakenBy} (${e.clientName || e.commodityName || e.selectedBankName})`).join(', ')}</p>
+                </div>
+                
+                {/* Insurance Summary with Checkboxes */}
                 {insuranceEntries.length > 0 && (() => {
-                  // Filter insurance entries for summary display based on selected bank
-                  const summaryInsurances = insuranceEntries.filter(entry => {
-                    const insuranceType = (entry.insuranceTakenBy || '').toLowerCase().replace(/\s+/g, '-');
-                    
-                    // For bank-funded insurance, only show if it matches the selected bank
-                    if (insuranceType === 'bank-funded') {
-                      if (!selectedBank || !selectedBank.bankName) {
-                        return false; // Don't show bank-funded if no bank selected
-                      }
-                      // Use flexible matching: check if bank names match or if one contains the other
-                      const insuranceBankName = (entry.selectedBankName || '').toLowerCase().trim();
-                      const selectedBankName = selectedBank.bankName.toLowerCase().trim();
-                      
-                      const exactMatch = insuranceBankName === selectedBankName;
-                      const insuranceContainsSelected = insuranceBankName.includes(selectedBankName);
-                      const selectedContainsInsurance = selectedBankName.includes(insuranceBankName);
-                      
-                      return exactMatch || insuranceContainsSelected || selectedContainsInsurance;
-                    }
-                    
-                    // Show all non-bank-funded insurances
-                    return true;
+                  console.log('🔍 FILTERING INSURANCES:', {
+                    total: insuranceEntries.length,
+                    client: form.client,
+                    commodity: baseForm.commodity,
+                    selectedBank: selectedBank,
+                    selectedBankName: selectedBank?.bankName,
+                    allInsurances: insuranceEntries
                   });
                   
-                  if (summaryInsurances.length === 0) {
-                    return null; // Don't show the green box if no insurances to display
+                  console.log('📋 ALL INSURANCE ENTRIES:');
+                  insuranceEntries.forEach((entry: any, index: number) => {
+                    console.log(`  [${index}] Type: ${entry.insuranceTakenBy}, Bank: ${entry.selectedBankName}, Commodity: ${entry.insuranceCommodity || entry.commodityName}, Client: ${entry.clientName}`);
+                  });
+                  
+                  // Categorize insurances by type - NO COMMODITY FILTERING FOR CLIENT
+                  const clientInsurance = insuranceEntries.find(entry => {
+                    const insuranceType = (entry.insuranceTakenBy || '').toLowerCase().trim();
+                    console.log(`Checking entry: ${entry.insuranceTakenBy}, type: ${insuranceType}, clientName: ${entry.clientName}`);
+                    // Check if it's client insurance (exact match or contains "client")
+                    if (insuranceType !== 'client' && !insuranceType.includes('client')) return false;
+                    // Match by client name only (universal - NO commodity check)
+                    const insuranceClientName = (entry.clientName || '').toLowerCase().trim();
+                    const formClientName = (form.client || '').toLowerCase().trim();
+                    const match = insuranceClientName === formClientName;
+                    console.log(`Client match: ${insuranceClientName} === ${formClientName} = ${match}`);
+                    return match;
+                  });
+                  
+                  const warehouseOwnerInsurance = insuranceEntries.find(entry => {
+                    const insuranceType = (entry.insuranceTakenBy || '').toLowerCase().trim();
+                    console.log(`Checking warehouse-owner: ${entry.insuranceTakenBy}, type: ${insuranceType}, commodity: ${entry.insuranceCommodity || entry.commodityName}`);
+                    // Check if it's warehouse-owner (exact match or contains)
+                    if (insuranceType !== 'warehouse-owner' && insuranceType !== 'warehouse owner' && !insuranceType.includes('warehouse')) return false;
+                    // Match by commodity
+                    if (!baseForm.commodity) return false;
+                    const entryCommodity = (entry.insuranceCommodity || entry.commodityName || '').toLowerCase().trim();
+                    const formCommodity = baseForm.commodity.toLowerCase().trim();
+                    const commodityMatch = entryCommodity === formCommodity || entryCommodity.includes(formCommodity) || formCommodity.includes(entryCommodity);
+                    console.log(`Warehouse-owner commodity match: ${entryCommodity} vs ${formCommodity} = ${commodityMatch}`);
+                    return commodityMatch;
+                  });
+                  
+                  const bankFundedInsurance = insuranceEntries.find(entry => {
+                    const insuranceType = (entry.insuranceTakenBy || '').toLowerCase().trim();
+                    console.log(`\n🏦 Checking bank-funded insurance:`);
+                    console.log(`   Type: "${entry.insuranceTakenBy}" (normalized: "${insuranceType}")`);
+                    console.log(`   Insurance Bank: "${entry.selectedBankName}"`);
+                    console.log(`   Insurance Commodity: "${entry.insuranceCommodity || entry.commodityName}"`);
+                    
+                    // Check if it's bank-funded (exact match or contains "bank")
+                    if (insuranceType !== 'bank-funded' && insuranceType !== 'bank funded' && !insuranceType.includes('bank')) {
+                      console.log(`   ❌ Not bank-funded type`);
+                      return false;
+                    }
+                    console.log(`   ✅ Is bank-funded type`);
+                    
+                    // Match by commodity first
+                    if (!baseForm.commodity) {
+                      console.log('   ❌ No commodity selected in form');
+                      return false;
+                    }
+                    const entryCommodity = (entry.insuranceCommodity || entry.commodityName || '').toLowerCase().trim();
+                    const formCommodity = baseForm.commodity.toLowerCase().trim();
+                    const commodityMatch = entryCommodity === formCommodity || entryCommodity.includes(formCommodity) || formCommodity.includes(entryCommodity);
+                    console.log(`   Commodity: "${entryCommodity}" vs form "${formCommodity}" = ${commodityMatch ? '✅ MATCH' : '❌ NO MATCH'}`);
+                    if (!commodityMatch) return false;
+                    
+                    // Match with the selected bank from "Select Bank for this Warehouse"
+                    if (!selectedBank) {
+                      console.log('   ❌ No bank selected in "Select Bank for this Warehouse"');
+                      return false;
+                    }
+                    console.log(`   Selected Bank Object:`, selectedBank);
+                    
+                    const insuranceBankName = (entry.selectedBankName || '').toLowerCase().trim();
+                    const selectedBankName = selectedBank.bankName.toLowerCase().trim();
+                    console.log(`   Insurance bank name (lowercase): "${insuranceBankName}"`);
+                    console.log(`   Selected bank name (lowercase): "${selectedBankName}"`);
+                    
+                    // Direct match: insurance's bank name should match the selected bank's name
+                    const exactMatch = insuranceBankName === selectedBankName;
+                    const insuranceIncludesSelected = insuranceBankName.includes(selectedBankName);
+                    const selectedIncludesInsurance = selectedBankName.includes(insuranceBankName);
+                    const bankMatch = exactMatch || insuranceIncludesSelected || selectedIncludesInsurance;
+                    
+                    console.log(`   Exact match: ${exactMatch}`);
+                    console.log(`   Insurance includes selected: ${insuranceIncludesSelected}`);
+                    console.log(`   Selected includes insurance: ${selectedIncludesInsurance}`);
+                    console.log(`   FINAL BANK MATCH: ${bankMatch ? '✅ YES' : '❌ NO'}`);
+                    
+                    return bankMatch;
+                  });
+                  
+                  console.log('🌱 AGROGREEN CHECK:');
+                  console.log('   agrogreenInsurance state:', agrogreenInsurance);
+                  console.log('   agrogreenInsurance type:', typeof agrogreenInsurance);
+                  console.log('   agrogreenInsurance truthiness:', !!agrogreenInsurance);
+                  console.log('   agrogreenInsurance.shouldShow:', agrogreenInsurance?.shouldShow);
+                  
+                  // SIMPLIFIED: Just look for Agrogreen in insuranceEntries directly
+                  // No need to check inspections flag - if it's in the list, show it
+                  const agrogreenData = insuranceEntries.find(entry => {
+                    const type = (entry.insuranceTakenBy || '').toLowerCase();
+                    const isAgrogreen = type === 'agrogreen';
+                    console.log('   Checking entry:', entry.insuranceTakenBy, 'isAgrogreen:', isAgrogreen);
+                    return isAgrogreen;
+                  });
+                  console.log('   🌱 Found Agrogreen in insuranceEntries:', agrogreenData);
+                  
+                  const availableInsurances = [
+                    clientInsurance && { type: 'client', data: clientInsurance },
+                    warehouseOwnerInsurance && { type: 'warehouse-owner', data: warehouseOwnerInsurance },
+                    bankFundedInsurance && { type: 'bank-funded', data: bankFundedInsurance },
+                    agrogreenData && { type: 'agrogreen', data: agrogreenData }
+                  ].filter(Boolean);
+                  
+                  console.log('✅ Available insurances:', availableInsurances);
+                  console.log('Client insurance found:', !!clientInsurance);
+                  console.log('Warehouse-owner insurance found:', !!warehouseOwnerInsurance);
+                  console.log('Bank-funded insurance found:', !!bankFundedInsurance);
+                  console.log('Agrogreen insurance found:', !!agrogreenData);
+                  
+                  if (availableInsurances.length === 0) {
+                    return (
+                      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+                        <p className="text-yellow-800">No matching insurance found. Please check the insurance data.</p>
+                      </div>
+                    );
                   }
+                  
+                  const handleInsuranceSelect = (insurance: any) => {
+                    setSelectedInsuranceForInward(insurance);
+                    // Auto-fill form fields
+                    setBaseForm(f => ({
+                      ...f,
+                      insuranceManagedBy: insurance.insuranceTakenBy || '',
+                      firePolicyNumber: insurance.firePolicyNumber || '',
+                      firePolicyAmount: insurance.remainingFirePolicyAmount || insurance.firePolicyAmount || '',
+                      firePolicyStart: insurance.firePolicyStartDate || '',
+                      firePolicyEnd: insurance.firePolicyEndDate || '',
+                      burglaryPolicyNumber: insurance.burglaryPolicyNumber || '',
+                      burglaryPolicyAmount: insurance.remainingBurglaryPolicyAmount || insurance.burglaryPolicyAmount || '',
+                      burglaryPolicyStart: insurance.burglaryPolicyStartDate || '',
+                      burglaryPolicyEnd: insurance.burglaryPolicyEndDate || '',
+                      firePolicyCompanyName: insurance.firePolicyCompanyName || '',
+                      burglaryPolicyCompanyName: insurance.burglaryPolicyCompanyName || '',
+                      bankFundedBy: insurance.selectedBankName || '',
+                    }));
+                  };
                   
                   return (
                     <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
                       <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
                         <Lightbulb className="h-4 w-4" />
-                        Insurance Coverage Summary
+                        Insurance Coverage Summary - Select One
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        {summaryInsurances.map((entry, index) => (
-                          <div key={index} className="space-y-2">
-                            <div className="font-medium text-green-700">
-                              {entry.insuranceTakenBy} Insurance
-                              {entry.selectedBankName && (
-                                <span className="ml-2 text-xs text-green-600">({entry.selectedBankName})</span>
-                              )}
+                      <div className="space-y-4">
+                        {availableInsurances.map((item: any, index) => {
+                          const insurance = item.data;
+                          const isSelected = selectedInsuranceForInward?.id === insurance.id;
+                          return (
+                            <div 
+                              key={index} 
+                              className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                                isSelected 
+                                  ? 'border-green-600 bg-green-100' 
+                                  : 'border-green-300 bg-white hover:border-green-500'
+                              }`}
+                              onClick={() => handleInsuranceSelect(insurance)}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input 
+                                  type="radio" 
+                                  checked={isSelected}
+                                  onChange={() => handleInsuranceSelect(insurance)}
+                                  className="mt-1"
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium text-green-700 mb-2">
+                                    {insurance.insuranceTakenBy} Insurance
+                                    {insurance.selectedBankName && (
+                                      <span className="ml-2 text-xs text-green-600">({insurance.selectedBankName})</span>
+                                    )}
+                                    {insurance.clientName && (
+                                      <span className="ml-2 text-xs text-green-600">({insurance.clientName})</span>
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2 text-sm text-green-600">
+                                    <div>🔥 Fire Policy: ₹{parseFloat(insurance.remainingFirePolicyAmount || insurance.firePolicyAmount || '0').toLocaleString()} remaining</div>
+                                    <div>🛡️ Burglary Policy: ₹{parseFloat(insurance.remainingBurglaryPolicyAmount || insurance.burglaryPolicyAmount || '0').toLocaleString()} remaining</div>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="space-y-1 text-green-600">
-                              <div>🔥 Fire Policy: ₹{parseFloat(entry.remainingFirePolicyAmount || entry.firePolicyAmount || '0').toLocaleString()} remaining</div>
-                              <div>🛡️ Burglary Policy: ₹{parseFloat(entry.remainingBurglaryPolicyAmount || entry.burglaryPolicyAmount || '0').toLocaleString()} remaining</div>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 })()}
                 
-                                {/* Insurance Type Selection for Information */}
-                <div className="mb-6">
-                  <Label className="block font-semibold mb-2">Select Insurance Type to View Details</Label>
-                  <Select
-                    value={selectedInsuranceInfoType}
-                    onValueChange={(value) => {
-                      setSelectedInsuranceInfoType(value);
-                      setSelectedInsuranceInfoIndex(null); // Reset selection when type changes
-                    }}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select Insurance Type to View Details" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="warehouse-owner">Warehouse Owner</SelectItem>
-                      <SelectItem value="client">Client</SelectItem>
-                      <SelectItem value="bank-funded">Bank Funded</SelectItem>
-                      <SelectItem value="agrogreen">Agrogreen</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
 
-                {/* Insurance Selection Dropdown */}
-                {selectedInsuranceInfoType && filteredInsuranceInfoEntries.length > 0 && (
-                  <div className="mb-6">
-                    <Label className="block font-semibold mb-2">Select Insurance</Label>
-                    <Select
-                      value={selectedInsuranceInfoIndex !== null ? String(selectedInsuranceInfoIndex) : ''}
-                      onValueChange={(value) => handleInsuranceInfoSelect(parseInt(value, 10))}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select Insurance" /></SelectTrigger>
-                      <SelectContent>
-                        {filteredInsuranceInfoEntries.map((ins: any, idx: number) => (
-                          <SelectItem key={ins.id || idx} value={String(idx)}>
-                            {ins.insuranceId || 'N/A'} - {ins.firePolicyNumber} / {ins.burglaryPolicyNumber} (Available - Fire: ₹{parseFloat(ins.remainingFirePolicyAmount || ins.firePolicyAmount || '0').toLocaleString()}, Burglary: ₹{parseFloat(ins.remainingBurglaryPolicyAmount || ins.burglaryPolicyAmount || '0').toLocaleString()})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {/* Display Insurance Information based on selected insurance only */}
-                {selectedInsuranceInfoType && filteredInsuranceInfoEntries.length > 0 && selectedInsuranceInfoIndex !== null && (
-                  <div className="space-y-6">
-                    {(() => {
-                      const insurance = filteredInsuranceInfoEntries[selectedInsuranceInfoIndex];
-                      if (!insurance) return null;
-                      return (
-                        <div key={insurance.id || selectedInsuranceInfoIndex} className="border border-orange-200 rounded-lg p-6 bg-orange-50">
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-lg font-medium text-orange-700">Insurance #{selectedInsuranceInfoIndex + 1}</h4>
-                            <div className="text-sm text-orange-600 font-medium">
-                              {insurance.insuranceId || 'N/A'} - {insurance.insuranceTakenBy} - {insurance.insuranceCommodity}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                              <Label className="block font-semibold mb-1">Insurance Taken By</Label>
-                              <Input value={insurance.insuranceTakenBy || ''} readOnly placeholder="Auto-filled from inspection" />
-                            </div>
-                            <div>
-                              <Label className="block font-semibold mb-1">Commodity</Label>
-                              <Input value={insurance.insuranceCommodity || ''} readOnly placeholder="Auto-filled from inspection" />
-                            </div>
-                          </div>
-                          {insurance.insuranceTakenBy === 'client' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                              <div>
-                                <Label className="block font-semibold mb-1">Client Name</Label>
-                                <Input value={insurance.clientName || ''} readOnly placeholder="Auto-filled from inspection" />
-                              </div>
-                              <div>
-                                <Label className="block font-semibold mb-1">Client Address</Label>
-                                <Input value={insurance.clientAddress || ''} readOnly placeholder="Auto-filled from inspection" />
-                              </div>
-                            </div>
-                          )}
-                          {(insurance.insuranceTakenBy === 'bank' || insurance.insuranceTakenBy === 'bank-funded') && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                              <div>
-                                <Label className="block font-semibold mb-1">Bank Name</Label>
-                                <Input value={insurance.selectedBankName || ''} readOnly placeholder="Auto-filled from inspection" />
-                              </div>
-                            </div>
-                          )}
-                          {insurance.insuranceTakenBy && insurance.insuranceTakenBy !== 'bank' && insurance.insuranceTakenBy !== 'bank-funded' && (
-                            <>
-                              {/* Fire Policy */}
-                              <h5 className="text-md font-semibold text-orange-600 mt-4 mb-2">Fire Policy Details</h5>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                  <Label className="block font-semibold mb-1">Fire Policy Company Name</Label>
-                                  <Input value={insurance.firePolicyCompanyName || ''} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Fire Policy Number</Label>
-                                  <Input value={insurance.firePolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Fire Policy Amount (Original)</Label>
-                                  <Input value={formatAmount(insurance.firePolicyAmount)} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Fire Policy Amount (Remaining)</Label>
-                                  <Input value={`₹${parseFloat(insurance.remainingFirePolicyAmount || insurance.firePolicyAmount || '0').toLocaleString()}`} readOnly placeholder="Auto-filled from inspection" className="bg-green-50 font-semibold" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
-                                  <Input value={normalizeDate(insurance.firePolicyStartDate)} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
-                                  <Input value={normalizeDate(insurance.firePolicyEndDate)} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                {selectedInsuranceInfoIndex === selectedInsuranceInfoIndex && (
-                                  <>
-                                    <div>
-                                      <Label className="block font-semibold mb-1">Remaining Fire Policy Amount</Label>
-                                      <Input value={formatAmount(initialRemainingFire)} readOnly className="bg-green-50" />
-                                    </div>
-                                    <div>
-                                      <Label className="block font-semibold mb-1">Update Remaining Fire Policy Amount</Label>
-                                      <Input value={remainingFirePolicy} readOnly className="bg-blue-50" />
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                              {/* Burglary Policy */}
-                              <h5 className="text-md font-semibold text-orange-600 mt-4 mb-2">Burglary Policy Details</h5>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <Label className="block font-semibold mb-1">Burglary Policy Company Name</Label>
-                                  <Input value={insurance.burglaryPolicyCompanyName || ''} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
-                                  <Input value={insurance.burglaryPolicyNumber || ''} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Burglary Policy Amount (Original)</Label>
-                                  <Input value={formatAmount(insurance.burglaryPolicyAmount)} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Burglary Policy Amount (Remaining)</Label>
-                                  <Input value={`₹${parseFloat(insurance.remainingBurglaryPolicyAmount || insurance.burglaryPolicyAmount || '0').toLocaleString()}`} readOnly placeholder="Auto-filled from inspection" className="bg-green-50 font-semibold" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
-                                  <Input value={normalizeDate(insurance.burglaryPolicyStartDate)} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                <div>
-                                  <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
-                                  <Input value={normalizeDate(insurance.burglaryPolicyEndDate)} readOnly placeholder="Auto-filled from inspection" />
-                                </div>
-                                {selectedInsuranceInfoIndex === selectedInsuranceInfoIndex && (
-                                  <>
-                                    <div>
-                                      <Label className="block font-semibold mb-1">Remaining Burglary Policy Amount</Label>
-                                      <Input value={formatAmount(initialRemainingBurglary)} readOnly className="bg-green-50" />
-                                    </div>
-                                    <div>
-                                      <Label className="block font-semibold mb-1">Update Remaining Burglary Policy Amount</Label>
-                                      <Input value={remainingBurglaryPolicy} readOnly className="bg-blue-50" />
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* Show message when no insurance found for selected type */}
-                {selectedInsuranceInfoType && filteredInsuranceInfoEntries.length === 0 && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-yellow-800 text-sm">
-                      <strong>Note:</strong> No insurance data found for the selected type &quot;{selectedInsuranceInfoType}&quot; in this warehouse. 
-                      Please ensure insurance data exists in the Warehouse Inspection section.
-                    </p>
-                  </div>
-                )}
               </div>
             )}
 
