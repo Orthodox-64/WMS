@@ -39,6 +39,7 @@ interface OutwardReportData {
   stackNumber: string;
   stackOutwardBags: string;
   doCode: string;
+  outwardEntries?: any[]; // Array of vehicle entries from Firebase
   [key: string]: any;
 }
 
@@ -487,6 +488,11 @@ export default function OutwardReportsPage() {
           // DO code - picked from outward section for a particular sr/wr number
           doCode: docData.doCode || docData.deliveryOrderCode || docData.doNumber || '',
           
+          // Outward entries array - contains vehicle-specific data for multiple vehicles
+          outwardEntries: docData.outwardEntries && Array.isArray(docData.outwardEntries) && docData.outwardEntries.length > 0
+            ? docData.outwardEntries
+            : undefined,
+          
           // Keep original fields for backward compatibility and debugging
           _originalData: {
             outwardSection: {
@@ -775,45 +781,47 @@ export default function OutwardReportsPage() {
     };
     
     // Function to create rows for multiple vehicle entries (following inward pattern)
-    // In outward, each document typically represents one vehicle/DO, but we group by SR/WR
+    // Each outward document may have multiple vehicles in outwardEntries array
     const createDetailedRows = (dataToExport: OutwardReportData[]) => {
       const detailedRows: string[] = [];
       
-      // Group outward entries by SR/WR number to show all vehicles for each SR/WR
-      const groupedBySRWR = dataToExport.reduce((acc: any, row) => {
-        const srwr = row.srWrNumber || 'UNKNOWN';
-        if (!acc[srwr]) {
-          acc[srwr] = [];
-        }
-        acc[srwr].push(row);
-        return acc;
-      }, {});
-      
-      console.log('Grouped outward entries:', Object.keys(groupedBySRWR).length, 'SR/WR numbers');
-      
-      // Process each SR/WR group
-      Object.entries(groupedBySRWR).forEach(([srwr, entries]: [string, any]) => {
-        const vehicleEntries = entries as OutwardReportData[];
+      dataToExport.forEach((row) => {
+        // Check if we have multiple vehicle entries (outwardEntries array)
+        // This follows the same pattern as inward's inwardEntries
+        const vehicleEntries = row.outwardEntries && Array.isArray(row.outwardEntries) && row.outwardEntries.length > 0
+          ? row.outwardEntries
+          : [null]; // If no vehicle entries, create one row with main data
         
-        // Create ONE row per vehicle entry (outward entry)
-        vehicleEntries.forEach((row) => {
+        vehicleEntries.forEach((vehicleEntry: any) => {
           // Combine stack entries into a single field
           const stackDetails = (() => {
+            // Try to get stacks from vehicleEntry first, then fall back to row-level data
+            const stackEntries = vehicleEntry?.stackEntries && Array.isArray(vehicleEntry.stackEntries) && vehicleEntry.stackEntries.length > 0
+              ? vehicleEntry.stackEntries
+              : (row.stackNumber && row.stackOutwardBags ? null : null);
+            
+            if (stackEntries && stackEntries.length > 0) {
+              return stackEntries.map((stack: any) => 
+                `${stack.stackNo || stack.stackNumber || ''} - ${stack.bags || stack.outwardBags || 0}`
+              ).join(' , ');
+            }
+            
+            // Fallback to row-level data if no vehicle-specific stacks
             if (row.stackNumber && row.stackOutwardBags) {
               const stackNos = row.stackNumber.split(',').map(s => s.trim());
               const stackBags = row.stackOutwardBags.toString().split(',').map(s => s.trim());
               
               if (stackNos.length === stackBags.length) {
                 return stackNos.map((stackNo, idx) => 
-                  `${stackNo} (${stackBags[idx]} bags)`
-                ).join('; ');
+                  `${stackNo} - ${stackBags[idx]}`
+                ).join(' , ');
               }
             }
-            return row.stackNumber ? `${row.stackNumber}: ${row.stackOutwardBags || 0} bags` : '';
+            return row.stackNumber ? `${row.stackNumber} - ${row.stackOutwardBags || 0}` : '';
           })();
           
           const csvRow = [
-            // Common warehouse and client data (same for all entries in this SR/WR)
+            // Common warehouse and client data (same for all entries in this outward document)
             row.outwardDate || '',
             row.outwardCode || '',
             row.srWrNumber || '',
@@ -831,16 +839,16 @@ export default function OutwardReportsPage() {
             row.variety || '',
             row.doCode || '',
             
-            // Vehicle-specific data (unique per outward entry)
-            row.vehicleNumber || '',
-            row.cadNumber || '',
-            row.gatepassNumber || '',
-            row.weighbridgeName || '',
-            row.weighbridgeSlipNumber || '',
-            row.grossWeight || '',
-            row.tareWeight || '',
-            row.netWeight || '',
-            row.totalOutwardBags || '',
+            // Vehicle-specific data (from vehicleEntry if available, otherwise from main row)
+            vehicleEntry ? (vehicleEntry.vehicleNumber || row.vehicleNumber || '') : (row.vehicleNumber || ''),
+            vehicleEntry ? (vehicleEntry.cadNumber || row.cadNumber || '') : (row.cadNumber || ''),
+            vehicleEntry ? (vehicleEntry.gatepass || vehicleEntry.gatepassNumber || row.gatepassNumber || '') : (row.gatepassNumber || ''),
+            vehicleEntry ? (vehicleEntry.weighbridgeName || row.weighbridgeName || '') : (row.weighbridgeName || ''),
+            vehicleEntry ? (vehicleEntry.weighbridgeSlipNo || vehicleEntry.weighbridgeSlipNumber || row.weighbridgeSlipNumber || '') : (row.weighbridgeSlipNumber || ''),
+            vehicleEntry ? (vehicleEntry.grossWeight || row.grossWeight || '') : (row.grossWeight || ''),
+            vehicleEntry ? (vehicleEntry.tareWeight || row.tareWeight || '') : (row.tareWeight || ''),
+            vehicleEntry ? (vehicleEntry.netWeight || row.netWeight || '') : (row.netWeight || ''),
+            vehicleEntry ? (vehicleEntry.totalBagsOutward || vehicleEntry.bags || row.totalOutwardBags || '') : (row.totalOutwardBags || ''),
             stackDetails
           ].map(escapeCsvValue).join(',');
           

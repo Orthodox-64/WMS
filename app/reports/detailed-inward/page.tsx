@@ -370,7 +370,10 @@ export default function DetailedInwardReportsPage() {
                   grossWeight: totalGrossWeight.toString(),
                   tareWeight: totalTareWeight.toString(),
                   netWeight: totalNetWeight.toString(),
-                  bags: totalBags.toString()
+                  bags: totalBags.toString(),
+                  // Preserve inwardEntries and stacks arrays for CSV export
+                  inwardEntries: docData.inwardEntries || [],
+                  stacks: docData.stacks || []
                 };
               })
             );
@@ -518,45 +521,87 @@ export default function DetailedInwardReportsPage() {
   const exportToCSV = () => {
     if (filteredData.length === 0) return;
     
-          const headers = [
-        'Date of Inward', 'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address', 'Client Code', 'Client Name',
-        'Commodity', 'Variety', 'Vehicle Number', 'CAD Number', 'Gatepass Number', 'Weighbridge Name', 'Weighbridge Number', 'Stack Number', 'Gross Weight (MT)', 'Tare Weight (MT)', 'Net Weight (MT)', 'Bags'
-      ];
+    const headers = [
+      'Date of Inward', 'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address', 'Client Code', 'Client Name',
+      'Commodity', 'Variety', 'Vehicle Number', 'CAD Number', 'Gatepass Number', 'Weighbridge Name', 'Weighbridge Number', 'Stack Number', 'Gross Weight (MT)', 'Tare Weight (MT)', 'Net Weight (MT)', 'Bags'
+    ];
     
-    const csvContent = [
-      headers.join(','),
-      ...filteredData.map((row, index) => [
-        row.dateOfInward || '',
-        row.state || '',
-        row.branch || '',
-        row.location || '',
-        row.typeOfBusiness || '',
-        row.warehouseType || '',
-        row.warehouseCode || '',
-        row.warehouseName || '',
-        row.warehouseAddress || '',
-        row.clientCode || '',
-        row.clientName || '',
-        row.commodity || '',
-        row.variety || '',
-        row.vehicleNumber || '',
-        row.cadNumber || '',
-        row.gatepassNumber || '',
-        row.weighbridgeName || '',
-        row.weighbridgeNumber || '',
-        row.stackNumber || '',
-        row.grossWeight || '',
-        row.tareWeight || '',
-        row.netWeight || '',
-        row.bags || ''
-      ].map(value => typeof value === 'string' && value.includes(',') ? `"${value}"` : value).join(','))
-    ].join('\n');
+    // Function to create rows for multiple vehicle entries (one row per vehicle with combined stack info)
+    const createDetailedRows = (dataToExport: DetailedInwardReportData[]) => {
+      const detailedRows: string[] = [];
+      
+      dataToExport.forEach((row) => {
+        // Parse inwardEntries if it exists in the row data
+        const inwardEntries = (row as any).inwardEntries;
+        
+        // Check if we have multiple vehicle entries
+        const vehicleEntries = inwardEntries && Array.isArray(inwardEntries) && inwardEntries.length > 0
+          ? inwardEntries
+          : [null]; // If no vehicle entries, create one row with main data
+        
+        vehicleEntries.forEach((vehicleEntry: any) => {
+          const rowData = [
+            row.dateOfInward || '',
+            row.state || '',
+            row.branch || '',
+            row.location || '',
+            row.typeOfBusiness || '',
+            row.warehouseType || '',
+            row.warehouseCode || '',
+            row.warehouseName || '',
+            row.warehouseAddress || '',
+            row.clientCode || '',
+            row.clientName || '',
+            row.commodity || '',
+            row.variety || '',
+            // Vehicle-specific data (if available)
+            vehicleEntry ? (vehicleEntry.vehicleNumber || row.vehicleNumber || '') : (row.vehicleNumber || ''),
+            row.cadNumber || '',
+            vehicleEntry ? (vehicleEntry.getpassNumber || row.gatepassNumber || '') : (row.gatepassNumber || ''),
+            vehicleEntry ? (vehicleEntry.weightBridge || row.weighbridgeName || '') : (row.weighbridgeName || ''),
+            vehicleEntry ? (vehicleEntry.weightBridgeSlipNumber || row.weighbridgeNumber || '') : (row.weighbridgeNumber || ''),
+            // Stack-specific data - combine all stacks for this vehicle
+            (() => {
+              const stacks = vehicleEntry?.stacks && Array.isArray(vehicleEntry.stacks) && vehicleEntry.stacks.length > 0
+                ? vehicleEntry.stacks
+                : ((row as any).stacks && Array.isArray((row as any).stacks) && (row as any).stacks.length > 0 ? (row as any).stacks : []);
+              
+              if (stacks.length > 0) {
+                return stacks.map((stack: any) => `${stack.stackNumber || ''} (${stack.numberOfBags || 0} bags)`).join('; ');
+              }
+              return row.stackNumber || '';
+            })(),
+            vehicleEntry ? (vehicleEntry.grossWeight || row.grossWeight || '') : (row.grossWeight || ''),
+            vehicleEntry ? (vehicleEntry.tareWeight || row.tareWeight || '') : (row.tareWeight || ''),
+            vehicleEntry ? (vehicleEntry.netWeight || row.netWeight || '') : (row.netWeight || ''),
+            vehicleEntry ? (vehicleEntry.totalBags || row.bags || '') : (row.bags || '')
+          ];
+          
+          // Escape values with commas or quotes
+          const csvRow = rowData.map(value => {
+            const stringValue = String(value).replace(/"/g, '""');
+            return typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n')) 
+              ? `"${stringValue}"` 
+              : stringValue;
+          }).join(',');
+          
+          detailedRows.push(csvRow);
+        });
+      });
+      
+      return detailedRows;
+    };
     
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const csvHeaders = headers.join(',');
+    const detailedRows = createDetailedRows(filteredData);
+    const csvRows = detailedRows.join('\r\n');
+    
+    const csvContent = `\uFEFF${csvHeaders}\r\n${csvRows}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'detailed_inward_report.csv'; // Changed filename
+    a.download = 'detailed_inward_report.csv';
     a.click();
     window.URL.revokeObjectURL(url);
   };
