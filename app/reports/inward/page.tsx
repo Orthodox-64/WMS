@@ -103,7 +103,7 @@ export default function InwardReportsPage() {
     { key: 'srWrNumber', label: 'SR/WR Number', width: 'w-32' },
     { key: 'srWrDate', label: 'SR/WR Date', width: 'w-28' },
   { key: 'fundingSrWrDate', label: 'Funding SR/WR Date', width: 'w-36' },
-  { key: 'srLastValidityDate', label: 'Not SR Last Validity Date', width: 'w-32' },
+  { key: 'srLastValidityDate', label: 'SR/WR Last Validity Date', width: 'w-32' },
     { key: 'totalBags', label: 'Total Bags', width: 'w-24' },
     { key: 'totalQty', label: 'Total Qty(MT)', width: 'w-28' },
     { key: 'roBags', label: 'RO Bags', width: 'w-20' },
@@ -740,8 +740,18 @@ export default function InwardReportsPage() {
             warehouseCode: docData.warehouseCode || warehouseDetails.warehouseCode || '',
             warehouseName: docData.warehouseName || '',
             warehouseAddress: docData.warehouseAddress || warehouseDetails.address || '',
-            clientCode: (_insuranceClientCode && _insuranceClientCode !== '') ? _insuranceClientCode : (docData.clientCode || ''),
-            clientName: (_insuranceClientName && _insuranceClientName !== '') ? _insuranceClientName : (docData.clientName || docData.client || ''),
+            // Client Code: show only if insurance managed by client, otherwise "-"
+            clientCode: (_managedByStr && _managedByStr.includes('client')) 
+              ? ((_insuranceClientCode && _insuranceClientCode !== '') ? _insuranceClientCode : (docData.clientCode || '-'))
+              : '-',
+            // Client Name: format as "clientName-clientCode" if insurance managed by client, otherwise "-"
+            clientName: (_managedByStr && _managedByStr.includes('client'))
+              ? (() => {
+                  const name = (_insuranceClientName && _insuranceClientName !== '') ? _insuranceClientName : (docData.clientName || docData.client || '');
+                  const code = (_insuranceClientCode && _insuranceClientCode !== '') ? _insuranceClientCode : (docData.clientCode || '');
+                  return (name && code) ? `${name}-${code}` : (name || code || '-');
+                })()
+              : '-',
             commodity: safeString(docData.commodity || docData.commodityName),
             variety: safeString(docData.variety || docData.varietyName),
             // Bank details with comprehensive fallback from inspections
@@ -906,7 +916,7 @@ export default function InwardReportsPage() {
       'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code',
       'Warehouse Name', 'Warehouse Address', 'Client Code', 'Client Name', 'Commodity', 'Variety',
       'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code', 'CAD Number', 'Inward Date',
-  'SR/WR Number', 'SR/WR Date', 'Funding SR/WR Date', 'Not SR Last Validity Date',
+  'SR/WR Number', 'SR/WR Date', 'Funding SR/WR Date', 'SR/WR Last Validity Date',
       'Total Bags', 'Total Qty(MT)', 'RO Bags', 'RO Qty (MT)', 'DO Bags', 'DO Qty (MT)',
       'Balance Bags', 'Balance Qty (MT)', 'Insurance Managed by', 'Rate (Rs/MT)', 'AUM(Rs/MT)',
       // Additional vehicle-specific columns
