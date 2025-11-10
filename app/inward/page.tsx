@@ -9518,7 +9518,7 @@ export default function InwardPage() {
                 <div className="flex flex-wrap gap-4 items-center">
                 <div>
                     <Label className="text-sm font-medium">Bank Name</Label>
-                    <Input value={selectedRowForSR?.bankName || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+                    <Input value={selectedRowForSR?.bankFundedBy || ''} readOnly className="text-sm mt-1 bg-white w-48" />
                 </div>
                 <div>
                     <Label className="text-sm font-medium">Bank Branch</Label>
@@ -9761,7 +9761,7 @@ export default function InwardPage() {
                         {(match.insuranceTakenBy === 'bank' || match.insuranceTakenBy === 'bank-funded') && (
                           <div>
                             <Label className="text-sm font-medium">Bank Name</Label>
-                            <Input value={match.selectedBankName || ''} readOnly className="text-sm" />
+                            <Input value={match.bankFundedBy || selectedRowForSR?.bankFundedBy || selectedRowForSR?.bankName || match.selectedBankName || ''} readOnly className="text-sm" />
                           </div>
                         )}
                         {match.insuranceTakenBy && match.insuranceTakenBy !== 'bank' && match.insuranceTakenBy !== 'bank-funded' && (

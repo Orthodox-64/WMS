@@ -290,7 +290,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Bank Name</Label>
               <Input 
-                value={selectedRowForSR?.bankName || ''} 
+                value={selectedRowForSR?.bankFundedBy || ''} 
                 readOnly
                 style={inputBaseStyle}
               />
@@ -571,6 +571,17 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               <Input value={matchedInsurance?.commodityName || selectedRowForSR?.commodity || ''} readOnly style={inputBaseStyle} />
             </div>
           </div>
+          {/* Show Bank Name if insurance taken by bank-funded or bank */}
+          {(matchedInsurance?.insuranceTakenBy === 'bank-funded' || matchedInsurance?.insuranceTakenBy === 'bank' || 
+            selectedRowForSR?.selectedInsurance?.insuranceTakenBy === 'bank-funded' || selectedRowForSR?.selectedInsurance?.insuranceTakenBy === 'bank') && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
+              <div>
+                <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Bank Name</Label>
+                <Input value={matchedInsurance?.bankFundedBy || selectedRowForSR?.bankFundedBy || selectedRowForSR?.bankName || matchedInsurance?.selectedBankName || matchedInsurance?.bankName || selectedRowForSR?.selectedBankName || '-'} readOnly style={inputBaseStyle} />
+              </div>
+              <div></div>
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy Company</Label>
