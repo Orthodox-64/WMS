@@ -61,8 +61,57 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
     if (byName) return byName?.actual ?? byName?.value ?? '';
     const byIndex = list[index];
     return byIndex?.actual ?? byIndex?.value ?? '';
-  };
+};
   const matchedInsurance = getMatchedInsurance();
+
+  // Calculate Validity End Date based on insurance data
+  const getValidityEndDate = () => {
+    // Find insurance match
+    let insurance = null;
+    
+    // If no selected insurance but have insurance data, use the first one
+    if (inspectionInsuranceData && inspectionInsuranceData.length > 0) {
+      if (selectedRowForSR?.selectedInsurance) {
+        insurance = inspectionInsuranceData.find(
+          (ins: any) =>
+            ins.insuranceId === selectedRowForSR.selectedInsurance.insuranceId &&
+            ins.insuranceTakenBy === selectedRowForSR.selectedInsurance.insuranceTakenBy
+        );
+      }
+      
+      // Fallback to first insurance if no match found
+      if (!insurance) {
+        insurance = inspectionInsuranceData[0];
+      }
+    }
+    
+    if (insurance) {
+      // If insurance taken by bank, Fire Policy End Date + 9 months
+      if (insurance.insuranceTakenBy === 'bank' || insurance.insuranceTakenBy === 'bank-funded') {
+        if (insurance.firePolicyEndDate) {
+          const fireEndDate = new Date(insurance.firePolicyEndDate);
+          fireEndDate.setMonth(fireEndDate.getMonth() + 9);
+          return fireEndDate.toISOString().slice(0, 10);
+        }
+      } else {
+        // For all other insurance types, use fire policy end date
+        if (insurance.firePolicyEndDate) {
+          // Normalize date
+          let dateStr = insurance.firePolicyEndDate;
+          if (dateStr.includes('T')) {
+            dateStr = dateStr.slice(0, 10);
+          }
+          return dateStr;
+        }
+      }
+    }
+    
+    // Fallback: use start date + 6 months if no insurance found
+    const startDate = srGenerationDate || selectedRowForSR?.srGenerationDate || new Date().toISOString().slice(0, 10);
+    const fallbackDate = new Date(startDate);
+    fallbackDate.setMonth(fallbackDate.getMonth() + 6);
+    return fallbackDate.toISOString().slice(0, 10);
+  };
 
   // Common input style: slightly more top bias and tighter line height to avoid clipping in PDF
   const inputBaseStyle: React.CSSProperties = {
@@ -430,7 +479,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Validity End Date</Label>
               <Input 
-                value={selectedRowForSR?.validityEndDate || ''} 
+                value={getValidityEndDate()} 
                 readOnly
                 style={inputBaseStyle}
               />
@@ -564,99 +613,70 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
           </div>
         </div>
 
-        {/* Signature Area */}
+        {/* Removed signature area - no longer shown in printable receipt */}
+        
+        {/* Spacer to push content and ensure page break before test certificate */}
         <div style={{ 
-          display: 'flex', 
-          justifyContent: 'flex-end', 
-          alignItems: 'flex-end', 
-          marginTop: '40px',
-          marginBottom: '20px',
-          breakInside: 'avoid'
+          height: '100px',
+          pageBreakAfter: 'always'
+        }}></div>
+      </div>
+
+      {/* Test Certificate on completely new page */}
+      <div style={{ pageBreakBefore: 'always', pageBreakInside: 'avoid' }}>
+        {/* Test Certificate Section - Everything on new page */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '32px',
+          marginTop: '20px'
         }}>
-          <div style={{ textAlign: 'right', marginRight: '20px' }}>
-            <div style={{ 
-              border: '2px dashed #d1d5db', 
-              width: '200px', 
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
+            src="/Group 86.png" 
+            alt="Agrogreen Logo" 
+            style={{ 
+              width: '120px', 
               height: '100px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              color: '#6b7280', 
-              fontSize: '12px',
-              marginBottom: '8px'
-            }}>
-              Sign/Stamp
-            </div>
-            <div style={{ 
-              color: '#ea580c', 
-              fontWeight: '700', 
-              fontSize: '14px', 
-              marginBottom: '8px' 
-            }}>
-              AGROGREEN WAREHOUSING PRIVATE LIMITED
-            </div>
-            <div style={{ 
-              color: '#6b7280', 
-              fontSize: '12px' 
-            }}>
-              AUTHORIZED SIGNATORY
-            </div>
+              marginBottom: '8px', 
+              borderRadius: '30%', 
+              objectFit: 'cover' 
+            }} 
+          />
+          <div style={{
+            fontSize: '18px',
+            fontWeight: '800',
+            color: '#ea580c',
+            marginTop: '8px',
+            marginBottom: '8px',
+            textAlign: 'center',
+            letterSpacing: '0.02em'
+          }}>
+            AGROGREEN WAREHOUSING PRIVATE LTD.
+          </div>
+          <div style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#16a34a',
+            marginBottom: '8px',
+            textAlign: 'center'
+          }}>
+            603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
+          </div>
+          <div style={{
+            fontSize: '14px',
+            fontWeight: '700',
+            color: '#ea580c',
+            textDecoration: 'underline',
+            textAlign: 'center',
+            marginBottom: '8px',
+            letterSpacing: '0.01em'
+          }}>
+            TEST CERTIFICATE
           </div>
         </div>
-
-  {/* Proper page break to next sheet */}
-  <div style={{ pageBreakBefore: 'always' }}>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '32px'
-          }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src="/Group 86.png" 
-              alt="Agrogreen Logo" 
-              style={{ 
-                width: '120px', 
-                height: '100px', 
-                marginBottom: '8px', 
-                borderRadius: '30%', 
-                objectFit: 'cover' 
-              }} 
-            />
-            <div style={{
-              fontSize: '18px',
-              fontWeight: '800',
-              color: '#ea580c',
-              marginTop: '8px',
-              marginBottom: '8px',
-              textAlign: 'center',
-              letterSpacing: '0.02em'
-            }}>
-              AGROGREEN WAREHOUSING PRIVATE LTD.
-            </div>
-            <div style={{
-              fontSize: '16px',
-              fontWeight: '600',
-              color: '#16a34a',
-              marginBottom: '8px',
-              textAlign: 'center'
-            }}>
-              603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
-            </div>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: '700',
-              color: '#ea580c',
-              textDecoration: 'underline',
-              textAlign: 'center',
-              marginBottom: '8px',
-              letterSpacing: '0.01em'
-            }}>
-              TEST CERTIFICATE
-            </div>
-          </div>
 
           {/* Test Certificate Fields */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
@@ -862,57 +882,19 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             textAlign: 'center', 
             color: '#16a34a', 
             fontWeight: '600', 
-            marginBottom: '60px' 
+            marginBottom: '40px' 
           }}>
             THE QUALITY OF GOODS IS AVERAGE
           </div>
 
-          {/* Final Signature Section and Footer - Keep Together */}
+          {/* Footer - Removed signature section */}
           <div style={{ 
             pageBreakInside: 'avoid', 
             breakInside: 'avoid',
-            marginTop: '40px',
-            minHeight: '180px',
+            marginTop: '20px',
             display: 'block'
           }}>
-            {/* Final Signature Section */}
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'flex-end', 
-              alignItems: 'flex-end'
-            }}>
-              <div style={{ textAlign: 'right', marginRight: '20px' }}>
-                <div style={{ 
-                  border: '2px dashed #d1d5db', 
-                  width: '200px', 
-                  height: '100px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  color: '#6b7280', 
-                  fontSize: '12px',
-                  marginBottom: '8px'
-                }}>
-                  Sign/Stamp
-                </div>
-                <div style={{ 
-                  color: '#ea580c', 
-                  fontWeight: '700', 
-                  fontSize: '14px', 
-                  marginBottom: '8px' 
-                }}>
-                  AGROGREEN WAREHOUSING PRIVATE LIMITED
-                </div>
-                <div style={{ 
-                  color: '#6b7280', 
-                  fontSize: '12px' 
-                }}>
-                  AUTHORIZED SIGNATORY
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
+            {/* Footer Disclaimer */}
             <div style={{ 
               marginTop: '20px', 
               padding: '10px', 
@@ -926,7 +908,6 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
               testing only. Total liability or any claim arising out of this report is limited to the invoiced amount only.
             </div>
           </div>
-        </div>
       </div>
     </div>
   );

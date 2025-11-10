@@ -728,59 +728,67 @@ export default function OutwardPage() {
       'Tare Weight (MT)',
       'Net Weight (MT)',
       'Total Outward Bags',
-      'Stack Number',
-      'Stack Inward Bags',
-      'Stack Outward Bags',
-      'Stack Balance Bags',
+      'Stack Details',
       'Remarks',
       'Status'
     ];
 
-    // Convert data to CSV format (one row per stack entry; if no stacks, one row with blank stack fields)
+    // Convert data to CSV format (one row per vehicle entry)
     const csvData = dataToExport.flatMap(outward => {
-      const stacks = Array.isArray(outward.stackEntries) && outward.stackEntries.length > 0
-        ? outward.stackEntries
-        : [null];
-      return stacks.map((stack: any) => [
-        outward.outwardCode || '',
-        outward.srwrNo || '',
-        outward.baseReceiptNo || outward.bankReceipt || '-',
-        outward.doCode || '',
-        outward.cadNumber || '',
-        outward.state || '',
-        outward.branch || '',
-        outward.location || '',
-        outward.warehouseName || '',
-        outward.warehouseCode || '',
-        outward.warehouseAddress || '',
-        outward.client || '',
-        outward.clientCode || '',
-        outward.clientAddress || '',
-        outward.warehouseType || outward.typeOfWarehouse || '',
-        outward.typeOfBusiness || outward.businessType || '',
-        outward.commodity || outward.commodityName || '',
-        outward.variety || outward.varietyName || '',
-        outward.inwardBags || outward.totalBags || '',
-        outward.inwardQuantity || outward.totalQuantity || '',
-        outward.doBags || '',
-        outward.doQuantity || '',
-        outward.outwardBags || '',
-        outward.outwardQuantity || '',
-        outward.vehicleNumber || '',
-        outward.gatepass || '',
-        outward.weighbridgeName || '',
-        outward.weighbridgeSlipNo || '',
-        outward.grossWeight || '',
-        outward.tareWeight || '',
-        outward.netWeight || '',
-        outward.totalBagsOutward || '',
-        stack?.stackNo || '',
-        stack?.inwardBags ?? '',
-        stack?.bags ?? '',
-        stack ? ((stack.inwardBags || 0) - (parseInt(stack.bags) || 0)) : '',
-        outward.remark || '',
-        normalizeStatusText(outward.outwardStatus || 'pending'),
-      ]);
+      // Check if we have vehicle entries (outwardEntries)
+      const vehicleEntries = Array.isArray(outward.outwardEntries) && outward.outwardEntries.length > 0
+        ? outward.outwardEntries
+        : [null]; // If no vehicle entries, create one row with main data
+      
+      return vehicleEntries.map((vehicleEntry: any) => {
+        // Format stack details as "stack-value" for each vehicle entry
+        let stackDetails = '';
+        if (vehicleEntry && Array.isArray(vehicleEntry.stackEntries) && vehicleEntry.stackEntries.length > 0) {
+          stackDetails = vehicleEntry.stackEntries
+            .map((stack: any) => `${stack.stackNo || ''}-${stack.bags || 0}`)
+            .join('; ');
+        }
+        
+        return [
+          outward.outwardCode || '',
+          outward.srwrNo || '',
+          outward.baseReceiptNo || outward.bankReceipt || '-',
+          outward.doCode || '',
+          outward.cadNumber || '',
+          outward.state || '',
+          outward.branch || '',
+          outward.location || '',
+          outward.warehouseName || '',
+          outward.warehouseCode || '',
+          outward.warehouseAddress || '',
+          outward.client || '',
+          outward.clientCode || '',
+          outward.clientAddress || '',
+          outward.warehouseType || outward.typeOfWarehouse || '',
+          outward.typeOfBusiness || outward.businessType || '',
+          outward.commodity || outward.commodityName || '',
+          outward.variety || outward.varietyName || '',
+          outward.inwardBags || outward.totalBags || '',
+          outward.inwardQuantity || outward.totalQuantity || '',
+          outward.doBags || '',
+          outward.doQuantity || '',
+          outward.outwardBags || '',
+          outward.outwardQuantity || '',
+          // Vehicle-specific data from vehicleEntry
+          vehicleEntry?.vehicleNumber || outward.vehicleNumber || '',
+          vehicleEntry?.gatepass || outward.gatepass || '',
+          vehicleEntry?.weighbridgeName || outward.weighbridgeName || '',
+          vehicleEntry?.weighbridgeSlipNo || outward.weighbridgeSlipNo || '',
+          vehicleEntry?.grossWeight || outward.grossWeight || '',
+          vehicleEntry?.tareWeight || outward.tareWeight || '',
+          vehicleEntry?.netWeight || outward.netWeight || '',
+          vehicleEntry?.totalBagsOutward || outward.totalBagsOutward || '',
+          // Stack details formatted as "stack-value"
+          stackDetails,
+          vehicleEntry?.remark || outward.remark || '',
+          normalizeStatusText(outward.outwardStatus || 'pending'),
+        ];
+      });
     });
 
     // Combine headers and data

@@ -9804,44 +9804,20 @@ export default function InwardPage() {
                     </div>
                   );
                 })()}
-                {/* Signature block for Stock Receipt only, right after insurance details */}
-                <div className="w-full flex justify-end mt-8 mb-2">
-                    <div className="flex flex-col items-end">
-                      <div className="w-56 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
-
-                        <span className="text-[10px] text-gray-400">Sign/Stamp</span>
-                      </div>
-                                                                    <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
-
-                      <div className="text-[10px] font-semibold">AUTHORIZED SIGNATORY</div>
-                    </div>
-                  </div>
-                {/* {selectedRowForSR?.receiptType !== 'WR' && (
-                  <div className="w-full flex justify-end mt-8 mb-2">
-                    <div className="flex flex-col items-end">
-                      <div className="w-56 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
-
-                        <span className="text-[10px] text-gray-400">Sign</span>
-                      </div>
-                                                                    <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
-
-                      <div className="text-[10px] font-semibold">AUTHORIZED SIGNATORY</div>
-                    </div>
-                  </div>
-                )} */}
+                {/* Removed signature block - no longer shown in SR/WR receipt */}
               </div>
               {/* Margin and Dotted Line */}
-              <div className="my-8">
+              <div className="my-6">
                 <hr className="border-t-2 border-dotted border-gray-400" />
               </div>
               {/* Agrogreen Logo and Test Certificate (Modal View) */}
-              <div className="relative flex flex-col items-center justify-center my-8">
-              <div className="flex flex-col items-center justify-center mb-8 mt-2">
-            <Image src="/Group 86.png" alt="Agrogreen Logo" width={120} height={100} style={{ marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
+              <div className="relative flex flex-col items-center justify-center my-6">
+              <div className="flex flex-col items-center justify-center mb-6 mt-2">
+            <Image src="/Group 86.png" alt="Agrogreen Logo" width={100} height={85} style={{ marginBottom: 6, borderRadius: '30%', objectFit: 'cover' }} />
             <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
               AGROGREEN WAREHOUSING PRIVATE LTD.
             </div>
-            <div className="text-base font-semibold text-green-600 mb-2 text-center">
+            <div className="text-sm font-semibold text-green-600 mb-2 text-center">
               603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
             </div>
             <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
@@ -9849,7 +9825,7 @@ export default function InwardPage() {
             </div>
           </div>
                 {/* FROM SECTION */}
-                <div className="w-full max-w-2xl mt-8 mb-4 border border-gray-200 rounded-lg p-4 bg-gray-50" style={{ maxWidth: '900px' }}>
+                <div className="w-full max-w-2xl mt-6 mb-4 border border-gray-200 rounded-lg p-4 bg-gray-50" style={{ maxWidth: '900px' }}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                       <Label className="font-semibold mb-1">Client Name</Label>
@@ -9907,7 +9883,7 @@ export default function InwardPage() {
                   />
                 </div>
                 {/* Quality Parameters Table - left aligned */}
-                <div className="w-full max-w-2xl mb-8" style={{ maxWidth: '900px' }}>
+                <div className="w-full max-w-2xl mb-6" style={{ maxWidth: '900px' }}>
                   <Label className="block font-semibold mb-2 text-green-700 text-left">Quality Parameters (from Commodity & Variety)</Label>
                   <div className="overflow-x-auto max-w-lg">
                     <table className="min-w-full border border-green-300 rounded-lg">
@@ -9949,18 +9925,9 @@ export default function InwardPage() {
                     </table>
                   </div>
                 </div>
-                {/* Footer Section - left and right aligned with space between */}
-                <div className="w-full max-w-2xl flex justify-between items-end mt-8 mb-2" style={{ maxWidth: '900px' }}>
+                {/* Footer Section - simplified without signature */}
+                <div className="w-full max-w-2xl flex justify-start items-end mt-6 mb-2" style={{ maxWidth: '900px' }}>
                   <div className="text-xs font-semibold text-left">THE QUALITY OF GOODS IS AVERAGE</div>
-                  <div className="flex flex-col items-end">
-                    {/* <div className="text-xs font-bold mb-1">Stamp</div> */}
-                   
-                    <div className="w-40 h-20 border-2 border-dashed border-gray-400 flex items-center justify-center mb-1">
-                      <span className="text-[10px] text-gray-400">Sign/Stamp</span>
-                    </div>
- <div className="text-xs font-bold mb-1 text-orange-500">AGROGREEN WAREHOUSING PRIVATE LIMITED</div>
-                    <div className="text-[10px] font-semibold text-green-700">AUTHORIZED SIGNATORY</div>
-                  </div>
                 </div>
               </div>
               {/* Approve/Reject/Resubmit Buttons and Print Button */}

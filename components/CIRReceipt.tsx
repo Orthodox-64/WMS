@@ -59,61 +59,61 @@ interface CIRReceiptProps {
 const borderColor = '#e67c1f';
 const borderLight = '#f3c892';
 const headerBg = '#fff7ed';
-const labelStyle = { fontWeight: 700, color: borderColor, fontSize: 15, letterSpacing: 0.5 };
-const valueStyle = { fontWeight: 500, color: '#222', fontSize: 15, letterSpacing: 0.2 };
-const cellPad = 14;
+const labelStyle = { fontWeight: 700, color: borderColor, fontSize: 15, letterSpacing: 0.3, lineHeight: 1.6 };
+const valueStyle = { fontWeight: 500, color: '#222', fontSize: 15, letterSpacing: 0.2, lineHeight: 1.6 };
+const cellPad = '14px 12px';
 
 const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
   return (
     <div
       style={{
         width: 900,
-        margin: '24px auto',
+        margin: '16px auto',
         background: '#f6fef9', // faint green
-        borderRadius: 16,
+        borderRadius: 12,
         fontFamily: 'Arial, sans-serif',
         color: '#222',
         boxShadow: '0 4px 24px #e0f2e9',
-        padding: 36,
+        padding: 24,
       }}
     >
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 8 }}>
-        <Image src="/Group 86.png" alt="Agrogreen Logo" width={90} height={90} style={{ borderRadius: '50%', margin: '0 auto 8px' }} />
-        <div style={{ fontSize: 22, fontWeight: 700, color: '#1aad4b', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
-        <div style={{ fontSize: 14, fontWeight: 500, color: '#e67c1f', marginBottom: 8 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+      <div style={{ textAlign: 'center', marginBottom: 6 }}>
+        <Image src="/Group 86.png" alt="Agrogreen Logo" width={80} height={80} style={{ borderRadius: '50%', margin: '0 auto 6px' }} />
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#1aad4b', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: '#e67c1f', marginBottom: 6 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
       </div>
       
       {/* Centered CIR FORM title with margin */}
-      <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '36px auto 36px auto' }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: borderColor, textAlign: 'center' }}>
+      <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '20px auto 20px auto' }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: borderColor, textAlign: 'center' }}>
           CIR (COMMODITY INWARD RECEIPT) STATUS FORM
         </span>
       </div>
 
       {/* Basic Info Table */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Inward ID</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.inwardId || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>CIR Status</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.cirStatus || '-'}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: cellPad }}>Inward ID</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: cellPad }}>{data.inwardId || '-'}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: cellPad }}>CIR Status</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: cellPad }}>{data.cirStatus || '-'}</td>
           </tr>
           <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>Date of Inward</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.dateOfInward || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10 }}>CAD Number</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10 }}>{data.cadNumber || '-'}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: cellPad }}>Date of Inward</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: cellPad }}>{data.dateOfInward || '-'}</td>
+            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: cellPad }}>CAD Number</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: cellPad }}>{data.cadNumber || '-'}</td>
           </tr>
         </tbody>
       </table>
 
       {/* Location Details */}
-      <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
         LOCATION DETAILS
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>State</td>
@@ -137,10 +137,10 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       </table>
 
       {/* Client Details */}
-      <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
         CLIENT DETAILS
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Client Name</td>
@@ -156,10 +156,10 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       </table>
 
       {/* Commodity Details */}
-      <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
         COMMODITY DETAILS
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Commodity</td>
@@ -183,10 +183,10 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       </table>
 
       {/* Vehicle & Weight Details */}
-      <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
         VEHICLE & WEIGHT DETAILS
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Vehicle Number</td>
@@ -216,10 +216,10 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       {/* Stack Information */}
       {data.stacks && data.stacks.length > 0 && (
         <>
-          <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
             STACK INFORMATION
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
             <thead>
               <tr>
                 <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Stack Number</th>
@@ -241,10 +241,10 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       {/* Lab Parameters */}
       {data.labParameterNames && data.labParameterNames.length > 0 && (
         <>
-          <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
             QUALITY PARAMETERS
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
             <tbody>
               <tr>
                 <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Sampling Date</td>
@@ -254,7 +254,7 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
               </tr>
             </tbody>
           </table>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
             <thead>
               <tr>
                 <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Parameter</th>
@@ -278,10 +278,10 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       )}
 
       {/* Bank Details */}
-      <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
         BANK DETAILS
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Bank Name</td>
@@ -305,10 +305,10 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       {/* Reservation & Billing Details - Only show if billingStatus exists */}
       {data.billingStatus && data.billingStatus !== '-' && (
         <>
-          <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
             {data.billingStatus === 'Reservation' ? 'RESERVATION DETAILS' : 'BILLING DETAILS'}
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
             <tbody>
               {/* Show Reservation fields if billingStatus is "Reservation" */}
               {data.billingStatus === 'Reservation' && (
@@ -351,11 +351,11 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       {/* Insurance Details */}
       {data.insuranceEntries && data.insuranceEntries.length > 0 && (
         <>
-          <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
             INSURANCE DETAILS
           </div>
           {data.insuranceEntries.map((insurance: any, index: number) => (
-            <table key={index} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+            <table key={index} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
               <tbody>
                 <tr>
                   <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Insurance ID</td>
@@ -382,29 +382,24 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       )}
 
       {/* Remarks Section */}
-      <div style={{ fontSize: 16, fontWeight: 700, color: borderColor, marginBottom: 8, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
         REMARKS / APPROVAL NOTE
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           <tr>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad, minHeight: '60px', verticalAlign: 'top' }}>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad, minHeight: '40px', verticalAlign: 'top' }}>
               {data.remarks || 'No remarks provided'}
             </td>
           </tr>
         </tbody>
       </table>
 
-      {/* Footer */}
-      <div style={{ marginTop: 36, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+      {/* Footer - Simplified without signature section */}
+      <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-end' }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, color: borderColor, marginBottom: 4 }}>Place: {data.place || 'Indore'}</div>
           <div style={{ fontSize: 14, fontWeight: 600, color: borderColor }}>Date: {data.date || new Date().toLocaleDateString('en-IN')}</div>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ borderTop: `2px solid ${borderColor}`, width: 200, paddingTop: 8, fontSize: 14, fontWeight: 600, color: borderColor }}>
-            Authorized Signature
-          </div>
         </div>
       </div>
     </div>
