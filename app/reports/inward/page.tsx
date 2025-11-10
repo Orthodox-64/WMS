@@ -102,8 +102,8 @@ export default function InwardReportsPage() {
     { key: 'inwardDate', label: 'Inward Date', width: 'w-28' },
     { key: 'srWrNumber', label: 'SR/WR Number', width: 'w-32' },
     { key: 'srWrDate', label: 'SR/WR Date', width: 'w-28' },
-    { key: 'fundingSrWrDate', label: 'Funding SR/WR Date', width: 'w-36' },
-    { key: 'srLastValidityDate', label: 'SR Last Validity Date', width: 'w-32' },
+  { key: 'fundingSrWrDate', label: 'Funding SR/WR Date', width: 'w-36' },
+  { key: 'srLastValidityDate', label: 'Not SR Last Validity Date', width: 'w-32' },
     { key: 'totalBags', label: 'Total Bags', width: 'w-24' },
     { key: 'totalQty', label: 'Total Qty(MT)', width: 'w-28' },
     { key: 'roBags', label: 'RO Bags', width: 'w-20' },
@@ -687,6 +687,47 @@ export default function InwardReportsPage() {
           };
 
           // Field mapping with comprehensive fallback logic
+
+          // If insurance is managed by client, try to get the client details from
+          // the warehouse inspection's insurance entries. This ensures the
+          // clientCode/clientName columns show the insurance client's details
+          // when insuranceManagedBy indicates 'client'.
+          const _insuranceEntriesForWarehouse = warehouseDetails.insuranceEntries || [];
+          const _managedByRaw = docData.insuranceManagedBy || docData.selectedInsurance || '';
+          const _managedByStr = extractInsuranceValue(_managedByRaw).toString().toLowerCase();
+
+          let _insuranceClientName: string | null = null;
+          let _insuranceClientCode: string | null = null;
+
+          if (_managedByStr && _managedByStr.includes('client')) {
+            // Try to find a matching insurance entry using common candidate fields
+            let _match: any = null;
+
+            // If managedByRaw is an object with insuranceId, try exact match first
+            if (_managedByRaw && typeof _managedByRaw === 'object' && (_managedByRaw.insuranceId || _managedByRaw.insuranceTakenBy)) {
+              const insId = _managedByRaw.insuranceId || _managedByRaw.insuranceTakenBy;
+              _match = _insuranceEntriesForWarehouse.find((ins: any) => (ins.insuranceId && ins.insuranceId === insId) || (ins.insuranceTakenBy && ins.insuranceTakenBy === insId));
+            }
+
+            // If no match yet, try to find by name-like fields matching the extracted managedBy string
+            if (!_match && typeof _managedByRaw === 'string' && _managedByRaw.trim()) {
+              _match = _insuranceEntriesForWarehouse.find((ins: any) => {
+                const candidates = [ins.insuranceTakenBy, ins.name, ins.clientName, ins.companyName, ins.insurerName, ins.insuranceProviderName];
+                return candidates.some((c: any) => c && c.toString().toLowerCase().includes(_managedByRaw.toString().toLowerCase()));
+              });
+            }
+
+            // Fallback: pick the first insurance entry that indicates 'Client' in insuranceTakenBy
+            if (!_match) {
+              _match = _insuranceEntriesForWarehouse.find((ins: any) => (ins.insuranceTakenBy && ins.insuranceTakenBy.toString().toLowerCase().includes('client')) || ins.clientName);
+            }
+
+            if (_match) {
+              _insuranceClientName = _match.clientName || _match.name || _match.companyName || _match.insurerName || _match.insuranceProviderName || '';
+              _insuranceClientCode = _match.clientCode || _match.customerCode || _match.insuranceClientCode || '';
+            }
+          }
+
           return {
             id: doc.id,
             state: docData.state || docData.databaseLocation || warehouseDetails.state || '',
@@ -699,8 +740,8 @@ export default function InwardReportsPage() {
             warehouseCode: docData.warehouseCode || warehouseDetails.warehouseCode || '',
             warehouseName: docData.warehouseName || '',
             warehouseAddress: docData.warehouseAddress || warehouseDetails.address || '',
-            clientCode: docData.clientCode || '',
-            clientName: docData.clientName || docData.client || '',
+            clientCode: (_insuranceClientCode && _insuranceClientCode !== '') ? _insuranceClientCode : (docData.clientCode || ''),
+            clientName: (_insuranceClientName && _insuranceClientName !== '') ? _insuranceClientName : (docData.clientName || docData.client || ''),
             commodity: safeString(docData.commodity || docData.commodityName),
             variety: safeString(docData.variety || docData.varietyName),
             // Bank details with comprehensive fallback from inspections
@@ -721,8 +762,18 @@ export default function InwardReportsPage() {
             ),
             // Funding SR/WR Date - only show when bank details are present
             fundingSrWrDate: hasBankDetails(docData) ? formatDate(docData.srGenerationDate) : '',
-            // SR Last Validity Date with comprehensive calculation
-            srLastValidityDate: calculateSRValidityDate(),
+            // SR Last Validity Date: prefer stock validity end date from SR/WR UI (if present),
+            // otherwise fall back to the calculated SR validity
+            srLastValidityDate: (
+              // try known stock validity fields on the inward document
+              formatDate(
+                docData.stockValidityEndDate ||
+                docData.stockValidity?.endDate ||
+                docData.stockValidityEnd ||
+                docData.stockValidity?.end ||
+                docData.srStockValidityEndDate
+              ) || calculateSRValidityDate()
+            ),
             
             // ** PROPERLY SOURCED VALUES AS PER REQUIREMENTS **
             // Total bags & qty from inward collection - ORIGINAL QUANTITIES AT TIME OF INWARD ENTRY
@@ -855,7 +906,7 @@ export default function InwardReportsPage() {
       'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code',
       'Warehouse Name', 'Warehouse Address', 'Client Code', 'Client Name', 'Commodity', 'Variety',
       'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code', 'CAD Number', 'Inward Date',
-      'SR/WR Number', 'SR/WR Date', 'Funding SR/WR Date', 'SR Last Validity Date',
+  'SR/WR Number', 'SR/WR Date', 'Funding SR/WR Date', 'Not SR Last Validity Date',
       'Total Bags', 'Total Qty(MT)', 'RO Bags', 'RO Qty (MT)', 'DO Bags', 'DO Qty (MT)',
       'Balance Bags', 'Balance Qty (MT)', 'Insurance Managed by', 'Rate (Rs/MT)', 'AUM(Rs/MT)',
       // Additional vehicle-specific columns
