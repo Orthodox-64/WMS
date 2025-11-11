@@ -579,9 +579,10 @@ export default function DeliveryOrderPage() {
       
       console.log(`Found ${roData.length} ROs with positive balance`);
       
-      // Fetch all inward entries first - ONLY APPROVED SR/WR entries for Direct DO
+      // Fetch all inward entries first - ONLY APPROVED entries for Direct DO
+      // Note: using 'status' field (not 'srwrStatus') to check for approved entries
       const inwardCol = collection(db, 'inward');
-      const inwardQ = query(inwardCol, where('srwrStatus', '==', 'approved'));
+      const inwardQ = query(inwardCol, where('status', '==', 'approved'));
       const inwardSnap = await getDocs(inwardQ);
   const allInwardEntries: any[] = inwardSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       
@@ -741,59 +742,18 @@ export default function DeliveryOrderPage() {
           }
           
           // THIRD CHECK: Does the inward entry itself have bank details?
-          // First check direct bank fields on the entry
-          const directInwardBankFields = ['bankName', 'bankBranch', 'bankState', 'ifscCode'];
-          for (const field of directInwardBankFields) {
-            if (entry[field] && typeof entry[field] === 'string' && entry[field].trim() !== '') {
-              console.log(`⚠️ Inward has direct bank field: ${field} = ${entry[field]}`);
-              return false;
-            }
+          // Check specific bank fields from inward collection: bankName, bankBranch, bankFundedBy
+          const hasBankName = entry.bankName && entry.bankName.trim() !== '';
+          const hasBankBranch = entry.bankBranch && entry.bankBranch.trim() !== '';
+          const hasBankFundedBy = entry.bankFundedBy && entry.bankFundedBy.trim() !== '' && entry.bankFundedBy !== '-';
+          
+          if (hasBankName || hasBankBranch || hasBankFundedBy) {
+            console.log(`⚠️ Inward has bank details - bankName: ${entry.bankName}, bankBranch: ${entry.bankBranch}, bankFundedBy: ${entry.bankFundedBy}`);
+            return false;
           }
           
-          if (entry.bankDetails) {
-            // Check various bank detail fields
-            if (entry.bankDetails.name && entry.bankDetails.name.trim() !== '') {
-              console.log(`⚠️ Inward has bank name`);
-              return false;
-            }
-            if (entry.bankDetails.accountNumber && entry.bankDetails.accountNumber.trim() !== '') {
-              console.log(`⚠️ Inward has account number`);
-              return false;
-            }
-            if (entry.bankDetails.ifscCode && entry.bankDetails.ifscCode.trim() !== '') {
-              console.log(`⚠️ Inward has IFSC code`);
-              return false;
-            }
-            
-            // Check if the bankDetails object has any properties at all
-            if (Object.keys(entry.bankDetails).length > 0) {
-              for (const key in entry.bankDetails) {
-                const value = entry.bankDetails[key];
-                if (value && typeof value === 'string' && value.trim() !== '') {
-                  console.log(`⚠️ Inward has bank details: ${key} = ${value}`);
-                  return false;
-                }
-              }
-            }
-          }
-          
-          // FOURTH CHECK: Final verification - does ANY field contain bank-related strings?
-          const bankRelatedTerms = ['bank', 'ifsc', 'account', 'sbi', 'hdfc', 'icici', 'axis'];
-          for (const key in entry) {
-            const value = entry[key];
-            if (typeof value === 'string') {
-              const valueLower = value.toLowerCase();
-              for (const term of bankRelatedTerms) {
-                if (valueLower.includes(term)) {
-                  console.log(`⚠️ Inward entry has bank-related term in field ${key}: ${value}`);
-                  return false;
-                }
-              }
-            }
-          }
-          
-          // If we got here, no bank details were found anywhere
-          console.log(`✅ NO BANK DETAILS FOUND - allowing for Direct DO`);
+          // If we got here, no bank details were found (all 3 fields are empty or default values)
+          console.log(`✅ NO BANK DETAILS FOUND - allowing for Direct DO (bankName: "${entry.bankName}", bankBranch: "${entry.bankBranch}", bankFundedBy: "${entry.bankFundedBy}")`);
           return true;
         })
         .map(entry => {
@@ -1639,10 +1599,30 @@ export default function DeliveryOrderPage() {
                       }}
                     >
                       <SelectTrigger id="ro-select" className="bg-white">
-                        <SelectValue placeholder="Select RO" />
+                        <SelectValue placeholder="Select RO or Direct SR/WR" />
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px]">
+                        <Input
+                          ref={searchInputRef}
+                          placeholder="Type to filter..."
+                          value={roSearch}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRoSearch(e.target.value)}
+                          className="mb-2 sticky top-0 z-10"
+                        />
                         {filteredROOptions
+                          .filter((option: any) => {
+                            // Only show entries with positive balance (hide 0 balance entries)
+                            const balanceBags = option.balanceBags !== undefined ? 
+                              Number(option.balanceBags) : 
+                              (option.releaseBags !== undefined ? Number(option.releaseBags) : 0);
+                            return balanceBags > 0;
+                          })
+                          .length === 0 ? (
+                          <div className="px-2 py-4 text-center text-sm text-gray-500">
+                            No options found matching &quot;{roSearch}&quot;
+                          </div>
+                        ) : (
+                          filteredROOptions
                           .filter((option: any) => {
                             // Only show entries with positive balance (hide 0 balance entries)
                             const balanceBags = option.balanceBags !== undefined ? 
@@ -1682,7 +1662,8 @@ export default function DeliveryOrderPage() {
                               )}
                             </SelectItem>
                           );
-                        })}
+                        })
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

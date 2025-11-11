@@ -95,7 +95,7 @@ export default function ReleaseOrderReportsPage() {
     { key: 'roQty', label: 'RO Qty (MT)', width: 'w-24' },
     { key: 'roCode', label: 'RO Code', width: 'w-20' },
     { key: 'balanceBag', label: 'Balance Bag', width: 'w-20' },
-    { key: 'balanceQty', label: 'Balance QT', width: 'w-20' }
+    { key: 'balanceQty', label: 'Balance Quantity (MT)', width: 'w-20' }
   ];
 
   // Set default date range (last 6 months)
@@ -488,7 +488,7 @@ export default function ReleaseOrderReportsPage() {
       'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name',
       'Warehouse Address', 'Client Code', 'Client Name', 'Commodity', 'Variety', 'Bank Name', 'Bank Branch',
       'Bank State', 'IFSC Code', 'Inward Bag', 'Inward Qty', 'RO Number', 'RO Date', 'RO bags', 'RO Qty (MT)',
-      'RO Code', 'Balance Bag', 'Balance QT'
+      'RO Code', 'Balance Bag', 'Balance Quantity (MT)'
     ];
     
     const csvContent = [

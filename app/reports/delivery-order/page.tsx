@@ -85,7 +85,7 @@ export default function DeliveryOrderReportsPage() {
     { key: 'doQty', label: 'DO Qty (MT)', width: 'w-24' },
     { key: 'doCode', label: 'DO Code', width: 'w-20' },
     { key: 'balanceBag', label: 'Balance Bag', width: 'w-20' },
-    { key: 'balanceQty', label: 'Balance QT', width: 'w-20' }
+    { key: 'balanceQty', label: 'Balance Quantity (MT)', width: 'w-20' }
   ];
 
   // Set default date range (last 6 months)
@@ -657,7 +657,7 @@ export default function DeliveryOrderReportsPage() {
     const headers = [
       'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name',
       'Warehouse Address', 'Client Code', 'Client Name', 'Commodity', 'Variety', 'Inward Bag', 'Inward Qty',
-      'DO Number', 'DO Date', 'DO Bags', 'DO Qty (MT)', 'DO Code', 'Balance Bag', 'Balance QT'
+      'DO Number', 'DO Date', 'DO Bags', 'DO Qty (MT)', 'DO Code', 'Balance Bag', 'Balance Quantity (MT)'
     ];
     
     const csvContent = [
@@ -1056,7 +1056,7 @@ export default function DeliveryOrderReportsPage() {
                     {visibleColumns.includes('doQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Qty (MT)</th>}
                     {visibleColumns.includes('doCode') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">DO Code</th>}
                     {visibleColumns.includes('balanceBag') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Bag</th>}
-                    {visibleColumns.includes('balanceQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance QT</th>}
+                    {visibleColumns.includes('balanceQty') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Balance Quantity (MT)</th>}
                   </tr>
                 </thead>
                 <tbody>

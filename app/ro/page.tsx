@@ -531,10 +531,24 @@ export default function ReleaseOrderPage() {
           balanceQuantity
         };
       })
-      // Filter out inwards with zero balance
-      .filter(inward => inward.balanceBags > 0);
+      // Filter: only show inwards with positive balance AND bank details present
+      .filter(inward => {
+        const hasPositiveBalance = inward.balanceBags > 0;
+        
+        // Check specific bank fields from inward collection: bankName, bankBranch, bankFundedBy
+        // All three must be present and not empty/default values
+        const hasBankName = inward.bankName && inward.bankName.trim() !== '';
+        const hasBankBranch = inward.bankBranch && inward.bankBranch.trim() !== '';
+        const hasBankFundedBy = inward.bankFundedBy && inward.bankFundedBy.trim() !== '' && inward.bankFundedBy !== '-';
+        
+        const hasBankDetails = hasBankName || hasBankBranch || hasBankFundedBy;
+        
+        console.log(`Inward ${inward.inwardId}: balance=${inward.balanceBags}, bankName=${inward.bankName}, bankBranch=${inward.bankBranch}, bankFundedBy=${inward.bankFundedBy}, hasBankDetails=${hasBankDetails}`);
+        
+        return hasPositiveBalance && hasBankDetails;
+      });
       
-      console.log(`Found ${merged.length} inward entries with positive balance`);
+      console.log(`Found ${merged.length} inward entries with positive balance and bank details`);
       setInwardOptions(merged);
     };
     fetchInwards();

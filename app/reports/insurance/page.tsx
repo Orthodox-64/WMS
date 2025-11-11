@@ -93,7 +93,7 @@ export default function InsuranceReportsPage() {
     { key: 'bankState', label: 'Bank State', width: 'w-24' },
     { key: 'ifscCode', label: 'IFSC Code', width: 'w-24' },
     { key: 'balanceBags', label: 'Balance Bags', width: 'w-24' },
-    { key: 'balanceQty', label: 'Balance Qty', width: 'w-24' },
+    { key: 'balanceQty', label: 'Balance Quantity (MT)', width: 'w-24' },
     { key: 'insuranceManagedBy', label: 'Insurance Managed By', width: 'w-32' },
     { key: 'rate', label: 'Rate', width: 'w-20' },
     { key: 'aum', label: 'AUM', width: 'w-20' },
@@ -344,6 +344,15 @@ export default function InsuranceReportsPage() {
         
         console.log('Final bank details:', { bankName, bankBranchName, bankState, ifscCode });
         
+        // Check if insurance is taken by client
+        const insuranceType = (insuranceData.insuranceType || '').toLowerCase();
+        const isTakenByClient = insuranceType.includes('client');
+        
+        console.log('Insurance type check:', {
+          insuranceType: insuranceData.insuranceType,
+          isTakenByClient
+        });
+        
         data.push({
           id: doc.id,
           state: insuranceData.state || warehouseDetails.state || '',
@@ -357,8 +366,10 @@ export default function InsuranceReportsPage() {
           warehouseCode: insuranceData.warehouseCode || warehouseDetails.warehouseCode || '',
           warehouseName: warehouseName || '',
           warehouseAddress: warehouseDetails.address || '',
-          clientCode: insuranceData.clientCode || latestInward.clientCode || '',
-          clientName: insuranceData.clientName || latestInward.clientName || '',
+          // Client Code: only show if insurance is taken by client
+          clientCode: isTakenByClient ? (insuranceData.clientCode || latestInward.clientCode || '') : '-',
+          // Client Name: only show if insurance is taken by client
+          clientName: isTakenByClient ? (insuranceData.clientName || latestInward.clientName || '') : '-',
           // Commodity and Variety with fallback to inward data
           commodity: insuranceData.commodityName ||
                     insuranceData.commodity ||
@@ -502,7 +513,7 @@ export default function InsuranceReportsPage() {
     const headers = [
       'State', 'Branch', 'Location', 'Type of Business', 'Warehouse Type', 'Warehouse Code', 'Warehouse Name', 'Warehouse Address',
       'Client Code', 'Client Name', 'Commodity', 'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code',
-      'Balance Bags', 'Balance Qty', 'Insurance Managed By', 'Rate', 'AUM', 'Fire Policy Number', 'Fire Policy Sum Insured',
+      'Balance Bags', 'Balance Quantity (MT)', 'Insurance Managed By', 'Rate', 'AUM', 'Fire Policy Number', 'Fire Policy Sum Insured',
       'Fire Policy Start Date', 'Fire Policy End Date', 'Burglary Policy Number', 'Burglary Policy Sum Insured', 'Burglary Policy Start Date', 'Burglary Policy End Date',
       'Fire Policy Remaining Amount', 'Burglary Policy Remaining Amount'
     ];

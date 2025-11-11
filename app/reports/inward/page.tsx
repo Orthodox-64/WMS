@@ -111,7 +111,7 @@ export default function InwardReportsPage() {
     { key: 'doBags', label: 'DO Bags', width: 'w-20' },
     { key: 'doQty', label: 'DO Qty (MT)', width: 'w-24' },
     { key: 'balanceBags', label: 'Balance Bags', width: 'w-24' },
-    { key: 'balanceQty', label: 'Balance Qty (MT)', width: 'w-28' },
+    { key: 'balanceQty', label: 'Balance Quantity (MT)', width: 'w-28' },
     { key: 'insuranceManagedBy', label: 'Insurance Managed by', width: 'w-32' },
     { key: 'rate', label: 'Rate (Rs/MT)', width: 'w-24' },
     { key: 'aum', label: 'AUM(Rs/MT)', width: 'w-24' }
@@ -688,46 +688,6 @@ export default function InwardReportsPage() {
 
           // Field mapping with comprehensive fallback logic
 
-          // If insurance is managed by client, try to get the client details from
-          // the warehouse inspection's insurance entries. This ensures the
-          // clientCode/clientName columns show the insurance client's details
-          // when insuranceManagedBy indicates 'client'.
-          const _insuranceEntriesForWarehouse = warehouseDetails.insuranceEntries || [];
-          const _managedByRaw = docData.insuranceManagedBy || docData.selectedInsurance || '';
-          const _managedByStr = extractInsuranceValue(_managedByRaw).toString().toLowerCase();
-
-          let _insuranceClientName: string | null = null;
-          let _insuranceClientCode: string | null = null;
-
-          if (_managedByStr && _managedByStr.includes('client')) {
-            // Try to find a matching insurance entry using common candidate fields
-            let _match: any = null;
-
-            // If managedByRaw is an object with insuranceId, try exact match first
-            if (_managedByRaw && typeof _managedByRaw === 'object' && (_managedByRaw.insuranceId || _managedByRaw.insuranceTakenBy)) {
-              const insId = _managedByRaw.insuranceId || _managedByRaw.insuranceTakenBy;
-              _match = _insuranceEntriesForWarehouse.find((ins: any) => (ins.insuranceId && ins.insuranceId === insId) || (ins.insuranceTakenBy && ins.insuranceTakenBy === insId));
-            }
-
-            // If no match yet, try to find by name-like fields matching the extracted managedBy string
-            if (!_match && typeof _managedByRaw === 'string' && _managedByRaw.trim()) {
-              _match = _insuranceEntriesForWarehouse.find((ins: any) => {
-                const candidates = [ins.insuranceTakenBy, ins.name, ins.clientName, ins.companyName, ins.insurerName, ins.insuranceProviderName];
-                return candidates.some((c: any) => c && c.toString().toLowerCase().includes(_managedByRaw.toString().toLowerCase()));
-              });
-            }
-
-            // Fallback: pick the first insurance entry that indicates 'Client' in insuranceTakenBy
-            if (!_match) {
-              _match = _insuranceEntriesForWarehouse.find((ins: any) => (ins.insuranceTakenBy && ins.insuranceTakenBy.toString().toLowerCase().includes('client')) || ins.clientName);
-            }
-
-            if (_match) {
-              _insuranceClientName = _match.clientName || _match.name || _match.companyName || _match.insurerName || _match.insuranceProviderName || '';
-              _insuranceClientCode = _match.clientCode || _match.customerCode || _match.insuranceClientCode || '';
-            }
-          }
-
           return {
             id: doc.id,
             state: docData.state || docData.databaseLocation || warehouseDetails.state || '',
@@ -740,18 +700,10 @@ export default function InwardReportsPage() {
             warehouseCode: docData.warehouseCode || warehouseDetails.warehouseCode || '',
             warehouseName: docData.warehouseName || '',
             warehouseAddress: docData.warehouseAddress || warehouseDetails.address || '',
-            // Client Code: show only if insurance managed by client, otherwise "-"
-            clientCode: (_managedByStr && _managedByStr.includes('client')) 
-              ? ((_insuranceClientCode && _insuranceClientCode !== '') ? _insuranceClientCode : (docData.clientCode || '-'))
-              : '-',
-            // Client Name: format as "clientName-clientCode" if insurance managed by client, otherwise "-"
-            clientName: (_managedByStr && _managedByStr.includes('client'))
-              ? (() => {
-                  const name = (_insuranceClientName && _insuranceClientName !== '') ? _insuranceClientName : (docData.clientName || docData.client || '');
-                  const code = (_insuranceClientCode && _insuranceClientCode !== '') ? _insuranceClientCode : (docData.clientCode || '');
-                  return (name && code) ? `${name}-${code}` : (name || code || '-');
-                })()
-              : '-',
+            // Client Code: always show from inward data
+            clientCode: docData.clientCode || '',
+            // Client Name: always show from inward data
+            clientName: docData.clientName || docData.client || '',
             commodity: safeString(docData.commodity || docData.commodityName),
             variety: safeString(docData.variety || docData.varietyName),
             // Bank details with comprehensive fallback from inspections
@@ -918,7 +870,7 @@ export default function InwardReportsPage() {
       'Bank Name', 'Bank Branch Name', 'Bank State', 'IFSC Code', 'CAD Number', 'Inward Date',
   'SR/WR Number', 'SR/WR Date', 'Funding SR/WR Date', 'SR/WR Last Validity Date',
       'Total Bags', 'Total Qty(MT)', 'RO Bags', 'RO Qty (MT)', 'DO Bags', 'DO Qty (MT)',
-      'Balance Bags', 'Balance Qty (MT)', 'Insurance Managed by', 'Rate (Rs/MT)', 'AUM(Rs/MT)',
+      'Balance Bags', 'Balance Quantity (MT)', 'Insurance Managed by', 'Rate (Rs/MT)', 'AUM(Rs/MT)',
       // Additional vehicle-specific columns
       'Vehicle Number', 'Gatepass Number', 'Weight Bridge', 'Weight Bridge Slip Number',
       'Gross Weight (MT)', 'Tare Weight (MT)', 'Net Weight (MT)', 'Average Weight (MT)',
