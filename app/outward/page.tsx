@@ -1838,7 +1838,26 @@ export default function OutwardPage() {
                       <SelectValue placeholder="Select Delivery Order" />
                     </SelectTrigger>
                     <SelectContent className="max-h-[320px]">
-                      {groupedDOOptions.map(group => {
+                      {/* Search Input */}
+                      <div className="px-2 py-2 border-b sticky top-0 bg-white z-10">
+                        <Input
+                          ref={searchInputRef}
+                          placeholder="Type to filter..."
+                          value={doSearch}
+                          onChange={(e) => setDoSearch(e.target.value)}
+                          className="h-8 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      
+                      {/* Empty state when no results */}
+                      {groupedDOOptions.length === 0 && doSearch ? (
+                        <div className="px-2 py-4 text-center text-sm text-gray-500">
+                          No options found matching &quot;{doSearch}&quot;
+                        </div>
+                      ) : (
+                        groupedDOOptions.map(group => {
                         const itemsWithBalance = group.items
                           .filter(option => {
                             const balanceBags = option.balanceBags !== undefined ? Number(option.balanceBags) : (option.doBags !== undefined ? Number(option.doBags) : 0);
@@ -1862,7 +1881,8 @@ export default function OutwardPage() {
                             })}
                           </SelectGroup>
                         );
-                      })}
+                      })
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
