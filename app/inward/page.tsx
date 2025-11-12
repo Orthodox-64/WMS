@@ -9518,7 +9518,7 @@ export default function InwardPage() {
                 <div className="flex flex-wrap gap-4 items-center">
                 <div>
                     <Label className="text-sm font-medium">Bank Name</Label>
-                    <Input value={selectedRowForSR?.bankFundedBy || ''} readOnly className="text-sm mt-1 bg-white w-48" />
+                    <Input value={selectedRowForSR?.bankName || selectedRowForSR?.bankFundedBy || ''} readOnly className="text-sm mt-1 bg-white w-48" />
                 </div>
                 <div>
                     <Label className="text-sm font-medium">Bank Branch</Label>
