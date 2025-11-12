@@ -10,10 +10,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CalendarIcon, Upload, Plus, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
+import { CalendarIcon, Upload, Plus, Trash2, ChevronDown, ChevronRight, Pencil, Eye, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { collection, getDocs, addDoc, query, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { uploadToCloudinary, CloudinaryUploadResult } from '@/lib/cloudinary';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -505,8 +506,8 @@ export default function WarehouseInspectionForm({
     nameOfOE: '',
     oeDate: null as Date | null,
     contactNumber: '',
-    place: '',
-    attachedFiles: [] as string[],
+  place: '',
+  attachedFiles: [] as Array<string | { name?: string; url?: string; format?: string; public_id?: string }>,
     
     // Remarks
     remarks: '',
@@ -618,23 +619,49 @@ export default function WarehouseInspectionForm({
     chambers: false
   });
   
-  // File upload handler
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File upload handler - uploads to Cloudinary and stores URLs in formData.attachedFiles
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      const fileNames = files.map(file => file.name);
-      setSelectedFiles(prev => [...prev, ...files]);
-      setFormData(prev => ({ 
-        ...prev, 
-        attachedFiles: [...prev.attachedFiles, ...fileNames]
-      }));
-      toast({
-        title: "Files Selected",
-        description: `${files.length} file(s) selected successfully`,
-      });
+    if (files.length === 0) {
+      e.target.value = '';
+      return;
     }
-    // Reset the input value so the same file can be selected again
-    e.target.value = '';
+    try {
+      // Optional: keep local selection state
+      setSelectedFiles(prev => [...prev, ...files]);
+
+      const results: CloudinaryUploadResult[] = await Promise.all(
+        files.map(file => uploadToCloudinary(file))
+      );
+
+      // Map to a compact structure used by UI and persistence
+      const attachments = results.map(r => ({
+        name: r.original_filename,
+        url: r.secure_url,
+        format: r.format,
+        public_id: r.public_id
+      }));
+
+      setFormData(prev => ({
+        ...prev,
+        attachedFiles: [...(prev.attachedFiles || []), ...attachments]
+      }));
+
+      toast({
+        title: "Upload Successful",
+        description: `${attachments.length} file(s) uploaded.`,
+      });
+    } catch (err) {
+      console.error('Cloudinary upload failed:', err);
+      toast({
+        title: "Upload Failed",
+        description: "Could not upload files. Please try again.",
+        variant: 'destructive'
+      });
+    } finally {
+      // Reset the input value so the same file can be selected again
+      e.target.value = '';
+    }
   };
 
   // Wrap loaders to satisfy exhaustive-deps
@@ -7217,35 +7244,53 @@ export default function WarehouseInspectionForm({
                 {formData.attachedFiles.length > 0 && (
                   <div className="mt-4 text-left border border-green-200 rounded-lg p-3 bg-green-50">
                     <p className="text-sm font-semibold text-green-800 mb-3 flex items-center">
-                      <Upload className="w-4 h-4 mr-1" />
+                      <FileText className="w-4 h-4 mr-1" />
                       Attached Files ({formData.attachedFiles.length}):
                     </p>
                     <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {formData.attachedFiles.map((file: string, index: number) => (
-                        <div key={index} className="flex items-center justify-between bg-white p-2 rounded border border-green-200 shadow-sm">
-                          <span className="text-sm text-gray-700 font-medium truncate mr-2">{file}</span>
-                          {!isFieldReadOnly('attachedFiles') && (
-                            <button
-                              type="button"
-                              className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full hover:bg-red-100 transition-colors"
-                              onClick={() => {
-                                setSelectedFiles((prev: File[]) => prev.filter((_: File, i: number) => i !== index));
-                                setFormData(prev => ({
-                                  ...prev,
-                                  attachedFiles: prev.attachedFiles.filter((_: string, i: number) => i !== index)
-                                }));
-                                toast({
-                                  title: "File Removed",
-                                  description: `"${file}" removed successfully`,
-                                });
-                              }}
-                              title="Remove file"
-                            >
-                              <Trash2 className="h-3 w-3 text-red-500" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                      {formData.attachedFiles.map((fileItem: any, index: number) => {
+                        const name = typeof fileItem === 'string' ? fileItem : (fileItem.name || fileItem.public_id || `File ${index+1}`);
+                        const url = typeof fileItem === 'string' ? undefined : (fileItem.url || fileItem.secure_url);
+                        return (
+                          <div key={index} className="flex items-center justify-between bg-white p-2 rounded border border-green-200 shadow-sm">
+                            <span className="text-sm text-gray-700 font-medium truncate mr-2 flex items-center">
+                              <FileText className="w-4 h-4 mr-2 text-green-600" /> {name}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {url && (
+                                <button
+                                  type="button"
+                                  className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-green-100 transition-colors"
+                                  onClick={() => window.open(url as string, '_blank')}
+                                  title="View file"
+                                >
+                                  <Eye className="h-4 w-4 text-green-600" />
+                                </button>
+                              )}
+                              {!isFieldReadOnly('attachedFiles') && (
+                                <button
+                                  type="button"
+                                  className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-red-100 transition-colors"
+                                  onClick={() => {
+                                    setSelectedFiles((prev: File[]) => prev.filter((_: File, i: number) => i !== index));
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      attachedFiles: prev.attachedFiles.filter((_: any, i: number) => i !== index)
+                                    }));
+                                    toast({
+                                      title: "File Removed",
+                                      description: `"${name}" removed successfully`,
+                                    });
+                                  }}
+                                  title="Remove file"
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

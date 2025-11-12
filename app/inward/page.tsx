@@ -4549,6 +4549,15 @@ export default function InwardPage() {
       cell: ({ row }: any) => (
         <div className="flex space-x-2">
           <Button
+            onClick={() => handleViewAttachment(row.original)}
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-amber-600 hover:text-amber-800 hover:bg-amber-50"
+            title="View uploaded attachment"
+          >
+            <Info className="h-4 w-4" />
+          </Button>
+          <Button
             onClick={() => handleViewSR(row.original)}
             size="sm"
             variant="ghost"
@@ -6571,6 +6580,54 @@ export default function InwardPage() {
       });
     } finally {
       setIsExpandingEntries(false);
+    }
+  }
+
+  // Handle viewing uploaded attachment for an inward row
+  function handleViewAttachment(row: any) {
+    try {
+      const attachment = row?.attachmentUrl;
+      if (!attachment || (Array.isArray(attachment) && attachment.length === 0)) {
+        toast({
+          title: 'No Attachment',
+          description: 'No uploaded attachment found for this inward entry.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      if (Array.isArray(attachment)) {
+        // If multiple, open the first and inform the user
+        const first = attachment[0];
+        if (first) {
+          window.open(first, '_blank');
+          toast({
+            title: 'Opening Attachment',
+            description: `Multiple attachments detected (${attachment.length}). Opened the first one.`,
+          });
+        }
+        return;
+      }
+
+      // Single URL string
+      if (typeof attachment === 'string') {
+        window.open(attachment, '_blank');
+        return;
+      }
+
+      // Unknown structure
+      toast({
+        title: 'Attachment Unavailable',
+        description: 'Could not open the attachment due to an unsupported format.',
+        variant: 'destructive'
+      });
+    } catch (e) {
+      console.error('Error opening attachment:', e);
+      toast({
+        title: 'Error',
+        description: 'Failed to open attachment. Please try again.',
+        variant: 'destructive'
+      });
     }
   }
 

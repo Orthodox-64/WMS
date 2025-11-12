@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Edit, CheckCircle, AlertCircle, X, Download, Search, Plus, MapPin, Building, Upload, Eye, FileText } from "lucide-react";
+import { Trash2, Edit, CheckCircle, AlertCircle, X, Download, Search, Plus, MapPin, Building, Upload, Eye, FileText, Info } from "lucide-react";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -181,6 +181,31 @@ export default function BankModulePage() {
             >
               <Plus className="w-4 h-4" />
             </Button>
+            {/* Info button to view uploaded documents for a branch row */}
+            {!rowData.isBank && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-sky-300 text-sky-700 hover:bg-sky-50"
+                title="View Uploaded Documents"
+                onClick={() => {
+                  const files = (rowData.uploadedFiles && rowData.uploadedFiles.length > 0)
+                    ? rowData.uploadedFiles
+                    : (rowData.parentBank?.locations?.find((l: any) => l.locationId === rowData.locationId)?.uploadedFiles || []);
+                  if (!files || files.length === 0) {
+                    toast({
+                      title: "No Documents",
+                      description: "No uploaded documents found for this branch.",
+                      duration: 2500
+                    });
+                    return;
+                  }
+                  handleViewFiles(files);
+                }}
+              >
+                <Info className="w-4 h-4" />
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -407,7 +432,8 @@ export default function BankModulePage() {
             createdAt: location.createdAt,
             isBank: false,
             isLocation: true,
-            parentBank: bank
+            parentBank: bank,
+            uploadedFiles: location.uploadedFiles || []
           });
         });
       }
@@ -797,41 +823,63 @@ export default function BankModulePage() {
   };
 
   // File upload functions
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files) {
-      setSelectedFiles(Array.from(files));
-    }
-  };
+    if (!files || files.length === 0) return;
 
-  const handleFileUpload = async () => {
-    if (selectedFiles.length === 0) {
-      toast({
-        title: "❌ No Files Selected",
-        description: "Please select files to upload.",
-        variant: "destructive",
-        duration: 3000,
-      });
-      return;
-    }
+    const filesArray = Array.from(files);
+    // keep selection for UI display while uploading
+    setSelectedFiles(filesArray);
 
     setIsUploading(true);
-    
     try {
-      const uploadPromises = selectedFiles.map(file => uploadToCloudinary(file));
+      const uploadPromises = filesArray.map(file => uploadToCloudinary(file));
       const uploadResults = await Promise.all(uploadPromises);
-      
-      // Add uploaded files to location form data
+
+      // Add uploaded files to location form data (these will persist to Firebase on submit)
       setLocationFormData(prev => ({
         ...prev,
         uploadedFiles: [...(prev.uploadedFiles || []), ...uploadResults]
       }));
 
+      // Clear the file selection and input after upload
       setSelectedFiles([]);
-      // Reset file input
-      const fileInput = document.getElementById('fileInput') as HTMLInputElement;
+      const fileInput = document.getElementById('fileInput') as HTMLInputElement | null;
       if (fileInput) fileInput.value = '';
 
+      toast({
+        title: "✅ Upload Successful",
+        description: `${uploadResults.length} file(s) uploaded successfully.`,
+        className: "bg-green-100 border-green-500 text-green-700",
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "❌ Upload Failed",
+        description: "Failed to upload files. Please try again.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Note: Manual upload kept for fallback but unused since auto-upload on select is enabled
+  const handleFileUpload = async () => {
+    if (selectedFiles.length === 0) return;
+    setIsUploading(true);
+    try {
+      const uploadPromises = selectedFiles.map(file => uploadToCloudinary(file));
+      const uploadResults = await Promise.all(uploadPromises);
+      setLocationFormData(prev => ({
+        ...prev,
+        uploadedFiles: [...(prev.uploadedFiles || []), ...uploadResults]
+      }));
+      setSelectedFiles([]);
+      const fileInput = document.getElementById('fileInput') as HTMLInputElement | null;
+      if (fileInput) fileInput.value = '';
       toast({
         title: "✅ Upload Successful",
         description: `${uploadResults.length} file(s) uploaded successfully.`,
@@ -1553,21 +1601,10 @@ export default function BankModulePage() {
                       accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                     />
                   </div>
-                  <Button
-                    type="button"
-                    onClick={handleFileUpload}
-                    disabled={isUploading || selectedFiles.length === 0}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 disabled:opacity-50"
-                  >
-                    {isUploading ? (
-                      <>⏳ Uploading...</>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Upload
-                      </>
-                    )}
-                  </Button>
+                  {/* Auto-upload on selection; button hidden intentionally */}
+                  <div className="text-sm text-blue-600">
+                    {isUploading ? '⏳ Uploading...' : 'Files upload automatically after selection'}
+                  </div>
                 </div>
 
                 {selectedFiles.length > 0 && (
@@ -1590,7 +1627,18 @@ export default function BankModulePage() {
                             size="sm"
                             variant="ghost"
                             className="h-4 w-4 p-0 text-blue-600 hover:text-blue-800"
+                            onClick={() => window.open(file.secure_url, '_blank')}
+                            title="View"
+                          >
+                            <Eye className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-4 w-4 p-0 text-red-600 hover:text-red-800"
                             onClick={() => handleRemoveFile(index)}
+                            title="Remove"
                           >
                             <X className="w-3 h-3" />
                           </Button>
