@@ -620,14 +620,34 @@ export default function InwardReportsPage() {
           // Get aggregated RO values
           const aggregatedRoBags = roData?.totalRoBags || 0;
           const aggregatedRoQty = roData?.totalRoQty || 0;
-          
+
           // Get aggregated DO values
           const aggregatedDoBags = doData?.totalDoBags || 0;
           const aggregatedDoQty = doData?.totalDoQty || 0;
-          
-          // Calculate balance (Total - RO - DO)
-          const balanceBags = inwardTotalBags - aggregatedRoBags - aggregatedDoBags;
-          const balanceQty = inwardTotalQty - aggregatedRoQty - aggregatedDoQty;
+
+          // Calculate balance with RO taking precedence over DO.
+          // If RO is present for this SR/WR, balance = total - RO (ignore DO for balance calculation).
+          // If RO is absent, balance = total - DO.
+          // Also limit balanceQty to up to 3 decimal places.
+          const hasRo = !!(roData && ( (roData.roEntries && roData.roEntries.length > 0) || aggregatedRoBags > 0 || aggregatedRoQty > 0 ));
+
+          let balanceBags = 0;
+          let balanceQty = 0;
+
+          if (hasRo) {
+            balanceBags = inwardTotalBags - aggregatedRoBags;
+            balanceQty = inwardTotalQty - aggregatedRoQty;
+          } else {
+            balanceBags = inwardTotalBags - aggregatedDoBags;
+            balanceQty = inwardTotalQty - aggregatedDoQty;
+          }
+
+          // Ensure non-negative and format qty up to 3 decimal places (trim trailing zeros)
+          const formatQty = (n: number) => {
+            const nonNeg = Math.max(0, n);
+            // toFixed(3) gives 3 decimals; parseFloat removes unnecessary trailing zeros
+            return parseFloat(nonNeg.toFixed(3)).toString();
+          };
 
           // Get warehouse details from inspections for enhanced data
           const warehouseDetails = warehouseDetailsMap.get(docData.warehouseName) || {};
@@ -645,17 +665,17 @@ export default function InwardReportsPage() {
             if (docData.srLastValidityDate) {
               return formatDate(docData.srLastValidityDate);
             }
-            
-            // If no direct field, calculate based on insurance policy end dates
+
+            // If no direct field, calculate based on warehouse-level insurance policy end dates
             const insuranceEntries = warehouseDetails.insuranceEntries || [];
             if (insuranceEntries.length > 0) {
               // Find the earliest policy end date among all insurance entries
               let earliestEndDate: Date | null = null;
-              
+
               insuranceEntries.forEach((insurance: any) => {
                 const fireEndDate = insurance.firePolicyEndDate ? new Date(insurance.firePolicyEndDate) : null;
                 const burglaryEndDate = insurance.burglaryPolicyEndDate ? new Date(insurance.burglaryPolicyEndDate) : null;
-                
+
                 [fireEndDate, burglaryEndDate].forEach((date: Date | null) => {
                   if (date && !isNaN(date.getTime())) {
                     if (!earliestEndDate || date < earliestEndDate) {
@@ -664,14 +684,14 @@ export default function InwardReportsPage() {
                   }
                 });
               });
-              
+
               if (earliestEndDate) {
                 const validDate = earliestEndDate as Date;
                 console.log('Calculated SR validity date from insurance policies:', validDate.toISOString().split('T')[0]);
                 return validDate.toISOString().split('T')[0];
               }
             }
-            
+
             // Fallback: If insurance taken by bank, typically 9 months from inward date
             const inwardDate = docData.inwardDate || docData.dateOfInward;
             if (inwardDate && hasBankDetails(docData)) {
@@ -682,7 +702,7 @@ export default function InwardReportsPage() {
                 return date.toISOString().split('T')[0];
               }
             }
-            
+
             return ''; // Empty if cannot calculate
           };
 
@@ -722,8 +742,19 @@ export default function InwardReportsPage() {
               docData.dateOfIssue || 
               docData.createdAt
             ),
-            // Funding SR/WR Date - only show when bank details are present
-            fundingSrWrDate: hasBankDetails(docData) ? formatDate(docData.srGenerationDate) : '',
+            // Funding SR/WR Date - show when bank details are present on inward OR from inspections (warehouseDetails)
+            // Prefer SR generation fields from inward document, fallback to known alternatives and warehouseDetails
+            fundingSrWrDate: (hasBankDetails(docData) || hasBankDetails(warehouseDetails))
+              ? formatDate(
+                  docData.srGenerationDate ||
+                  docData.srwrGenerationDate ||
+                  docData.dateOfIssue ||
+                  docData.createdAt ||
+                  warehouseDetails.srGenerationDate ||
+                  warehouseDetails.srwrGenerationDate ||
+                  ''
+                )
+              : '',
             // SR Last Validity Date: prefer stock validity end date from SR/WR UI (if present),
             // otherwise fall back to the calculated SR validity
             srLastValidityDate: (
@@ -750,9 +781,9 @@ export default function InwardReportsPage() {
             doBags: aggregatedDoBags.toString(),
             doQty: aggregatedDoQty.toString(),
             
-            // Balance calculated as Total - RO
+            // Balance: if RO present => total - RO, else => total - DO
             balanceBags: Math.max(0, balanceBags).toString(),
-            balanceQty: Math.max(0, balanceQty).toString(),
+            balanceQty: formatQty(balanceQty),
             
             insuranceManagedBy: extractInsuranceValue(docData.insuranceManagedBy || docData.selectedInsurance),
             rate: safeString(docData.marketRate || docData.rate), // Fetch from marketRate field in inward collection
@@ -846,7 +877,7 @@ export default function InwardReportsPage() {
     }
     
     return filtered;
-  }, [inwardData, searchTerm, warehouseFilter, clientFilter, startDate, endDate]);
+  }, [inwardData, searchTerm, warehouseFilter, clientFilter]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);

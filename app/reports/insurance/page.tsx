@@ -352,6 +352,63 @@ export default function InsuranceReportsPage() {
           insuranceType: insuranceData.insuranceType,
           isTakenByClient
         });
+
+        // Calculate SR Last Validity Date for this insurance entry - prefer insurance document's own policy end dates
+        const calculateSRValidityDateForInsurance = () => {
+          if (insuranceData.srLastValidityDate) return formatDate(insuranceData.srLastValidityDate);
+
+          // Prefer explicit policy end dates on the insurance document first
+          const possiblePolicyEndDates = [insuranceData.firePolicyEndDate, insuranceData.burglaryPolicyEndDate, insuranceData.policyEndDate, insuranceData.endDate].filter(Boolean);
+          if (possiblePolicyEndDates.length > 0) {
+            // choose earliest
+            const dates = possiblePolicyEndDates.map((d: any) => new Date(d)).filter((d: Date) => !isNaN(d.getTime()));
+            if (dates.length > 0) {
+              const earliest = dates.reduce((a: Date, b: Date) => a < b ? a : b);
+              return earliest.toISOString().split('T')[0];
+            }
+          }
+
+          // If insurance document has multiple insurance entries use them
+          let insuranceEntriesForDoc: any[] = [];
+          if (insuranceData.insuranceEntries && Array.isArray(insuranceData.insuranceEntries) && insuranceData.insuranceEntries.length > 0) {
+            insuranceEntriesForDoc = insuranceData.insuranceEntries;
+          } else if (insuranceData.selectedInsurance && typeof insuranceData.selectedInsurance === 'object') {
+            insuranceEntriesForDoc = [insuranceData.selectedInsurance];
+          }
+
+          if (insuranceEntriesForDoc.length > 0) {
+            const possibleDateKeys = ['firePolicyEndDate', 'burglaryPolicyEndDate', 'policyEndDate', 'endDate', 'end_date'];
+            let earliestEndDate: Date | null = null;
+            insuranceEntriesForDoc.forEach((ins: any) => {
+              possibleDateKeys.forEach(key => {
+                const val = ins?.[key];
+                if (val) {
+                  const date = new Date(val);
+                  if (!isNaN(date.getTime())) {
+                    if (!earliestEndDate || date < earliestEndDate) earliestEndDate = date;
+                  }
+                }
+              });
+            });
+            if (earliestEndDate) return (earliestEndDate as Date).toISOString().split('T')[0];
+          }
+
+          // Fallback: if bank-funded, try derive from insurance creation or policy start date (no strong rule here)
+          const fallbackDate = insuranceData.firePolicyStartDate || insuranceData.dateOfCreation || insuranceData.createdAt;
+          if (fallbackDate) {
+            try {
+              const d = new Date(fallbackDate);
+              if (!isNaN(d.getTime())) {
+                d.setMonth(d.getMonth() + 9);
+                return d.toISOString().split('T')[0];
+              }
+            } catch {}
+          }
+
+          return '';
+        };
+
+        const srLastValidityDateForRow = calculateSRValidityDateForInsurance();
         
         data.push({
           id: doc.id,
@@ -399,6 +456,8 @@ export default function InsuranceReportsPage() {
           burglaryPolicySumInsured: insuranceData.burglaryPolicyAmount || '',
           burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate || '',
           burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate || '',
+          // Calculated SR/WR Last Validity Date for this insurance entry (prefers entry-level dates)
+          srLastValidityDate: srLastValidityDateForRow || '',
           // Remaining amounts - fetch from insurance collection
           firePolicyRemainingAmount: insuranceData.firePolicyRemainingAmount || '',
           burglaryPolicyRemainingAmount: insuranceData.burglaryPolicyRemainingAmount || ''
@@ -491,7 +550,7 @@ export default function InsuranceReportsPage() {
     }
     
     return filtered;
-  }, [insuranceData, searchTerm, statusFilter, warehouseFilter, stateFilter, branchFilter, clientFilter, commodityFilter, insuranceManagedByFilter, startDate, endDate]);
+  }, [insuranceData, searchTerm, statusFilter, warehouseFilter, stateFilter, branchFilter, clientFilter, commodityFilter, insuranceManagedByFilter]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
