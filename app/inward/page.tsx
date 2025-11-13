@@ -2815,6 +2815,36 @@ export default function InwardPage() {
       return;
     }
     
+    // Validate insurance amounts for non-bank-funded insurance
+    if (selectedInsuranceForInward) {
+      const insuranceType = (selectedInsuranceForInward.insuranceTakenBy || '').toLowerCase();
+      const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
+      
+      if (!isBankFunded) {
+        const totalValue = parseFloat(baseForm.totalValue) || 0;
+        const fireAmount = parseFloat(selectedInsuranceForInward.remainingFirePolicyAmount || selectedInsuranceForInward.firePolicyAmount || '0');
+        const burglaryAmount = parseFloat(selectedInsuranceForInward.remainingBurglaryPolicyAmount || selectedInsuranceForInward.burglaryPolicyAmount || '0');
+        
+        // Check if total value exceeds either fire or burglary policy amount
+        if (totalValue > fireAmount || totalValue > burglaryAmount) {
+          const exceededPolicies = [];
+          if (totalValue > fireAmount) {
+            exceededPolicies.push(`Fire Policy (₹${fireAmount.toLocaleString()})`);
+          }
+          if (totalValue > burglaryAmount) {
+            exceededPolicies.push(`Burglary Policy (₹${burglaryAmount.toLocaleString()})`);
+          }
+          
+          toast({
+            title: "❌ Cannot Submit - Insurance Amount Exceeded",
+            description: `Total Value (₹${totalValue.toLocaleString()}) exceeds the ${exceededPolicies.join(' and ')} available amount. Please reduce the quantity or market rate, or increase the insurance coverage before submitting.`,
+            variant: 'destructive'
+          });
+          return;
+        }
+      }
+    }
+    
     if (!fileAttachment && !isEditMode) {
       alert('Please attach a file.');
       return;
