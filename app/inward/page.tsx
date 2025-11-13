@@ -1920,95 +1920,6 @@ export default function InwardPage() {
           return;
         }
 
-        // Check if insurance exists for the specific commodity/client combination
-        if (baseForm.commodity && clientName) {
-          console.log('🔍 Searching for insurance match:', {
-            searchingFor: { commodity: baseForm.commodity, client: clientName },
-            availableInsurance: insuranceEntries.map((ins: any) => ({
-              commodityName: ins.commodityName,
-              clientName: ins.clientName,
-              selectedCommodities: ins.selectedCommodities
-            }))
-          });
-
-          const matchingInsurance = insuranceEntries.find((ins: any) => {
-            // Case-insensitive comparison for commodity
-            const insCommodityName = (ins.commodityName || ins.insuranceCommodity || '').toLowerCase();
-            const formCommodity = (baseForm.commodity || '').toLowerCase();
-            
-            // Check if commodity matches (either single commodity or in selectedCommodities array)
-            let commodityMatches = insCommodityName === formCommodity;
-            
-            // Also check selectedCommodities array if it exists
-            if (!commodityMatches && ins.selectedCommodities && Array.isArray(ins.selectedCommodities)) {
-              commodityMatches = ins.selectedCommodities.some((item: any) => 
-                (item.commodityName || '').toLowerCase() === formCommodity
-              );
-            }
-            
-            // Case-insensitive comparison for client name
-            // Note: Some insurance types (warehouse-owner, agrogreen, bank-funded) apply to ALL clients
-            const insClientName = (ins.clientName || '').toLowerCase().trim();
-            const formClientName = (clientName || '').toLowerCase().trim();
-            const insuranceType = (ins.insuranceTakenBy || '').toLowerCase();
-            
-            // Insurance applies if:
-            // 1. Client name matches exactly, OR
-            // 2. Insurance is warehouse-owner, agrogreen, or bank-funded (applies to all clients), OR
-            // 3. Insurance has no specific client (empty/null clientName)
-            const clientMatches = 
-              insClientName === formClientName || 
-              insuranceType === 'warehouse-owner' || 
-              insuranceType === 'agrogreen' || 
-              insuranceType === 'bank-funded' ||
-              !insClientName; // No specific client means it applies to all
-            
-            console.log('🔎 Comparing:', {
-              insurance: { 
-                commodityName: ins.commodityName, 
-                clientName: ins.clientName,
-                insuranceType: ins.insuranceTakenBy,
-                selectedCommodities: ins.selectedCommodities 
-              },
-              form: { commodity: baseForm.commodity, client: clientName },
-              commodityMatches,
-              clientMatches,
-              result: commodityMatches && clientMatches
-            });
-            
-            return commodityMatches && clientMatches;
-          });
-          
-          if (!matchingInsurance) {
-            console.error('❌ No matching insurance found!');
-            const msg = `No Insurance for Commodity - No insurance coverage found for commodity "${baseForm.commodity}" and client "${clientName}". Insurance for this specific commodity-client combination is required.`;
-            setInlineAlert({ title: 'No Commodity Insurance', message: msg, severity: 'error' });
-            setPreventInward(true);
-            return;
-          }
-          
-          console.log('✅ Found matching insurance:', matchingInsurance);
-          
-          // Check if there's sufficient remaining insurance amount (skip for bank-funded)
-          const insuranceType = (matchingInsurance.insuranceTakenBy || '').toLowerCase();
-          const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
-          
-          if (!isBankFunded && (matchingInsurance.firePolicyRemainingAmount !== undefined || matchingInsurance.burglaryPolicyRemainingAmount !== undefined)) {
-            const fireRemaining = parseFloat(matchingInsurance.firePolicyRemainingAmount || '0');
-            const burglaryRemaining = parseFloat(matchingInsurance.burglaryPolicyRemainingAmount || '0');
-            const totalValue = parseFloat(baseForm.totalValue || '0');
-            
-            if (totalValue > 0 && (fireRemaining + burglaryRemaining) < totalValue) {
-              const msg = `Insufficient Insurance Coverage - Total inward value (₹${totalValue.toLocaleString()}) exceeds available insurance coverage (₹${(fireRemaining + burglaryRemaining).toLocaleString()}). Please contact administration to increase insurance coverage.`;
-              setInlineAlert({ title: 'Insufficient Insurance', message: msg, severity: 'error' });
-              setPreventInward(true);
-              return;
-            }
-          } else if (isBankFunded) {
-            console.log('🏦 Bank-funded insurance detected - skipping amount validation in commodity check');
-          }
-        }
-
         // If there are insurance entries, prefer checking the specifically selected insurance (when adding inward).
         const today = new Date();
         today.setHours(0,0,0,0);
@@ -9708,16 +9619,16 @@ export default function InwardPage() {
                   <Label className="font-semibold">Validity Start Date</Label>
                   <Input 
                     value={(() => {
-                      // Use SR Generation Date if available, otherwise use current date
+                      // Use SR Generation Date if available
                       const startDate = srGenerationDate || selectedRowForSR?.srGenerationDate;
                       if (startDate) {
-                        return startDate;
+                        return formatToDDMMYYYY(new Date(startDate));
                       }
-                      // If no SR generation date, use today's date
-                      return new Date().toISOString().slice(0, 10);
+                      // Return empty string to show placeholder
+                      return '';
                     })()}
                     readOnly 
-                    placeholder="Auto-calculated"
+                    placeholder="Auto-set on Approve"
                   />
                 </div>
                 <div>
@@ -9756,14 +9667,14 @@ export default function InwardPage() {
                           if (insurance.firePolicyEndDate) {
                             const fireEndDate = new Date(insurance.firePolicyEndDate);
                             fireEndDate.setMonth(fireEndDate.getMonth() + 9);
-                            const result = fireEndDate.toISOString().slice(0, 10);
+                            const result = formatToDDMMYYYY(fireEndDate);
                             console.log('🏦 Bank insurance: Fire end date + 9 months =', result);
                             return result;
                           }
                         } else {
                           // For all other insurance types, use fire policy end date
                           if (insurance.firePolicyEndDate) {
-                            const result = normalizeDate(insurance.firePolicyEndDate);
+                            const result = formatToDDMMYYYY(new Date(normalizeDate(insurance.firePolicyEndDate)));
                             console.log('🏢 Other insurance: Fire end date =', result);
                             return result;
                           }
@@ -9775,7 +9686,7 @@ export default function InwardPage() {
                       const startDate = srGenerationDate || selectedRowForSR?.srGenerationDate || new Date().toISOString().slice(0, 10);
                       const fallbackDate = new Date(startDate);
                       fallbackDate.setMonth(fallbackDate.getMonth() + 6);
-                      return fallbackDate.toISOString().slice(0, 10);
+                      return formatToDDMMYYYY(fallbackDate);
                     })()}
                     readOnly
                     placeholder="Auto-calculated"
