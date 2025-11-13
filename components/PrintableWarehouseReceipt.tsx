@@ -290,7 +290,7 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <div>
               <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Bank Name</Label>
               <Input 
-                value={selectedRowForSR?.bankFundedBy || ''} 
+                value={selectedRowForSR?.bankName || selectedRowForSR?.bankFundedBy || ''} 
                 readOnly
                 style={inputBaseStyle}
               />
@@ -577,58 +577,18 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
               <div>
                 <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Bank Name</Label>
-                <Input value={matchedInsurance?.bankFundedBy || selectedRowForSR?.bankFundedBy || selectedRowForSR?.bankName || matchedInsurance?.selectedBankName || matchedInsurance?.bankName || selectedRowForSR?.selectedBankName || '-'} readOnly style={inputBaseStyle} />
+                <Input value={selectedRowForSR?.bankName || selectedRowForSR?.bankFundedBy || matchedInsurance?.bankFundedBy || matchedInsurance?.selectedBankName || matchedInsurance?.bankName || selectedRowForSR?.selectedBankName || '-'} readOnly style={inputBaseStyle} />
               </div>
               <div></div>
             </div>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy Company</Label>
-              <Input value={matchedInsurance?.firePolicyCompanyName || matchedInsurance?.firePolicyCompany || selectedRowForSR?.firePolicyCompanyName || '-'} readOnly style={inputBaseStyle} />
-            </div>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy Number</Label>
-              <Input value={matchedInsurance?.firePolicyNumber || '-'} readOnly style={inputBaseStyle} />
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy Amount</Label>
-              <Input value={matchedInsurance?.firePolicyAmount || matchedInsurance?.fireSumInsured || '-'} readOnly style={inputBaseStyle} />
-            </div>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Fire Policy End Date</Label>
-              <Input value={(matchedInsurance?.firePolicyEndDate || matchedInsurance?.firePolicyEndOn || '-') as string} readOnly style={inputBaseStyle} />
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Burglary Policy Company</Label>
-              <Input value={matchedInsurance?.burglaryPolicyCompanyName || matchedInsurance?.burglaryPolicyCompany || selectedRowForSR?.burglaryPolicyCompanyName || '-'} readOnly style={inputBaseStyle} />
-            </div>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Burglary Policy Number</Label>
-              <Input value={matchedInsurance?.burglaryPolicyNumber || '-'} readOnly style={inputBaseStyle} />
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', breakInside: 'avoid' }}>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Burglary Policy Amount</Label>
-              <Input value={matchedInsurance?.burglaryPolicyAmount || matchedInsurance?.burglarySumInsured || '-'} readOnly style={inputBaseStyle} />
-            </div>
-            <div>
-              <Label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Burglary Policy End Date</Label>
-              <Input value={(matchedInsurance?.burglaryPolicyEndDate || matchedInsurance?.burglaryPolicyEndOn || '-') as string} readOnly style={inputBaseStyle} />
-            </div>
-          </div>
         </div>
 
         {/* Removed signature area - no longer shown in printable receipt */}
         
         {/* Spacer to push content and ensure page break before test certificate */}
         <div style={{ 
-          height: '100px',
+          height: '340px',
           pageBreakAfter: 'always'
         }}></div>
       </div>

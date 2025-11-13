@@ -33,6 +33,7 @@ interface StorageReceiptProps {
     hologramNumber: string;
     insuranceDetails: InsuranceDetail[];
     bankName: string;
+    bankFundedBy?: string;
     date: string;
     place: string;
     stockInwardDate?: string;
@@ -146,7 +147,7 @@ const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Hologram Number</td>
             <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.hologramNumber}</td>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Bank Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.bankName}</td>
+            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>{data.bankName || data.bankFundedBy || ''}</td>
           </tr>
           <tr>
             <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: 10, width: '25%', wordWrap: 'break-word' }}>Place</td>
