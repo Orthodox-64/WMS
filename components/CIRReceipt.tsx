@@ -27,6 +27,7 @@ interface CIRReceiptProps {
     bankBranch?: string;
     bankState?: string;
     ifscCode?: string;
+    bankFundedBy?: string;
     billingStatus?: string;
     reservationRate?: string;
     reservationQty?: string;
@@ -354,30 +355,56 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
           <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
             INSURANCE DETAILS
           </div>
-          {data.insuranceEntries.map((insurance: any, index: number) => (
-            <table key={index} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-              <tbody>
-                <tr>
-                  <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Insurance ID</td>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.insuranceId || '-'}</td>
-                  <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Taken By</td>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.insuranceTakenBy || '-'}</td>
-                </tr>
-                <tr>
-                  <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Fire Policy No.</td>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.firePolicyNumber || '-'}</td>
-                  <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Fire Policy Amount</td>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.firePolicyAmount || '-'}</td>
-                </tr>
-                <tr>
-                  <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Burglary Policy No.</td>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.burglaryPolicyNumber || '-'}</td>
-                  <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Burglary Policy Amount</td>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.burglaryPolicyAmount || '-'}</td>
-                </tr>
-              </tbody>
-            </table>
-          ))}
+          {data.insuranceEntries.map((insurance: any, index: number) => {
+            const insuranceTakenBy = (insurance.insuranceTakenBy || '').toLowerCase();
+            const isBankFunded = insuranceTakenBy === 'bank' || insuranceTakenBy === 'bank-funded';
+            
+            // For bank-funded insurance, show only 3 fields
+            if (isBankFunded) {
+              return (
+                <table key={index} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Insurance Taken By</td>
+                      <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.insuranceTakenBy || '-'}</td>
+                      <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Commodity</td>
+                      <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.commodityName || '-'}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Bank Name</td>
+                      <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }} colSpan={3}>{data.bankName || data.bankFundedBy || '-'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              );
+            }
+            
+            // For other insurance types, show all fields
+            return (
+              <table key={index} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
+                <tbody>
+                  <tr>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Insurance ID</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.insuranceId || '-'}</td>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Taken By</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.insuranceTakenBy || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Fire Policy No.</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.firePolicyNumber || '-'}</td>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Fire Policy Amount</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.firePolicyAmount || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Burglary Policy No.</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.burglaryPolicyNumber || '-'}</td>
+                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Burglary Policy Amount</td>
+                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.burglaryPolicyAmount || '-'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            );
+          })}
         </>
       )}
 

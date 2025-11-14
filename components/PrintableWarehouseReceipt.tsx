@@ -106,11 +106,8 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
       }
     }
     
-    // Fallback: use start date + 6 months if no insurance found
-    const startDate = srGenerationDate || selectedRowForSR?.srGenerationDate || new Date().toISOString().slice(0, 10);
-    const fallbackDate = new Date(startDate);
-    fallbackDate.setMonth(fallbackDate.getMonth() + 6);
-    return fallbackDate.toISOString().slice(0, 10);
+    // If no insurance found, return empty string
+    return '';
   };
 
   // Common input style: slightly more top bias and tighter line height to avoid clipping in PDF

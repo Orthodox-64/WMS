@@ -4408,7 +4408,19 @@ export default function InwardPage() {
     { accessorKey: "burglaryPolicyEndDate", header: "Burglary Policy End Date" },
     { accessorKey: "firePolicyName", header: "Fire Policy Name" },
     { accessorKey: "burglaryPolicyName", header: "Burglary Policy Name" },
-    { accessorKey: "bankFundedBy", header: "Bank Funded By" },
+    { 
+      accessorKey: "bankFundedBy", 
+      header: "Bank Funded By",
+      cell: ({ row }: any) => {
+        const insuranceTakenBy = row.original.selectedInsurance?.insuranceTakenBy || row.original.insuranceManagedBy || '';
+        const isBankFunded = insuranceTakenBy.toLowerCase() === 'bank' || insuranceTakenBy.toLowerCase() === 'bank-funded';
+        
+        if (isBankFunded) {
+          return row.original.bankName || row.original.bankFundedBy || '-';
+        }
+        return '-';
+      }
+    },
     // Add CIR Status column
     {
       accessorKey: 'cirStatus',
@@ -7170,70 +7182,87 @@ export default function InwardPage() {
           {cirModalData?.insuranceEntries && Array.isArray(cirModalData.insuranceEntries) && cirModalData.insuranceEntries.length > 0 && (
             <div className="border-t pt-6 mb-6">
               <h3 className="text-xl font-semibold mb-4 text-blue-700">Insurance Details</h3>
-              {cirModalData.insuranceEntries.map((insurance: any, index: number) => (
-                <div key={index} className="border border-blue-200 rounded-lg p-6 bg-blue-50 mb-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-lg font-medium text-blue-700">Insurance ID: {insurance.insuranceId}</h4>
-                    <div className="text-sm text-blue-600 font-medium">
-                      {insurance.insuranceTakenBy} - {insurance.commodityName}
+              {cirModalData.insuranceEntries.map((insurance: any, index: number) => {
+                const insuranceTakenBy = (insurance.insuranceTakenBy || '').toLowerCase().trim();
+                const isBankFunded = insuranceTakenBy === 'bank' || insuranceTakenBy === 'bank-funded' || insuranceTakenBy.includes('bank');
+                
+                return (
+                  <div key={index} className="border border-blue-200 rounded-lg p-6 bg-blue-50 mb-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-medium text-blue-700">Insurance ID: {insurance.insuranceId}</h4>
+                      <div className="text-sm text-blue-600 font-medium">
+                        {insurance.insuranceTakenBy} - {insurance.commodityName}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <Label className="block font-semibold mb-1">Insurance Taken By</Label>
+                        <Input value={insurance.insuranceTakenBy || ''} readOnly />
+                      </div>
+                      <div>
+                        <Label className="block font-semibold mb-1">Commodity</Label>
+                        <Input value={insurance.commodityName || ''} readOnly />
+                      </div>
+                      {/* Show Bank Name if insurance is bank-funded or bank */}
+                      {isBankFunded && (
+                        <div>
+                          <Label className="block font-semibold mb-1">Bank Name</Label>
+                          <Input value={cirModalData?.bankName || cirModalData?.bankFundedBy || ''} readOnly />
+                        </div>
+                      )}
+                      {/* Show all other fields only for non-bank-funded insurance */}
+                      {!isBankFunded && (
+                        <>
+                          <div>
+                            <Label className="block font-semibold mb-1">Client Name</Label>
+                            <Input value={insurance.clientName || ''} readOnly />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Fire Policy Number</Label>
+                            <Input value={insurance.firePolicyNumber || ''} readOnly />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Fire Policy Amount (Original)</Label>
+                            <Input value={formatAmount(insurance.firePolicyAmount)} readOnly />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Fire Policy Remaining Amount</Label>
+                            <Input value={formatAmount(insurance.firePolicyRemainingAmount)} readOnly className="bg-green-50" />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
+                            <Input value={normalizeDate(insurance.firePolicyStartDate)} readOnly />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
+                            <Input value={normalizeDate(insurance.firePolicyEndDate)} readOnly />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
+                            <Input value={insurance.burglaryPolicyNumber || ''} readOnly />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Burglary Policy Amount (Original)</Label>
+                            <Input value={formatAmount(insurance.burglaryPolicyAmount)} readOnly />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Burglary Policy Remaining Amount</Label>
+                            <Input value={formatAmount(insurance.burglaryPolicyRemainingAmount)} readOnly className="bg-green-50" />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
+                            <Input value={normalizeDate(insurance.burglaryPolicyStartDate)} readOnly />
+                          </div>
+                          <div>
+                            <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
+                            <Input value={normalizeDate(insurance.burglaryPolicyEndDate)} readOnly />
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <Label className="block font-semibold mb-1">Insurance Taken By</Label>
-                      <Input value={insurance.insuranceTakenBy || ''} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Commodity</Label>
-                      <Input value={insurance.commodityName || ''} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Client Name</Label>
-                      <Input value={insurance.clientName || ''} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Fire Policy Number</Label>
-                      <Input value={insurance.firePolicyNumber || ''} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Fire Policy Amount (Original)</Label>
-                      <Input value={formatAmount(insurance.firePolicyAmount)} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Fire Policy Remaining Amount</Label>
-                      <Input value={formatAmount(insurance.firePolicyRemainingAmount)} readOnly className="bg-green-50" />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Fire Policy Start Date</Label>
-                      <Input value={normalizeDate(insurance.firePolicyStartDate)} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Fire Policy End Date</Label>
-                      <Input value={normalizeDate(insurance.firePolicyEndDate)} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Burglary Policy Number</Label>
-                      <Input value={insurance.burglaryPolicyNumber || ''} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Burglary Policy Amount (Original)</Label>
-                      <Input value={formatAmount(insurance.burglaryPolicyAmount)} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Burglary Policy Remaining Amount</Label>
-                      <Input value={formatAmount(insurance.burglaryPolicyRemainingAmount)} readOnly className="bg-green-50" />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Burglary Policy Start Date</Label>
-                      <Input value={normalizeDate(insurance.burglaryPolicyStartDate)} readOnly />
-                    </div>
-                    <div>
-                      <Label className="block font-semibold mb-1">Burglary Policy End Date</Label>
-                      <Input value={normalizeDate(insurance.burglaryPolicyEndDate)} readOnly />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
           {/* Saved Inward Entries Section */}
@@ -9659,37 +9688,20 @@ export default function InwardPage() {
                         }
                       }
                       
-                      if (insurance) {
+                      if (insurance && insurance.firePolicyEndDate) {
                         console.log('✅ Found insurance:', insurance.insuranceTakenBy, insurance.firePolicyEndDate);
                         
-                        // If insurance taken by bank, Fire Policy End Date + 9 months
-                        if (insurance.insuranceTakenBy === 'bank' || insurance.insuranceTakenBy === 'bank-funded') {
-                          if (insurance.firePolicyEndDate) {
-                            const fireEndDate = new Date(insurance.firePolicyEndDate);
-                            fireEndDate.setMonth(fireEndDate.getMonth() + 9);
-                            const result = formatToDDMMYYYY(fireEndDate);
-                            console.log('🏦 Bank insurance: Fire end date + 9 months =', result);
-                            return result;
-                          }
-                        } else {
-                          // For all other insurance types, use fire policy end date
-                          if (insurance.firePolicyEndDate) {
-                            const result = formatToDDMMYYYY(new Date(normalizeDate(insurance.firePolicyEndDate)));
-                            console.log('🏢 Other insurance: Fire end date =', result);
-                            return result;
-                          }
-                        }
+                        // For all insurance types, use fire policy end date as-is (stock validity end date = fire policy end date)
+                        const result = formatToDDMMYYYY(new Date(normalizeDate(insurance.firePolicyEndDate)));
+                        console.log('📅 Stock validity end date (fire policy end date):', result);
+                        return result;
                       }
                       
-                      console.log('⚠️ No valid insurance or date found, using fallback');
-                      // Fallback: use start date + 6 months if no insurance found
-                      const startDate = srGenerationDate || selectedRowForSR?.srGenerationDate || new Date().toISOString().slice(0, 10);
-                      const fallbackDate = new Date(startDate);
-                      fallbackDate.setMonth(fallbackDate.getMonth() + 6);
-                      return formatToDDMMYYYY(fallbackDate);
+                      console.log('⚠️ No valid insurance or date found');
+                      return '';
                     })()}
                     readOnly
-                    placeholder="Auto-calculated"
+                    placeholder="From Fire Policy End Date"
                   />
                 </div>
               </div>
