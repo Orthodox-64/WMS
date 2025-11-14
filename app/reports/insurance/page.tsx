@@ -147,7 +147,7 @@ export default function InsuranceReportsPage() {
       
       // Create comprehensive maps for cross-referencing data
       const warehouseDetailsMap = new Map();
-      const inwardDataMap = new Map();
+      const insuranceDataMap = new Map(); // Map by warehouse name to store insurance master data
       const outwardDataMap = new Map();
       
       // Build warehouse details map from inspections (warehouse type, business type, bank details)
@@ -191,27 +191,30 @@ export default function InsuranceReportsPage() {
         }
       });
       
-      // Build inward data map for balance calculations, rates, and commodity details
-      inwardSnap.docs.forEach(doc => {
+      // Build insurance master data map - store all insurance entries by warehouse name
+      insuranceSnap.docs.forEach(doc => {
         const docData = doc.data();
         const warehouseName = docData.warehouseName;
         if (warehouseName) {
-          if (!inwardDataMap.has(warehouseName)) {
-            inwardDataMap.set(warehouseName, []);
+          if (!insuranceDataMap.has(warehouseName)) {
+            insuranceDataMap.set(warehouseName, []);
           }
-          inwardDataMap.get(warehouseName).push({
-            commodity: docData.commodity || docData.commodityName || '',
-            variety: docData.variety || docData.varietyName || '',
-            totalBags: Number(docData.totalBags || docData.inwardBags || 0),
-            totalQuantity: Number(docData.totalQuantity || docData.inwardQuantity || 0),
-            rate: docData.rate || docData.marketRate || docData.reservationRate || '',
-            // Bank details from inward data
-            bankName: docData.bankName || docData.bank || docData.selectedBankName || '',
-            bankBranchName: docData.bankBranchName || docData.bankBranch || docData.branchName || docData.selectedBankBranchName || '',
-            bankState: docData.bankState || docData.selectedBankState || '',
-            ifscCode: docData.ifscCode || docData.IFSC || docData.ifsc || '',
-            clientCode: docData.clientCode || '',
-            clientName: docData.clientName || ''
+          
+          // Extract insurance entries from this document
+          let insuranceEntries: any[] = [];
+          if (docData.insuranceEntries && Array.isArray(docData.insuranceEntries) && docData.insuranceEntries.length > 0) {
+            insuranceEntries = docData.insuranceEntries;
+          } else {
+            // If no array, treat entire document as one entry
+            insuranceEntries = [docData];
+          }
+          
+          // Store all entries for this warehouse
+          insuranceEntries.forEach(entry => {
+            insuranceDataMap.get(warehouseName).push({
+              ...entry,
+              _sourceDocId: doc.id // Track which document this came from
+            });
           });
         }
       });
@@ -233,17 +236,17 @@ export default function InsuranceReportsPage() {
       
       console.log('Applying date filtering for insurance report. Date range:', startDate, 'to', endDate);
       
-      // Filter insurance documents by date range first
-      let filteredInsuranceDocs = insuranceSnap.docs;
+      // Filter INWARD documents by date range first (since we're showing inward-based data)
+      let filteredInwardDocs = inwardSnap.docs;
       
       if (startDate && endDate) {
         const startDateObj = new Date(startDate);
         const endDateObj = new Date(endDate);
         endDateObj.setHours(23, 59, 59, 999); // Include the entire end date
         
-        console.log('Filtering insurance by date range:', startDateObj, 'to', endDateObj);
+        console.log('Filtering inward by date range:', startDateObj, 'to', endDateObj);
         
-        filteredInsuranceDocs = insuranceSnap.docs.filter(doc => {
+        filteredInwardDocs = inwardSnap.docs.filter(doc => {
           const docData = doc.data();
           let docDate = null;
           
@@ -258,18 +261,18 @@ export default function InsuranceReportsPage() {
             }
           }
           
-          // If no createdAt or invalid, try other date fields
+          // If no createdAt or invalid, try inwardDate or dateOfInward
           if (!docDate || isNaN(docDate.getTime())) {
-            if (docData.dateOfCreation) {
-              docDate = new Date(docData.dateOfCreation);
-            } else if (docData.firePolicyStartDate) {
-              docDate = new Date(docData.firePolicyStartDate);
+            if (docData.inwardDate) {
+              docDate = new Date(docData.inwardDate);
+            } else if (docData.dateOfInward) {
+              docDate = new Date(docData.dateOfInward);
             }
           }
           
           // If still no valid date, exclude from results
           if (!docDate || isNaN(docDate.getTime())) {
-            console.log('No valid date found for insurance document:', doc.id);
+            console.log('No valid date found for inward document:', doc.id);
             return false;
           }
           
@@ -278,126 +281,130 @@ export default function InsuranceReportsPage() {
           return isInRange;
         });
         
-        console.log('Insurance report: After date filtering:', filteredInsuranceDocs.length, 'of', insuranceSnap.docs.length, 'documents remain');
+        console.log('Insurance report: After date filtering:', filteredInwardDocs.length, 'of', inwardSnap.docs.length, 'inward documents remain');
       }
       
-      // Process filtered insurance master data with comprehensive data enhancement
-      filteredInsuranceDocs.forEach(doc => {
-        const insuranceData = doc.data();
-        const warehouseName = insuranceData.warehouseName;
+      // PROCESS EACH INWARD ENTRY - Each inward doc becomes one row in insurance report
+      filteredInwardDocs.forEach(doc => {
+        const inwardData = doc.data();
+        const warehouseName = inwardData.warehouseName;
         
-        console.log('=== INSURANCE DOCUMENT DEBUG ===');
-        console.log('Processing insurance for warehouse:', warehouseName);
-        console.log('Available insurance fields:', Object.keys(insuranceData));
+        console.log('=== INWARD-BASED INSURANCE REPORT DEBUG ===');
+        console.log('Processing inward entry for warehouse:', warehouseName);
+        console.log('Branch:', inwardData.branch, 'Insurance:', inwardData.insuranceManagedBy || inwardData.selectedInsurance);
         
         // Get warehouse details from inspections
         const warehouseDetails = warehouseDetailsMap.get(warehouseName) || {};
-        console.log('Warehouse details from inspections:', warehouseDetails);
         
-        // Get inward data for balance calculations and commodity details
-        const inwardEntries = inwardDataMap.get(warehouseName) || [];
-        const latestInward = inwardEntries.length > 0 ? inwardEntries[inwardEntries.length - 1] : {};
-        console.log('Latest inward data:', latestInward);
+        // Get insurance master data for this warehouse (may have multiple entries)
+        const insuranceEntries = insuranceDataMap.get(warehouseName) || [];
         
-        // Get outward data for balance calculations
+        // Try to find matching insurance entry based on insurance type or other criteria
+        // For now, use the first matching entry or create default
+        let matchingInsurance: any = {};
+        const inwardInsuranceType = (inwardData.insuranceManagedBy || inwardData.selectedInsurance || '').toString().toLowerCase();
+        
+        if (insuranceEntries.length > 0) {
+          // Try to find exact match by insurance type
+          matchingInsurance = insuranceEntries.find((ins: any) => {
+            const insType = (ins.insuranceType || '').toString().toLowerCase();
+            return insType === inwardInsuranceType || 
+                   (inwardInsuranceType.includes('bank') && insType.includes('bank')) ||
+                   (inwardInsuranceType.includes('client') && insType.includes('client')) ||
+                   (inwardInsuranceType.includes('agro') && insType.includes('agro'));
+          }) || insuranceEntries[0]; // Fallback to first entry
+        }
+        
+        console.log('Found matching insurance entry:', matchingInsurance ? 'Yes' : 'No');
+        
+        // Get outward data for THIS specific inward's balance calculations
         const outwardEntries = outwardDataMap.get(warehouseName) || [];
         const totalOutwardBags = outwardEntries.reduce((sum: number, entry: any) => sum + entry.outwardBags, 0);
         const totalOutwardQuantity = outwardEntries.reduce((sum: number, entry: any) => sum + entry.outwardQuantity, 0);
         
-        // Calculate balance bags and quantity
-        const totalInwardBags = inwardEntries.reduce((sum: number, entry: any) => sum + entry.totalBags, 0);
-        const totalInwardQuantity = inwardEntries.reduce((sum: number, entry: any) => sum + entry.totalQuantity, 0);
-        const balanceBags = totalInwardBags - totalOutwardBags;
-        const balanceQty = totalInwardQuantity - totalOutwardQuantity;
+        // Calculate balance bags and quantity for THIS inward entry
+        const inwardBags = Number(inwardData.totalBags || inwardData.inwardBags || 0);
+        const inwardQuantity = Number(inwardData.totalQuantity || inwardData.inwardQuantity || 0);
+        const balanceBags = inwardBags - totalOutwardBags;
+        const balanceQty = inwardQuantity - totalOutwardQuantity;
         
-        console.log('Balance calculations:', {
-          totalInwardBags,
+        console.log('Balance calculations for this inward:', {
+          inwardBags,
           totalOutwardBags,
           balanceBags,
-          totalInwardQuantity,
+          inwardQuantity,
           totalOutwardQuantity,
           balanceQty
         });
         
         // Calculate AUM (Assets Under Management) - rate * balance quantity
-        const rate = Number(insuranceData.rate || latestInward.rate || 0);
+        const rate = Number(matchingInsurance.rate || inwardData.rate || inwardData.marketRate || 0);
         const aum = rate * Math.max(0, balanceQty);
         
-        // Comprehensive bank details with multiple fallback sources
-        const bankName = insuranceData.bankFundedBy ||
-                        insuranceData.bankName ||
-                        latestInward.bankName ||
+        // Comprehensive bank details from inward data with fallbacks
+        const bankName = inwardData.bankName || 
+                        inwardData.bank || 
+                        inwardData.selectedBankName ||
+                        matchingInsurance.bankFundedBy ||
+                        matchingInsurance.bankName ||
                         warehouseDetails.bankName || '';
         
-        const bankBranchName = insuranceData.bankBranchName ||
-                              insuranceData.bankBranch ||
-                              latestInward.bankBranchName ||
+        const bankBranchName = inwardData.bankBranchName ||
+                              inwardData.bankBranch ||
+                              inwardData.branchName ||
+                              inwardData.selectedBankBranchName ||
+                              matchingInsurance.bankBranchName ||
+                              matchingInsurance.bankBranch ||
                               warehouseDetails.bankBranchName || '';
         
-        const bankState = insuranceData.bankState ||
-                         latestInward.bankState ||
+        const bankState = inwardData.bankState ||
+                         inwardData.selectedBankState ||
+                         matchingInsurance.bankState ||
                          warehouseDetails.bankState || '';
         
-        const ifscCode = insuranceData.ifscCode ||
-                        latestInward.ifscCode ||
+        const ifscCode = inwardData.ifscCode ||
+                        inwardData.IFSC ||
+                        inwardData.ifsc ||
+                        matchingInsurance.ifscCode ||
                         warehouseDetails.ifscCode || '';
         
         console.log('Final bank details:', { bankName, bankBranchName, bankState, ifscCode });
         
         // Check if insurance is taken by client
-        const insuranceType = (insuranceData.insuranceType || '').toLowerCase();
+        const insuranceType = (inwardData.insuranceManagedBy || inwardData.selectedInsurance || matchingInsurance.insuranceType || '').toString().toLowerCase();
         const isTakenByClient = insuranceType.includes('client');
         
         console.log('Insurance type check:', {
-          insuranceType: insuranceData.insuranceType,
+          insuranceType: insuranceType,
           isTakenByClient
         });
 
-        // Calculate SR Last Validity Date for this insurance entry - prefer insurance document's own policy end dates
-        const calculateSRValidityDateForInsurance = () => {
-          if (insuranceData.srLastValidityDate) return formatDate(insuranceData.srLastValidityDate);
-
-          // Prefer explicit policy end dates on the insurance document first
-          const possiblePolicyEndDates = [insuranceData.firePolicyEndDate, insuranceData.burglaryPolicyEndDate, insuranceData.policyEndDate, insuranceData.endDate].filter(Boolean);
-          if (possiblePolicyEndDates.length > 0) {
-            // choose earliest
-            const dates = possiblePolicyEndDates.map((d: any) => new Date(d)).filter((d: Date) => !isNaN(d.getTime()));
+        // Calculate SR Last Validity Date
+        const calculateSRValidityDate = () => {
+          // Try matching insurance entry dates first
+          const entryPolicyEndDates = [
+            matchingInsurance.firePolicyEndDate, 
+            matchingInsurance.burglaryPolicyEndDate, 
+            matchingInsurance.policyEndDate, 
+            matchingInsurance.endDate
+          ].filter(Boolean);
+          
+          if (entryPolicyEndDates.length > 0) {
+            const dates = entryPolicyEndDates.map((d: any) => new Date(d)).filter((d: Date) => !isNaN(d.getTime()));
             if (dates.length > 0) {
               const earliest = dates.reduce((a: Date, b: Date) => a < b ? a : b);
               return earliest.toISOString().split('T')[0];
             }
           }
 
-          // If insurance document has multiple insurance entries use them
-          let insuranceEntriesForDoc: any[] = [];
-          if (insuranceData.insuranceEntries && Array.isArray(insuranceData.insuranceEntries) && insuranceData.insuranceEntries.length > 0) {
-            insuranceEntriesForDoc = insuranceData.insuranceEntries;
-          } else if (insuranceData.selectedInsurance && typeof insuranceData.selectedInsurance === 'object') {
-            insuranceEntriesForDoc = [insuranceData.selectedInsurance];
-          }
-
-          if (insuranceEntriesForDoc.length > 0) {
-            const possibleDateKeys = ['firePolicyEndDate', 'burglaryPolicyEndDate', 'policyEndDate', 'endDate', 'end_date'];
-            let earliestEndDate: Date | null = null;
-            insuranceEntriesForDoc.forEach((ins: any) => {
-              possibleDateKeys.forEach(key => {
-                const val = ins?.[key];
-                if (val) {
-                  const date = new Date(val);
-                  if (!isNaN(date.getTime())) {
-                    if (!earliestEndDate || date < earliestEndDate) earliestEndDate = date;
-                  }
-                }
-              });
-            });
-            if (earliestEndDate) return (earliestEndDate as Date).toISOString().split('T')[0];
-          }
-
-          // Fallback: if bank-funded, try derive from insurance creation or policy start date (no strong rule here)
-          const fallbackDate = insuranceData.firePolicyStartDate || insuranceData.dateOfCreation || insuranceData.createdAt;
-          if (fallbackDate) {
+          // Fallback: add 9 months to inward date or insurance start date
+          const fallbackStartDate = inwardData.inwardDate || 
+                                   inwardData.dateOfInward || 
+                                   matchingInsurance.firePolicyStartDate || 
+                                   matchingInsurance.dateOfCreation;
+          if (fallbackStartDate) {
             try {
-              const d = new Date(fallbackDate);
+              const d = new Date(fallbackStartDate);
               if (!isNaN(d.getTime())) {
                 d.setMonth(d.getMonth() + 9);
                 return d.toISOString().split('T')[0];
@@ -408,61 +415,51 @@ export default function InsuranceReportsPage() {
           return '';
         };
 
-        const srLastValidityDateForRow = calculateSRValidityDateForInsurance();
+        const srLastValidityDateForRow = calculateSRValidityDate();
         
+        // Create a row for THIS inward entry
         data.push({
-          id: doc.id,
-          state: insuranceData.state || warehouseDetails.state || '',
-          branch: insuranceData.branch || warehouseDetails.branch || '',
-          location: insuranceData.location || warehouseDetails.location || '',
-          // Type of Business should come from inspections collection (businessType)
+          id: doc.id, // Use inward doc ID
+          state: inwardData.state || warehouseDetails.state || '',
+          branch: inwardData.branch || warehouseDetails.branch || '',
+          location: inwardData.location || warehouseDetails.location || '',
           typeOfBusiness: warehouseDetails.businessType || '',
-          // Warehouse Type: prefer inspections (handles 'Others' via customWarehouseType), then fall back
-          warehouseType: warehouseDetails.warehouseType ||
-                        insuranceData.warehouseType || '',
-          warehouseCode: insuranceData.warehouseCode || warehouseDetails.warehouseCode || '',
+          warehouseType: warehouseDetails.warehouseType || inwardData.warehouseType || '',
+          warehouseCode: inwardData.warehouseCode || warehouseDetails.warehouseCode || '',
           warehouseName: warehouseName || '',
-          warehouseAddress: warehouseDetails.address || '',
-          // Client Code: only show if insurance is taken by client
-          clientCode: isTakenByClient ? (insuranceData.clientCode || latestInward.clientCode || '') : '-',
-          // Client Name: only show if insurance is taken by client
-          clientName: isTakenByClient ? (insuranceData.clientName || latestInward.clientName || '') : '-',
-          // Commodity and Variety with fallback to inward data
-          commodity: insuranceData.commodityName ||
-                    insuranceData.commodity ||
-                    latestInward.commodity || '',
-          variety: insuranceData.varietyName ||
-                  insuranceData.variety ||
-                  latestInward.variety || '',
-          // Bank details with comprehensive fallback chain
+          warehouseAddress: warehouseDetails.address || inwardData.warehouseAddress || '',
+          // Client details from inward
+          clientCode: isTakenByClient ? (inwardData.clientCode || matchingInsurance.clientCode || '') : '-',
+          clientName: isTakenByClient ? (inwardData.clientName || inwardData.client || matchingInsurance.clientName || '') : '-',
+          // Commodity and Variety from inward
+          commodity: inwardData.commodity || inwardData.commodityName || matchingInsurance.commodityName || '',
+          variety: inwardData.variety || inwardData.varietyName || matchingInsurance.varietyName || '',
+          // Bank details
           bankName: bankName,
           bankBranchName: bankBranchName,
           bankState: bankState,
           ifscCode: ifscCode,
-          // Balance calculations with proper zero handling
+          // Balance calculations for this specific inward
           balanceBags: String(Math.max(0, balanceBags)),
           balanceQty: String(Math.max(0, balanceQty)),
-          insuranceManagedBy: insuranceData.insuranceType || '',
-          // Rate with fallback to inward data
+          insuranceManagedBy: inwardData.insuranceManagedBy || inwardData.selectedInsurance || matchingInsurance.insuranceType || '',
           rate: String(rate),
-          // AUM calculation
           aum: String(aum),
-          // Policy details with updated amounts from Insurance Master
-          firePolicyNumber: insuranceData.firePolicyNumber || '',
-          firePolicySumInsured: insuranceData.firePolicyAmount || '',
-          firePolicyStartDate: insuranceData.firePolicyStartDate || '',
-          firePolicyEndDate: insuranceData.firePolicyEndDate || '',
-          burglaryPolicyNumber: insuranceData.burglaryPolicyNumber || '',
-          burglaryPolicySumInsured: insuranceData.burglaryPolicyAmount || '',
-          burglaryPolicyStartDate: insuranceData.burglaryPolicyStartDate || '',
-          burglaryPolicyEndDate: insuranceData.burglaryPolicyEndDate || '',
-          // Calculated SR/WR Last Validity Date for this insurance entry (prefers entry-level dates)
+          // Policy details from matching insurance entry
+          firePolicyNumber: matchingInsurance.firePolicyNumber || '',
+          firePolicySumInsured: matchingInsurance.firePolicyAmount || '',
+          firePolicyStartDate: matchingInsurance.firePolicyStartDate || '',
+          firePolicyEndDate: matchingInsurance.firePolicyEndDate || '',
+          burglaryPolicyNumber: matchingInsurance.burglaryPolicyNumber || '',
+          burglaryPolicySumInsured: matchingInsurance.burglaryPolicyAmount || '',
+          burglaryPolicyStartDate: matchingInsurance.burglaryPolicyStartDate || '',
+          burglaryPolicyEndDate: matchingInsurance.burglaryPolicyEndDate || '',
           srLastValidityDate: srLastValidityDateForRow || '',
-          // Remaining amounts - fetch from insurance collection
-          firePolicyRemainingAmount: insuranceData.firePolicyRemainingAmount || '',
-          burglaryPolicyRemainingAmount: insuranceData.burglaryPolicyRemainingAmount || ''
+          // Remaining amounts
+          firePolicyRemainingAmount: matchingInsurance.firePolicyRemainingAmount || '',
+          burglaryPolicyRemainingAmount: matchingInsurance.burglaryPolicyRemainingAmount || ''
         });
-      });
+      }); // End of inward docs loop
       
       console.log('✅ INSURANCE REPORT: Final processed data:', data.length, 'records');
       setInsuranceData(data);
