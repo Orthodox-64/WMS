@@ -1251,8 +1251,10 @@ export default function InwardPage() {
             burglaryPolicyAmount: data.burglaryPolicyAmount || '0',
             burglaryPolicyStartDate: data.burglaryPolicyStartDate || null,
             burglaryPolicyEndDate: data.burglaryPolicyEndDate || null,
-            remainingFirePolicyAmount: data.firePolicyAmount || '0',
-            remainingBurglaryPolicyAmount: data.burglaryPolicyAmount || '0',
+            firePolicyRemainingAmount: data.firePolicyRemainingAmount || data.firePolicyAmount || '0',
+            burglaryPolicyRemainingAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount || '0',
+            remainingFirePolicyAmount: data.firePolicyRemainingAmount || data.firePolicyAmount || '0',
+            remainingBurglaryPolicyAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount || '0',
             createdAt: data.createdAt || new Date(),
             isUniversal: true  // Mark as universal
           });
@@ -1287,8 +1289,10 @@ export default function InwardPage() {
               burglaryPolicyAmount: data.burglaryPolicyAmount || '0',
               burglaryPolicyStartDate: data.burglaryPolicyStartDate || null,
               burglaryPolicyEndDate: data.burglaryPolicyEndDate || null,
-              remainingFirePolicyAmount: data.firePolicyAmount || '0',
-              remainingBurglaryPolicyAmount: data.burglaryPolicyAmount || '0',
+              firePolicyRemainingAmount: data.firePolicyRemainingAmount || data.firePolicyAmount || '0',
+              burglaryPolicyRemainingAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount || '0',
+              remainingFirePolicyAmount: data.firePolicyRemainingAmount || data.firePolicyAmount || '0',
+              remainingBurglaryPolicyAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount || '0',
               createdAt: data.createdAt || new Date(),
               isUniversal: true  // Mark as universal
             });
@@ -1332,8 +1336,10 @@ export default function InwardPage() {
               burglaryPolicyAmount: data.burglaryPolicyAmount || '0',
               burglaryPolicyStartDate: data.burglaryPolicyStartDate || null,
               burglaryPolicyEndDate: data.burglaryPolicyEndDate || null,
-              remainingFirePolicyAmount: data.firePolicyAmount || '0',
-              remainingBurglaryPolicyAmount: data.burglaryPolicyAmount || '0',
+              firePolicyRemainingAmount: data.firePolicyRemainingAmount || data.firePolicyAmount || '0',
+              burglaryPolicyRemainingAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount || '0',
+              remainingFirePolicyAmount: data.firePolicyRemainingAmount || data.firePolicyAmount || '0',
+              remainingBurglaryPolicyAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount || '0',
               createdAt: data.createdAt || new Date(),
               isUniversal: false  // NOT universal - warehouse-specific!
             });
@@ -1374,8 +1380,10 @@ export default function InwardPage() {
               burglaryPolicyAmount: data.burglaryPolicyAmount || '0',
               burglaryPolicyStartDate: data.burglaryPolicyStartDate || null,
               burglaryPolicyEndDate: data.burglaryPolicyEndDate || null,
-              remainingFirePolicyAmount: data.firePolicyAmount || '0',
-              remainingBurglaryPolicyAmount: data.burglaryPolicyAmount || '0',
+              firePolicyRemainingAmount: data.firePolicyRemainingAmount || data.firePolicyAmount || '0',
+              burglaryPolicyRemainingAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount || '0',
+              remainingFirePolicyAmount: data.firePolicyRemainingAmount || data.firePolicyAmount || '0',
+              remainingBurglaryPolicyAmount: data.burglaryPolicyRemainingAmount || data.burglaryPolicyAmount || '0',
               createdAt: data.createdAt || new Date(),
               isUniversal: false  // NOT universal - warehouse-specific!
             });
@@ -2727,31 +2735,60 @@ export default function InwardPage() {
     }
     
     // Validate insurance amounts for non-bank-funded insurance
+    // Check if total value exceeds EITHER fire OR burglary policy remaining balance
     if (selectedInsuranceForInward) {
-      const insuranceType = (selectedInsuranceForInward.insuranceTakenBy || '').toLowerCase();
-      const isBankFunded = insuranceType === 'bank' || insuranceType === 'bank-funded';
+      const insuranceType = (selectedInsuranceForInward.insuranceType || selectedInsuranceForInward.insuranceTakenBy || '').toLowerCase();
+      const isBankFunded = insuranceType.includes('bank');
+      
+      console.log('🔍 INSURANCE VALIDATION CHECK:');
+      console.log('Insurance Type:', insuranceType);
+      console.log('Is Bank Funded:', isBankFunded);
+      console.log('Selected Insurance Object:', selectedInsuranceForInward);
       
       if (!isBankFunded) {
         const totalValue = parseFloat(baseForm.totalValue) || 0;
-        const fireAmount = parseFloat(selectedInsuranceForInward.remainingFirePolicyAmount || selectedInsuranceForInward.firePolicyAmount || '0');
-        const burglaryAmount = parseFloat(selectedInsuranceForInward.remainingBurglaryPolicyAmount || selectedInsuranceForInward.burglaryPolicyAmount || '0');
         
-        // Check if total value exceeds either fire or burglary policy amount
-        if (totalValue > fireAmount || totalValue > burglaryAmount) {
+        // Use firePolicyRemainingAmount and burglaryPolicyRemainingAmount from insurance master
+        const fireRemainingAmount = parseFloat(
+          selectedInsuranceForInward.firePolicyRemainingAmount || 
+          selectedInsuranceForInward.remainingFirePolicyAmount || 
+          selectedInsuranceForInward.firePolicyAmount || 
+          '0'
+        );
+        const burglaryRemainingAmount = parseFloat(
+          selectedInsuranceForInward.burglaryPolicyRemainingAmount || 
+          selectedInsuranceForInward.remainingBurglaryPolicyAmount || 
+          selectedInsuranceForInward.burglaryPolicyAmount || 
+          '0'
+        );
+        
+        console.log('Total Value:', totalValue);
+        console.log('Fire Remaining Amount:', fireRemainingAmount);
+        console.log('Burglary Remaining Amount:', burglaryRemainingAmount);
+        console.log('Fire Check (totalValue > fireRemaining):', totalValue > fireRemainingAmount);
+        console.log('Burglary Check (totalValue > burglaryRemaining):', totalValue > burglaryRemainingAmount);
+        
+        // Check if total value exceeds EITHER fire OR burglary policy remaining amount
+        if (totalValue > fireRemainingAmount || totalValue > burglaryRemainingAmount) {
           const exceededPolicies = [];
-          if (totalValue > fireAmount) {
-            exceededPolicies.push(`Fire Policy (₹${fireAmount.toLocaleString()})`);
+          if (totalValue > fireRemainingAmount) {
+            exceededPolicies.push(`Fire Policy Balance (₹${fireRemainingAmount.toLocaleString()})`);
           }
-          if (totalValue > burglaryAmount) {
-            exceededPolicies.push(`Burglary Policy (₹${burglaryAmount.toLocaleString()})`);
+          if (totalValue > burglaryRemainingAmount) {
+            exceededPolicies.push(`Burglary Policy Balance (₹${burglaryRemainingAmount.toLocaleString()})`);
           }
           
+          console.log('❌ VALIDATION FAILED - Exceeded policies:', exceededPolicies);
+          
           toast({
-            title: "❌ Cannot Submit - Insurance Amount Exceeded",
-            description: `Total Value (₹${totalValue.toLocaleString()}) exceeds the ${exceededPolicies.join(' and ')} available amount. Please reduce the quantity or market rate, or increase the insurance coverage before submitting.`,
-            variant: 'destructive'
+            title: "❌ Cannot Submit - Insurance Balance Exceeded",
+            description: `Total Value (₹${totalValue.toLocaleString()}) exceeds ${exceededPolicies.join(' and ')} remaining. Please reduce the quantity or market rate before submitting.`,
+            variant: 'destructive',
+            duration: 6000
           });
           return;
+        } else {
+          console.log('✅ VALIDATION PASSED - Total value within limits');
         }
       }
     }
@@ -8630,6 +8667,15 @@ export default function InwardPage() {
                   }
                   
                   const handleInsuranceSelect = (insurance: any) => {
+                    console.log('🎯 SELECTED INSURANCE FULL OBJECT:', insurance);
+                    console.log('📊 INSURANCE FIELDS:');
+                    console.log('  - firePolicyRemainingAmount:', insurance.firePolicyRemainingAmount);
+                    console.log('  - burglaryPolicyRemainingAmount:', insurance.burglaryPolicyRemainingAmount);
+                    console.log('  - remainingFirePolicyAmount:', insurance.remainingFirePolicyAmount);
+                    console.log('  - remainingBurglaryPolicyAmount:', insurance.remainingBurglaryPolicyAmount);
+                    console.log('  - firePolicyAmount:', insurance.firePolicyAmount);
+                    console.log('  - burglaryPolicyAmount:', insurance.burglaryPolicyAmount);
+                    
                     setSelectedInsuranceForInward(insurance);
                     // Auto-fill form fields
                     setBaseForm(f => ({
