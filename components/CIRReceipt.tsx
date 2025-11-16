@@ -1,5 +1,4 @@
 import React from 'react';
-import Image from 'next/image';
 
 interface CIRReceiptProps {
   data: {
@@ -50,6 +49,7 @@ interface CIRReceiptProps {
     netWeight?: string;
     stacks?: any[];
     insuranceEntries?: any[];
+    inwardEntries?: any[];
     cirStatus?: string;
     remarks?: string;
     date?: string;
@@ -57,392 +57,240 @@ interface CIRReceiptProps {
   };
 }
 
-const borderColor = '#e67c1f';
-const borderLight = '#f3c892';
-const headerBg = '#fff7ed';
-const labelStyle = { fontWeight: 700, color: borderColor, fontSize: 15, letterSpacing: 0.3, lineHeight: 1.6 };
-const valueStyle = { fontWeight: 500, color: '#222', fontSize: 15, letterSpacing: 0.2, lineHeight: 1.6 };
-const cellPad = '14px 12px';
-
 const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
+  // Debug log to verify data
+  console.log('CIRReceipt - Lab Parameters:', {
+    labParameterNames: data.labParameterNames,
+    labResults: data.labResults,
+    dateOfSampling: data.dateOfSampling,
+    dateOfTesting: data.dateOfTesting
+  });
+
   return (
     <div
       style={{
-        width: 900,
-        margin: '16px auto',
-        background: '#f6fef9', // faint green
-        borderRadius: 12,
+        padding: '20px 20px 40px 20px',
         fontFamily: 'Arial, sans-serif',
-        color: '#222',
-        boxShadow: '0 4px 24px #e0f2e9',
-        padding: 24,
+        fontSize: '12px',
+        lineHeight: '1.6',
+        color: '#000',
       }}
     >
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 6 }}>
-        <Image src="/Group 86.png" alt="Agrogreen Logo" width={80} height={80} style={{ borderRadius: '50%', margin: '0 auto 6px' }} />
-        <div style={{ fontSize: 20, fontWeight: 700, color: '#1aad4b', letterSpacing: 0.5, marginBottom: 2 }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: '#e67c1f', marginBottom: 6 }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
+      <div style={{ textAlign: 'center', marginBottom: '15px', borderBottom: '1px solid #000', paddingBottom: '8px' }}>
+        <div style={{ fontSize: '16px', fontWeight: 'bold' }}>AGROGREEN WAREHOUSING PRIVATE LTD.</div>
+        <div style={{ fontSize: '10px' }}>603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010</div>
       </div>
       
-      {/* Centered CIR FORM title with margin */}
-      <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '20px auto 20px auto' }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: borderColor, textAlign: 'center' }}>
-          CIR (COMMODITY INWARD RECEIPT) STATUS FORM
-        </span>
+      <div style={{ textAlign: 'center', fontSize: '13px', fontWeight: 'bold', marginBottom: '15px' }}>
+        CIR (COMMODITY INWARD RECEIPT) STATUS FORM
       </div>
 
-      {/* Basic Info Table */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: cellPad }}>Inward ID</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: cellPad }}>{data.inwardId || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: cellPad }}>CIR Status</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: cellPad }}>{data.cirStatus || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: cellPad }}>Date of Inward</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: cellPad }}>{data.dateOfInward || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, textAlign: 'center', padding: cellPad }}>CAD Number</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, textAlign: 'center', padding: cellPad }}>{data.cadNumber || '-'}</td>
-          </tr>
-        </tbody>
-      </table>
+      {/* Basic Info */}
+      <div style={{ marginBottom: '12px' }}>
+        <div><strong>Inward ID:</strong> {data.inwardId || '-'}</div>
+        <div><strong>CIR Status:</strong> {data.cirStatus || '-'}</div>
+        <div><strong>Date of Inward:</strong> {data.dateOfInward || '-'}</div>
+        <div><strong>CAD Number:</strong> {data.cadNumber || '-'}</div>
+        <div><strong>Base Receipt:</strong> {data.bankReceipt || '-'}</div>
+      </div>
 
       {/* Location Details */}
-      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-        LOCATION DETAILS
+      <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>LOCATION DETAILS</div>
+        <div><strong>State:</strong> {data.state || '-'}</div>
+        <div><strong>Branch:</strong> {data.branch || '-'}</div>
+        <div><strong>Location:</strong> {data.location || '-'}</div>
+        <div><strong>Warehouse Name:</strong> {data.warehouseName || '-'}</div>
+        <div><strong>Warehouse Code:</strong> {data.warehouseCode || '-'}</div>
+        <div><strong>Business Type:</strong> {data.businessType || '-'}</div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>State</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.state || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Branch</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.branch || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Location</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.location || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Warehouse Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.warehouseName || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Warehouse Code</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.warehouseCode || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Business Type</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.businessType || '-'}</td>
-          </tr>
-        </tbody>
-      </table>
 
       {/* Client Details */}
-      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-        CLIENT DETAILS
+      <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>CLIENT DETAILS</div>
+        <div><strong>Client Name:</strong> {data.client || '-'}</div>
+        <div><strong>Client Code:</strong> {data.clientCode || '-'}</div>
+        <div><strong>Client Address:</strong> {data.clientAddress || '-'}</div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Client Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.client || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Client Code</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.clientCode || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Client Address</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }} colSpan={3}>{data.clientAddress || '-'}</td>
-          </tr>
-        </tbody>
-      </table>
 
       {/* Commodity Details */}
-      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-        COMMODITY DETAILS
+      <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>COMMODITY DETAILS</div>
+        <div><strong>Commodity:</strong> {data.commodity || '-'}</div>
+        <div><strong>Variety:</strong> {data.varietyName || '-'}</div>
+        <div><strong>Total Bags:</strong> {data.totalBags || '-'}</div>
+        <div><strong>Total Quantity (MT):</strong> {data.totalQuantity || '-'}</div>
+        <div><strong>Market Rate (Rs/MT):</strong> {data.marketRate || '-'}</div>
+        <div><strong>Total Value (Rs):</strong> {data.totalValue || '-'}</div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Commodity</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.commodity || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Variety</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.varietyName || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Total Bags</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.totalBags || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Total Quantity (MT)</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.totalQuantity || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Market Rate (Rs/MT)</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.marketRate || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Total Value (Rs)</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.totalValue || '-'}</td>
-          </tr>
-        </tbody>
-      </table>
 
       {/* Vehicle & Weight Details */}
-      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-        VEHICLE & WEIGHT DETAILS
-      </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Vehicle Number</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.vehicleNumber || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Gatepass Number</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.getpassNumber || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Weight Bridge</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.weightBridge || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Weight Bridge Slip No.</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.weightBridgeSlipNumber || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Gross Weight (MT)</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.grossWeight || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Tare Weight (MT)</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.tareWeight || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Net Weight (MT)</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }} colSpan={3}>{data.netWeight || '-'}</td>
-          </tr>
-        </tbody>
-      </table>
+      {data.inwardEntries && data.inwardEntries.length > 0 ? (
+        <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>VEHICLE & WEIGHT DETAILS</div>
+          {data.inwardEntries.map((entry: any, index: number) => (
+            <div key={index} style={{ marginBottom: '10px', paddingBottom: '8px', borderBottom: index < data.inwardEntries!.length - 1 ? '1px dashed #ccc' : 'none' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>Entry {index + 1}</div>
+              <div><strong>Vehicle Number:</strong> {entry.vehicleNumber || '-'}</div>
+              <div><strong>Gatepass Number:</strong> {entry.getpassNumber || '-'}</div>
+              <div><strong>Weight Bridge:</strong> {entry.weightBridge || '-'}</div>
+              <div><strong>Weight Bridge Slip No.:</strong> {entry.weightBridgeSlipNumber || '-'}</div>
+              <div><strong>Gross Weight (MT):</strong> {entry.grossWeight || '-'}</div>
+              <div><strong>Tare Weight (MT):</strong> {entry.tareWeight || '-'}</div>
+              <div><strong>Net Weight (MT):</strong> {entry.netWeight || '-'}</div>
+              {entry.stacks && entry.stacks.length > 0 && (
+                <div style={{ marginTop: '5px' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '11px' }}>Stacks:</div>
+                  {entry.stacks.map((stack: any, stackIdx: number) => (
+                    <div key={stackIdx} style={{ fontSize: '11px', marginLeft: '10px' }}>
+                      <strong>Stack {stackIdx + 1}:</strong> {stack.stackNumber || '-'}, <strong>Bags:</strong> {stack.numberOfBags || '-'}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>VEHICLE & WEIGHT DETAILS</div>
+          <div><strong>Vehicle Number:</strong> {data.vehicleNumber || '-'}</div>
+          <div><strong>Gatepass Number:</strong> {data.getpassNumber || '-'}</div>
+          <div><strong>Weight Bridge:</strong> {data.weightBridge || '-'}</div>
+          <div><strong>Weight Bridge Slip No.:</strong> {data.weightBridgeSlipNumber || '-'}</div>
+          <div><strong>Gross Weight (MT):</strong> {data.grossWeight || '-'}</div>
+          <div><strong>Tare Weight (MT):</strong> {data.tareWeight || '-'}</div>
+          <div><strong>Net Weight (MT):</strong> {data.netWeight || '-'}</div>
+        </div>
+      )}
 
-      {/* Stack Information */}
-      {data.stacks && data.stacks.length > 0 && (
-        <>
-          <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-            STACK INFORMATION
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-            <thead>
-              <tr>
-                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Stack Number</th>
-                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Number of Bags</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.stacks.map((stack: any, index: number) => (
-                <tr key={index}>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad, textAlign: 'center' }}>{stack.stackNumber || '-'}</td>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad, textAlign: 'center' }}>{stack.numberOfBags || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
+      {/* Stack Information - Only show if no inwardEntries (old format) */}
+      {!data.inwardEntries && data.stacks && data.stacks.length > 0 && (
+        <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>STACK INFORMATION</div>
+          {data.stacks.map((stack: any, index: number) => (
+            <div key={index}>
+              <strong>Stack {index + 1} - Number:</strong> {stack.stackNumber || '-'}, <strong>Bags:</strong> {stack.numberOfBags || '-'}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Lab Parameters */}
       {data.labParameterNames && data.labParameterNames.length > 0 && (
-        <>
-          <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-            QUALITY PARAMETERS
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
-            <tbody>
-              <tr>
-                <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Sampling Date</td>
-                <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.dateOfSampling || '-'}</td>
-                <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Testing Date</td>
-                <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.dateOfTesting || '-'}</td>
-              </tr>
-            </tbody>
-          </table>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
+        <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>QUALITY PARAMETERS</div>
+          <div><strong>Sampling Date:</strong> {data.dateOfSampling || '-'}</div>
+          <div><strong>Testing Date:</strong> {data.dateOfTesting || '-'}</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', border: '1px solid #000' }}>
             <thead>
               <tr>
-                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Parameter</th>
-                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Actual Value (%)</th>
+                <th style={{ border: '1px solid #000', padding: '6px', textAlign: 'left', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>Parameter</th>
+                <th style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>Actual Value (%)</th>
               </tr>
             </thead>
             <tbody>
               {data.labParameterNames.map((name: string, idx: number) => (
                 <tr key={idx}>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{name}</td>
-                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad, textAlign: 'center' }}>
-                    {typeof data.labResults?.[idx] === 'object' && data.labResults[idx]?.value ? 
-                      data.labResults[idx].value : 
-                      (data.labResults?.[idx] || '-')}
+                  <td style={{ border: '1px solid #000', padding: '6px' }}>{name}</td>
+                  <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center' }}>
+                    {typeof data.labResults?.[idx] === 'object' && data.labResults[idx]?.value 
+                      ? data.labResults[idx].value 
+                      : (data.labResults?.[idx] || '-')}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </>
+        </div>
       )}
 
       {/* Bank Details */}
-      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-        BANK DETAILS
+      <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>BANK DETAILS</div>
+        <div><strong>Bank Name:</strong> {data.bankName || '-'}</div>
+        <div><strong>Bank Branch:</strong> {data.bankBranch || '-'}</div>
+        <div><strong>Bank State:</strong> {data.bankState || '-'}</div>
+        <div><strong>IFSC Code:</strong> {data.ifscCode || '-'}</div>
+        <div><strong>Bank Receipt:</strong> {data.bankReceipt || '-'}</div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Bank Name</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.bankName || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Bank Branch</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.bankBranch || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Bank State</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.bankState || '-'}</td>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>IFSC Code</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.ifscCode || '-'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Bank Receipt</td>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }} colSpan={3}>{data.bankReceipt || '-'}</td>
-          </tr>
-        </tbody>
-      </table>
 
-      {/* Reservation & Billing Details - robust, case-insensitive */}
+      {/* Reservation & Billing Details */}
       {(() => {
         const billingStatusLower = (data.billingStatus || '').trim().toLowerCase();
         return billingStatusLower && billingStatusLower !== '-';
       })() && (
-        <>
-          <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
+        <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
             {(() => {
               const bs = (data.billingStatus || '').trim().toLowerCase();
               if (bs === 'reservation') return 'RESERVATION DETAILS';
               if (bs.includes('post')) return 'BILLING DETAILS';
-              // Fallback: if explicit reservation fields present, treat as reservation
               if (data.reservationRate || data.reservationQty) return 'RESERVATION DETAILS';
               return 'BILLING DETAILS';
             })()}
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-            <tbody>
-              {/* Reservation block (case-insensitive) */}
-              {(() => {
-                const bs = (data.billingStatus || '').trim().toLowerCase();
-                return bs === 'reservation';
-              })() && (
-                <>
-                  <tr>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation Rate (Rs/MT)</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.reservationRate || '-'}</td>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation Quantity (MT)</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.reservationQty || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation Start Date</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.reservationStart || '-'}</td>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation End Date</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.reservationEnd || '-'}</td>
-                  </tr>
-                </>
-              )}
-              {/* Post-reservation billing (support multiple naming variants) */}
-              {(() => {
-                const bs = (data.billingStatus || '').trim().toLowerCase();
-                return bs.includes('post');
-              })() && (
-                <>
-                  <tr>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Billing Cycle</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.billingCycle || '-'}</td>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Billing Type</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{data.billingType || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Billing Rate (Rs/MT)</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }} colSpan={3}>{data.billingRate || '-'}</td>
-                  </tr>
-                </>
-              )}
-            </tbody>
-          </table>
-        </>
+          {(() => {
+            const bs = (data.billingStatus || '').trim().toLowerCase();
+            return bs === 'reservation';
+          })() && (
+            <>
+              <div><strong>Reservation Rate (Rs/MT):</strong> {data.reservationRate || '-'}</div>
+              <div><strong>Reservation Quantity (MT):</strong> {data.reservationQty || '-'}</div>
+              <div><strong>Reservation Start Date:</strong> {data.reservationStart || '-'}</div>
+              <div><strong>Reservation End Date:</strong> {data.reservationEnd || '-'}</div>
+            </>
+          )}
+          {(() => {
+            const bs = (data.billingStatus || '').trim().toLowerCase();
+            return bs.includes('post');
+          })() && (
+            <>
+              <div><strong>Billing Cycle:</strong> {data.billingCycle || '-'}</div>
+              <div><strong>Billing Type:</strong> {data.billingType || '-'}</div>
+              <div><strong>Billing Rate (Rs/MT):</strong> {data.billingRate || '-'}</div>
+            </>
+          )}
+        </div>
       )}
 
       {/* Insurance Details */}
       {data.insuranceEntries && data.insuranceEntries.length > 0 && (
-        <>
-          <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-            INSURANCE DETAILS
-          </div>
+        <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>INSURANCE DETAILS</div>
           {data.insuranceEntries.map((insurance: any, index: number) => {
             const insuranceTakenBy = (insurance.insuranceTakenBy || '').toLowerCase();
             const isBankFunded = insuranceTakenBy === 'bank' || insuranceTakenBy === 'bank-funded';
             
-            // For bank-funded insurance, show only 3 fields
             if (isBankFunded) {
               return (
-                <table key={index} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Insurance Taken By</td>
-                      <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.insuranceTakenBy || '-'}</td>
-                      <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Commodity</td>
-                      <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.commodityName || '-'}</td>
-                    </tr>
-                    <tr>
-                      <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Bank Name</td>
-                      <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }} colSpan={3}>{data.bankName || data.bankFundedBy || '-'}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div key={index} style={{ marginBottom: '8px' }}>
+                  <div><strong>Insurance Taken By:</strong> {insurance.insuranceTakenBy || '-'}</div>
+                  <div><strong>Commodity:</strong> {insurance.commodityName || '-'}</div>
+                  <div><strong>Bank Name:</strong> {data.bankName || data.bankFundedBy || '-'}</div>
+                </div>
               );
             }
             
-            // For other insurance types, show all fields
             return (
-              <table key={index} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-                <tbody>
-                  <tr>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Insurance ID</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.insuranceId || '-'}</td>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Taken By</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.insuranceTakenBy || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Fire Policy No.</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.firePolicyNumber || '-'}</td>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Fire Policy Amount</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.firePolicyAmount || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Burglary Policy No.</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.burglaryPolicyNumber || '-'}</td>
-                    <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Burglary Policy Amount</td>
-                    <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad }}>{insurance.burglaryPolicyAmount || '-'}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div key={index} style={{ marginBottom: '8px' }}>
+                <div><strong>Insurance ID:</strong> {insurance.insuranceId || '-'}</div>
+                <div><strong>Taken By:</strong> {insurance.insuranceTakenBy || '-'}</div>
+                <div><strong>Fire Policy No.:</strong> {insurance.firePolicyNumber || '-'}</div>
+                <div><strong>Fire Policy Amount:</strong> {insurance.firePolicyAmount || '-'}</div>
+                <div><strong>Burglary Policy No.:</strong> {insurance.burglaryPolicyNumber || '-'}</div>
+                <div><strong>Burglary Policy Amount:</strong> {insurance.burglaryPolicyAmount || '-'}</div>
+              </div>
             );
           })}
-        </>
+        </div>
       )}
 
-      {/* Remarks Section */}
-      <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-        REMARKS / APPROVAL NOTE
-      </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: cellPad, minHeight: '40px', verticalAlign: 'top' }}>
-              {data.remarks || 'No remarks provided'}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* Footer - Simplified without signature section */}
-      <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-end' }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: borderColor, marginBottom: 4 }}>Place: {data.place || 'Indore'}</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: borderColor }}>Date: {data.date || new Date().toLocaleDateString('en-IN')}</div>
-        </div>
+      {/* Footer */}
+      <div style={{ marginTop: '15px', borderTop: '1px solid #000', paddingTop: '8px' }}>
+        <div><strong>Place:</strong> {data.place || 'Indore'}</div>
+        <div><strong>Date:</strong> {data.date || new Date().toLocaleDateString('en-IN')}</div>
       </div>
     </div>
   );

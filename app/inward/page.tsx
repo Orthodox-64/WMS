@@ -5785,16 +5785,15 @@ export default function InwardPage() {
     let fileName: string;
     
     if (isCIRPrint) {
-      console.log('CIR Print: Modal open:', showCIRModal);
-      console.log('CIR Print: Modal data:', cirModalData);
-      console.log('CIR Print: Modal content ref:', cirModalContentRef.current);
+      console.log('CIR Print: Using CIRReceipt component');
+      console.log('CIR Print: Receipt ref:', cirReceiptRef.current);
       
-      if (!cirModalContentRef.current) {
-        console.error('CIR modal content ref is not available');
-        toast({ title: 'Error', description: 'CIR modal content not available. Please wait for the modal to fully load and try again.', variant: 'destructive' });
+      if (!cirReceiptRef.current) {
+        console.error('CIR receipt ref is not available');
+        toast({ title: 'Error', description: 'CIR receipt not available. Please wait and try again.', variant: 'destructive' });
         return;
       }
-      targetRef = cirModalContentRef;
+      targetRef = cirReceiptRef;
       documentType = 'CIR status form';
       fileName = `cir-status-form-${cirModalData?.inwardId || 'document'}.pdf`;
     } else {
@@ -5814,75 +5813,16 @@ export default function InwardPage() {
       const jsPDF = (await import('jspdf')).default;
       
       // Wait a moment for the component to render
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      // For CIR print, we need to temporarily hide the remarks section and action buttons
-      let hiddenElements: HTMLElement[] = [];
-      
-      if (isCIRPrint && targetRef.current) {
-        console.log('Hiding elements for CIR print...');
-        
-        // Hide remarks section - look for any element containing "Remarks" or "Approval Note"
-        const allElements = targetRef.current.querySelectorAll('*');
-        allElements.forEach(element => {
-          const text = element.textContent || '';
-          if ((text.includes('Remarks') || text.includes('Approval Note')) && 
-              !element.querySelector('*') && // Only leaf elements
-              element.tagName === 'LABEL') {
-            // Find the parent container div
-            let parent = element.parentElement;
-            while (parent && parent !== targetRef.current) {
-              if (parent.classList.contains('mt-6') || parent.classList.contains('space-y-4')) {
-                hiddenElements.push(parent);
-                parent.style.display = 'none';
-                console.log('Hidden remarks section:', parent);
-                break;
-              }
-              parent = parent.parentElement;
-            }
-          }
-        });
-        
-        // Hide action buttons - look for divs containing buttons
-        const buttonContainers = targetRef.current.querySelectorAll('div');
-        buttonContainers.forEach(container => {
-          const buttons = container.querySelectorAll('button');
-          if (buttons.length > 0) {
-            // Check if this container has Print, Approve, Reject, or Save buttons
-            let hasActionButtons = false;
-            buttons.forEach(button => {
-              const buttonText = button.textContent || '';
-              if (buttonText.includes('Print') || buttonText.includes('Approve') || 
-                  buttonText.includes('Reject') || buttonText.includes('Save') || 
-                  buttonText.includes('Resubmit')) {
-                hasActionButtons = true;
-              }
-            });
-            
-            if (hasActionButtons) {
-              hiddenElements.push(container as HTMLElement);
-              (container as HTMLElement).style.display = 'none';
-              console.log('Hidden button container:', container);
-            }
-          }
-        });
-        
-        console.log('Total hidden elements:', hiddenElements.length);
-      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
       
       const canvas = await html2canvas(targetRef.current!, { 
         scale: 2, 
         useCORS: true, 
         backgroundColor: '#fff',
-        logging: true,
+        logging: false,
         allowTaint: false,
         height: targetRef.current!.scrollHeight,
         width: targetRef.current!.scrollWidth
-      });
-      
-      // Restore hidden elements
-      hiddenElements.forEach(element => {
-        element.style.display = '';
       });
       
       const imgData = canvas.toDataURL('image/png');
@@ -10857,6 +10797,15 @@ export default function InwardPage() {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Hidden CIRReceipt for PDF generation */}
+      {cirModalData && (
+        <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+          <div ref={cirReceiptRef}>
+            <CIRReceipt data={cirModalData} />
+          </div>
+        </div>
       )}
 
       {/* Expand Entries Modal */}
