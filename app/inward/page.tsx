@@ -2932,6 +2932,33 @@ export default function InwardPage() {
       hasBaseFormData: !!(entry.state && entry.branch && entry.location)
     })));
     
+    // Enforce in-form uniqueness for Gatepass Number and Weighbridge Slip Number across all entries
+    const normalizeKey = (s: any) => (s ?? '').toString().trim().toLowerCase();
+    const gatepassCounts = new Map<string, number>();
+    const slipCounts = new Map<string, number>();
+    
+    for (const entry of allEntries) {
+      const g = normalizeKey(entry.getpassNumber);
+      if (g) gatepassCounts.set(g, (gatepassCounts.get(g) || 0) + 1);
+      const s = normalizeKey(entry.weightBridgeSlipNumber);
+      if (s) slipCounts.set(s, (slipCounts.get(s) || 0) + 1);
+    }
+    
+    const duplicateGatepasses = Array.from(gatepassCounts.entries()).filter(([, c]) => c > 1).map(([k]) => k);
+    const duplicateSlips = Array.from(slipCounts.entries()).filter(([, c]) => c > 1).map(([k]) => k);
+    
+    if (duplicateGatepasses.length > 0 || duplicateSlips.length > 0) {
+      const lines: string[] = [];
+      if (duplicateGatepasses.length > 0) {
+        lines.push(`Duplicate Gatepass Numbers: ${duplicateGatepasses.join(', ')}`);
+      }
+      if (duplicateSlips.length > 0) {
+        lines.push(`Duplicate Weighbridge Slip Numbers: ${duplicateSlips.join(', ')}`);
+      }
+      alert(`Duplicate values detected across entries. Please resolve before submitting.\n\n${lines.join('\n')}`);
+      return;
+    }
+    
     // Ensure all entries have their totalBags calculated from their stacks
     allEntries = allEntries.map(entry => {
       if (entry.stacks && Array.isArray(entry.stacks)) {
@@ -4179,13 +4206,26 @@ export default function InwardPage() {
       return;
     }
 
-    // Validate getpass number uniqueness
+    // Normalize comparison for duplicates (trim + case-insensitive)
+    const normalizeKey = (s: any) => (s ?? '').toString().trim().toLowerCase();
+
+    // Validate getpass number uniqueness across in-form entries
     const isGetpassDuplicate = inwardEntries.some(entry => 
-      entry.getpassNumber === currentEntryForm.getpassNumber
+      normalizeKey(entry.getpassNumber) === normalizeKey(currentEntryForm.getpassNumber)
     );
     
     if (isGetpassDuplicate) {
       alert('Gatepass number must be unique. This gatepass number has already been used in a previous entry.');
+      return;
+    }
+
+    // Validate Weighbridge Slip Number uniqueness across in-form entries
+    const isSlipDuplicate = inwardEntries.some(entry => 
+      normalizeKey(entry.weightBridgeSlipNumber) === normalizeKey(currentEntryForm.weightBridgeSlipNumber)
+    );
+
+    if (isSlipDuplicate) {
+      alert('Weighbridge slip number must be unique across all entries. This slip number is already used in a previous entry.');
       return;
     }
 
@@ -6382,31 +6422,22 @@ export default function InwardPage() {
             marketRate: selectedRowForSR?.marketRate || '',
             valueOfCommodity: selectedRowForSR?.totalValue || '',
             hologramNumber: selectedRowForSR?.hologramNumber || hologramNumber || '',
-            insuranceDetails: [
-              (() => {
-                // Prefer the inspection insurance entry that matches the saved selectedInsurance on the inward row
-                const sel = selectedRowForSR?.selectedInsurance;
-                let matched: any = null;
-                try {
-                  if (sel && inspectionInsuranceData && inspectionInsuranceData.length) {
-                    matched = inspectionInsuranceData.find((i: any) => i.insuranceId === sel.insuranceId && i.insuranceTakenBy === sel.insuranceTakenBy) || null;
-                  }
-                } catch (e) {
-                  // ignore and fallback
-                  matched = null;
-                }
-                // fallback to first inspection entry if no explicit match
-                matched = matched || inspectionInsuranceData[0] || null;
-
-                return {
-                  policyNo: matched?.firePolicyNumber || '-',
-                  company: matched?.firePolicyCompanyName || '-',
-                  validFrom: matched?.firePolicyStartDate ? normalizeDate(matched.firePolicyStartDate) : '-',
-                  validTo: matched?.firePolicyEndDate ? normalizeDate(matched.firePolicyEndDate) : '-',
-                  sumInsured: matched?.firePolicyAmount || '-',
-                };
-              })(),
-            ],
+            insuranceDetails: (() => {
+              // Collect client, agrogreen, bank funded policies for display
+              const filtered = (inspectionInsuranceData || []).filter((ins: any) => {
+                const t = (ins.insuranceTakenBy || '').toLowerCase();
+                return ['client','agrogreen','bank','bank-funded'].includes(t);
+              });
+              const base = filtered.length ? filtered : (inspectionInsuranceData[0] ? [inspectionInsuranceData[0]] : []);
+              return base.map((matched: any) => ({
+                policyNo: matched?.firePolicyNumber || '-',
+                company: matched?.firePolicyCompanyName || '-',
+                validFrom: matched?.firePolicyStartDate ? normalizeDate(matched.firePolicyStartDate) : '-',
+                validTo: matched?.firePolicyEndDate ? normalizeDate(matched.firePolicyEndDate) : '-',
+                sumInsured: matched?.firePolicyAmount || '-',
+                insuranceTakenBy: matched?.insuranceTakenBy || ''
+              }));
+            })(),
             bankName: selectedRowForSR?.bankName || '',
             date: selectedRowForSR?.dateOfInward || '',
             place: selectedRowForSR?.branch || '',
@@ -6650,21 +6681,77 @@ export default function InwardPage() {
     let selectedInsuranceEntries = [];
     
     if (row.selectedInsurance && insuranceEntries.length > 0) {
-      yourInsurance = insuranceEntries.find(
+      const sel = row.selectedInsurance;
+      const matchDirect = insuranceEntries.find(
         (ins: any) =>
-          ins.insuranceId === row.selectedInsurance.insuranceId &&
-          ins.insuranceTakenBy === row.selectedInsurance.insuranceTakenBy
+          (ins.insuranceId === sel.insuranceId || ins.insuranceId === sel.insuranceId?.trim()) &&
+          (ins.insuranceTakenBy?.toLowerCase() === sel.insuranceTakenBy?.toLowerCase())
       ) || null;
-      
-      // Only include the selected insurance in the CIR display
+
+      // Fallback: try by takenBy only (Agrogreen / Client) if id mismatch
+      const matchByTakenBy = matchDirect || insuranceEntries.find(
+        (ins: any) => ins.insuranceTakenBy?.toLowerCase() === sel.insuranceTakenBy?.toLowerCase()
+      ) || null;
+
+      // Normalizer to guarantee fields present for CIRReceipt
+      const normalizeInsurance = (ins: any) => ({
+        insuranceId: ins?.insuranceId || ins?.id || sel.insuranceId || '-',
+        insuranceTakenBy: ins?.insuranceTakenBy || sel.insuranceTakenBy || '-',
+        firePolicyNumber: ins?.firePolicyNumber || ins?.firePolicyNo || '-',
+        firePolicyAmount: ins?.firePolicyAmount || ins?.firePolicySumInsured || ins?.remainingFirePolicyAmount || '-',
+        firePolicyStartDate: ins?.firePolicyStartDate || ins?.firePolicyStart || null,
+        firePolicyEndDate: ins?.firePolicyEndDate || ins?.firePolicyEnd || null,
+        burglaryPolicyNumber: ins?.burglaryPolicyNumber || ins?.burglaryPolicyNo || '-',
+        burglaryPolicyAmount: ins?.burglaryPolicyAmount || ins?.burglaryPolicySumInsured || ins?.remainingBurglaryPolicyAmount || '-',
+        burglaryPolicyStartDate: ins?.burglaryPolicyStartDate || ins?.burglaryPolicyStart || null,
+        burglaryPolicyEndDate: ins?.burglaryPolicyEndDate || ins?.burglaryPolicyEnd || null,
+        firePolicyCompanyName: ins?.firePolicyCompanyName || '-',
+        burglaryPolicyCompanyName: ins?.burglaryPolicyCompanyName || '-',
+        clientName: ins?.clientName || row.client || '-',
+        clientAddress: ins?.clientAddress || row.clientAddress || '',
+        selectedBankName: ins?.selectedBankName || ins?.bankName || '-',
+        // Add commodity mapping (multiple possible keys) used by CIRReceipt for bank-funded display
+        commodityName: ins?.commodityName || ins?.insuranceCommodity || ins?.commodity || row.commodity || '-',
+        varietyName: ins?.varietyName || row.varietyName || '',
+      });
+
+      yourInsurance = matchByTakenBy ? normalizeInsurance(matchByTakenBy) : null;
+
+      // If still not found and takenBy agrogreen/client, attempt inspection collection fresh fetch
+      if (!yourInsurance && sel.insuranceTakenBy) {
+        const takenByLower = sel.insuranceTakenBy.toLowerCase();
+        if ((takenByLower === 'agrogreen' || takenByLower === 'client') && row.warehouseName) {
+          try {
+            const inspectionsCollection = collection(db, 'inspections');
+            const q = query(inspectionsCollection, where('warehouseName', '==', row.warehouseName));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              const inspectionData = snap.docs[0].data();
+              let entries: any[] = [];
+              if (Array.isArray(inspectionData.insuranceEntries)) entries = inspectionData.insuranceEntries;
+              else if (inspectionData.warehouseInspectionData?.insuranceEntries && Array.isArray(inspectionData.warehouseInspectionData.insuranceEntries)) entries = inspectionData.warehouseInspectionData.insuranceEntries;
+              const fallback = entries.find((e: any) => e.insuranceTakenBy?.toLowerCase() === takenByLower);
+              if (fallback) {
+                yourInsurance = normalizeInsurance(fallback);
+                console.log('🔄 CIR: Fallback fetched insurance from inspections for', takenByLower);
+              }
+            }
+          } catch (e) {
+            console.warn('CIR: Fallback inspection fetch failed', e);
+          }
+        }
+      }
+
       if (yourInsurance) {
         selectedInsuranceEntries = [yourInsurance];
-        console.log('✅ CIR: Found selected insurance for display:', yourInsurance.insuranceId);
+        console.log('✅ CIR: Using ONLY selected insurance for display:', yourInsurance.insuranceId, yourInsurance.insuranceTakenBy);
       } else {
-        console.log('⚠️ CIR: Selected insurance not found in available entries');
+        selectedInsuranceEntries = [];
+        console.log('⚠️ CIR: Selected insurance not resolved; insurance section will be empty');
       }
     } else {
-      console.log('⚠️ CIR: No selected insurance found in row data');
+      selectedInsuranceEntries = [];
+      console.log('ℹ️ CIR: No selectedInsurance present; insurance section will be empty');
     }
 
     // Prepare lab parameter names from commodity/variety
@@ -9104,6 +9191,7 @@ export default function InwardPage() {
                     placeholder="Enter Slip Number"
                     disabled={!canCreateInwardEntry}
                   />
+                  <p className="text-xs text-orange-600 mt-1">Weighbridge slip number must be unique across all entries</p>
                 </div>
               </div>
 
@@ -9733,80 +9821,104 @@ export default function InwardPage() {
               <div>
                 <Label className="font-semibold text-orange-500">Insurance Details </Label>
                 {(() => {
-                  if (!selectedRowForSR?.selectedInsurance || !inspectionInsuranceData.length) {
+                  // Robust match: case-insensitive and fallback by takenBy for Client/Agrogreen
+                  if (!selectedRowForSR?.selectedInsurance) {
                     return <div className="text-gray-500 text-sm">No insurance data found in inspection</div>;
                   }
-                  const match = inspectionInsuranceData.find(
-                    (insurance: any) =>
-                      insurance.insuranceId === selectedRowForSR.selectedInsurance.insuranceId &&
-                      insurance.insuranceTakenBy === selectedRowForSR.selectedInsurance.insuranceTakenBy
+                  const sel = selectedRowForSR.selectedInsurance;
+                  const entries = inspectionInsuranceData || [];
+                  if (!entries.length) {
+                    return <div className="text-gray-500 text-sm">No insurance data found in inspection</div>;
+                  }
+                  let match = entries.find((ins: any) =>
+                    (ins.insuranceId === sel.insuranceId || (ins.insuranceId||'').trim() === (sel.insuranceId||'').trim()) &&
+                    (ins.insuranceTakenBy||'').toLowerCase() === (sel.insuranceTakenBy||'').toLowerCase()
                   );
+                  if (!match) {
+                    match = entries.find((ins: any) => (ins.insuranceTakenBy||'').toLowerCase() === (sel.insuranceTakenBy||'').toLowerCase()) || null;
+                  }
                   if (!match) {
                     return <div className="text-gray-500 text-sm">No insurance data found in inspection</div>;
                   }
+                  // Normalize fields for safe display
+                  const norm = {
+                    insuranceTakenBy: match.insuranceTakenBy,
+                    insuranceCommodity: match.insuranceCommodity || match.commodityName || selectedRowForSR?.commodity || '',
+                    clientName: match.clientName || selectedRowForSR?.client || '',
+                    clientAddress: match.clientAddress || selectedRowForSR?.clientAddress || '',
+                    bankFundedBy: match.bankFundedBy || match.selectedBankName || selectedRowForSR?.bankFundedBy || selectedRowForSR?.bankName || '',
+                    firePolicyCompanyName: match.firePolicyCompanyName || '',
+                    firePolicyNumber: match.firePolicyNumber || '',
+                    firePolicyAmount: match.firePolicyAmount || match.firePolicyRemainingAmount || '',
+                    firePolicyEndDate: match.firePolicyEndDate || '',
+                    burglaryPolicyCompanyName: match.burglaryPolicyCompanyName || '',
+                    burglaryPolicyNumber: match.burglaryPolicyNumber || '',
+                    burglaryPolicyAmount: match.burglaryPolicyAmount || match.burglaryPolicyRemainingAmount || '',
+                    burglaryPolicyEndDate: match.burglaryPolicyEndDate || ''
+                  };
                   return (
                     <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
                       {/* <h6 className="font-medium text-blue-600 mb-2">Insurance Entry</h6> */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <Label className="text-sm font-medium">Insurance Taken By</Label>
-                          <Input value={match.insuranceTakenBy || ''} readOnly className="text-sm" />
+                          <Input value={norm.insuranceTakenBy || ''} readOnly className="text-sm" />
                         </div>
                         <div>
                           <Label className="text-sm font-medium">Commodity</Label>
-                          <Input value={match.insuranceCommodity || ''} readOnly className="text-sm" />
+                          <Input value={norm.insuranceCommodity || ''} readOnly className="text-sm" />
                         </div>
-                        {match.insuranceTakenBy === 'client' && (
+                        {(norm.insuranceTakenBy||'').toLowerCase() === 'client' && (
                           <>
                             <div>
                               <Label className="text-sm font-medium">Client Name</Label>
-                              <Input value={match.clientName || ''} readOnly className="text-sm" />
+                              <Input value={norm.clientName || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Client Address</Label>
-                              <Input value={match.clientAddress || ''} readOnly className="text-sm" />
+                              <Input value={norm.clientAddress || ''} readOnly className="text-sm" />
                             </div>
                           </>
                         )}
-                        {(match.insuranceTakenBy === 'bank' || match.insuranceTakenBy === 'bank-funded') && (
+                        {((norm.insuranceTakenBy||'').toLowerCase() === 'bank' || (norm.insuranceTakenBy||'').toLowerCase() === 'bank-funded') && (
                           <div>
                             <Label className="text-sm font-medium">Bank Name</Label>
-                            <Input value={match.bankFundedBy || selectedRowForSR?.bankFundedBy || selectedRowForSR?.bankName || match.selectedBankName || ''} readOnly className="text-sm" />
+                            <Input value={norm.bankFundedBy} readOnly className="text-sm" />
                           </div>
                         )}
-                        {match.insuranceTakenBy && match.insuranceTakenBy !== 'bank' && match.insuranceTakenBy !== 'bank-funded' && (
+                        {norm.insuranceTakenBy && (norm.insuranceTakenBy||'').toLowerCase() !== 'bank' && (norm.insuranceTakenBy||'').toLowerCase() !== 'bank-funded' && (
                           <>
                             <div>
                               <Label className="text-sm font-medium">Fire Policy Company</Label>
-                              <Input value={match.firePolicyCompanyName || ''} readOnly className="text-sm" />
+                              <Input value={norm.firePolicyCompanyName || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Fire Policy Number</Label>
-                              <Input value={match.firePolicyNumber || ''} readOnly className="text-sm" />
+                              <Input value={norm.firePolicyNumber || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Fire Policy Amount</Label>
-                              <Input value={match.firePolicyAmount ? `₹${match.firePolicyAmount}` : ''} readOnly className="text-sm" />
+                              <Input value={norm.firePolicyAmount ? `₹${norm.firePolicyAmount}` : ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Fire Policy End Date</Label>
-                              <Input value={normalizeDate(match.firePolicyEndDate)} readOnly className="text-sm" />
+                              <Input value={normalizeDate(norm.firePolicyEndDate)} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Burglary Policy Company</Label>
-                              <Input value={match.burglaryPolicyCompanyName || ''} readOnly className="text-sm" />
+                              <Input value={norm.burglaryPolicyCompanyName || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Burglary Policy Number</Label>
-                              <Input value={match.burglaryPolicyNumber || ''} readOnly className="text-sm" />
+                              <Input value={norm.burglaryPolicyNumber || ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Burglary Policy Amount</Label>
-                              <Input value={match.burglaryPolicyAmount ? `₹${match.burglaryPolicyAmount}` : ''} readOnly className="text-sm" />
+                              <Input value={norm.burglaryPolicyAmount ? `₹${norm.burglaryPolicyAmount}` : ''} readOnly className="text-sm" />
                             </div>
                             <div>
                               <Label className="text-sm font-medium">Burglary Policy End Date</Label>
-                              <Input value={normalizeDate(match.burglaryPolicyEndDate)} readOnly className="text-sm" />
+                              <Input value={normalizeDate(norm.burglaryPolicyEndDate)} readOnly className="text-sm" />
                             </div>
                           </>
                         )}
@@ -10059,15 +10171,21 @@ export default function InwardPage() {
                         marketRate: selectedRowForSR?.marketRate || '',
                         valueOfCommodity: selectedRowForSR?.totalValue || '',
                         hologramNumber: selectedRowForSR?.hologramNumber || hologramNumber || '',
-                        insuranceDetails: [
-                          {
-                            policyNo: inspectionInsuranceData[0]?.firePolicyNumber || '-',
-                            company: inspectionInsuranceData[0]?.firePolicyCompanyName || '-',
-                            validFrom: inspectionInsuranceData[0]?.firePolicyStartDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyStartDate) : '-',
-                            validTo: inspectionInsuranceData[0]?.firePolicyEndDate ? normalizeDate(inspectionInsuranceData[0]?.firePolicyEndDate) : '-',
-                            sumInsured: inspectionInsuranceData[0]?.firePolicyAmount || '-',
-                          },
-                        ],
+                        insuranceDetails: (() => {
+                          const candidates = (inspectionInsuranceData || []).filter((ins: any) => {
+                            const t = (ins.insuranceTakenBy || '').toLowerCase();
+                            return ['client','agrogreen','bank','bank-funded'].includes(t);
+                          });
+                          const list = candidates.length ? candidates : (inspectionInsuranceData[0] ? [inspectionInsuranceData[0]] : []);
+                          return list.map((matched: any) => ({
+                            policyNo: matched?.firePolicyNumber || '-',
+                            company: matched?.firePolicyCompanyName || '-',
+                            validFrom: matched?.firePolicyStartDate ? normalizeDate(matched.firePolicyStartDate) : '-',
+                            validTo: matched?.firePolicyEndDate ? normalizeDate(matched.firePolicyEndDate) : '-',
+                            sumInsured: matched?.firePolicyAmount || '-',
+                            insuranceTakenBy: matched?.insuranceTakenBy || ''
+                          }));
+                        })(),
                         bankName: selectedRowForSR?.bankName || selectedRowForSR?.bankFundedBy || '',
                         bankFundedBy: selectedRowForSR?.bankFundedBy || '',
                         date: selectedRowForSR?.dateOfInward || '',

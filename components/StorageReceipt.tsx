@@ -6,6 +6,7 @@ interface InsuranceDetail {
   validFrom: string;
   validTo: string;
   sumInsured: string;
+  insuranceTakenBy?: string; // Added to distinguish source (Client / Agrogreen / Bank)
 }
 
 interface StorageReceiptProps {
@@ -56,7 +57,8 @@ const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
   const srNo = data.srNo || data.inwardId || '-';
   const cadNo = data.cadNo || data.cadNumber || '-';
   const srGenerationDate = data.srGenerationDate || '-';
-  const insurance = (Array.isArray(data.insuranceDetails) && data.insuranceDetails[0]) ? data.insuranceDetails[0] : null;
+  const insuranceList: InsuranceDetail[] = Array.isArray(data.insuranceDetails) ? data.insuranceDetails : [];
+  const insurance = insuranceList[0] || null; // fallback for legacy single display
   const receiptType = (data.receiptType || 'SR').toUpperCase();
   const isWR = receiptType === 'WR';
 
@@ -169,19 +171,49 @@ const StorageReceipt: React.FC<StorageReceiptProps> = ({ data }) => {
           </tr>
         </tbody>
       </table>
-      {/* Insurance block (defensive) */}
+      {/* Insurance block (multi-source support) */}
       <div style={{ marginTop: 8, marginBottom: 8 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: borderColor, marginBottom: 6 }}>Insurance Details</div>
-        {insurance ? (
-          <div style={{ display: 'flex', gap: 24 }}>
+        {insuranceList.length === 0 && (
+          <div style={{ ...valueStyle }}>No insurance details available.</div>
+        )}
+        {insuranceList.length === 1 && insurance && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
+            {insurance.insuranceTakenBy && (
+              <div style={{ ...valueStyle }}>Taken By: {insurance.insuranceTakenBy}</div>
+            )}
             <div style={{ ...valueStyle }}>Policy No: {insurance.policyNo || '-'}</div>
             <div style={{ ...valueStyle }}>Company: {insurance.company || '-'}</div>
             <div style={{ ...valueStyle }}>Valid From: {insurance.validFrom || '-'}</div>
             <div style={{ ...valueStyle }}>Valid To: {insurance.validTo || '-'}</div>
             <div style={{ ...valueStyle }}>Sum Insured: {insurance.sumInsured || '-'}</div>
           </div>
-        ) : (
-          <div style={{ ...valueStyle }}>No insurance details available.</div>
+        )}
+        {insuranceList.length > 1 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4 }}>
+            <thead>
+              <tr>
+                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: 8 }}>Taken By</th>
+                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: 8 }}>Policy No</th>
+                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: 8 }}>Company</th>
+                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: 8 }}>Valid From</th>
+                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: 8 }}>Valid To</th>
+                <th style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: 8 }}>Sum Insured</th>
+              </tr>
+            </thead>
+            <tbody>
+              {insuranceList.map((ins, idx) => (
+                <tr key={idx}>
+                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: 8 }}>{ins.insuranceTakenBy || '-'}</td>
+                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: 8 }}>{ins.policyNo || '-'}</td>
+                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: 8 }}>{ins.company || '-'}</td>
+                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: 8 }}>{ins.validFrom || '-'}</td>
+                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: 8 }}>{ins.validTo || '-'}</td>
+                  <td style={{ ...valueStyle, border: `2px solid ${borderColor}`, padding: 8 }}>{ins.sumInsured || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
       {/* Footer Section - matches uploaded image, with sticker/stamp box in bottom left */}

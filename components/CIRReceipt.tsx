@@ -303,16 +303,29 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
         </tbody>
       </table>
 
-      {/* Reservation & Billing Details - Only show if billingStatus exists */}
-      {data.billingStatus && data.billingStatus !== '-' && (
+      {/* Reservation & Billing Details - robust, case-insensitive */}
+      {(() => {
+        const billingStatusLower = (data.billingStatus || '').trim().toLowerCase();
+        return billingStatusLower && billingStatusLower !== '-';
+      })() && (
         <>
           <div style={{ fontSize: 15, fontWeight: 700, color: borderColor, marginBottom: 6, textAlign: 'center' }}>
-            {data.billingStatus === 'Reservation' ? 'RESERVATION DETAILS' : 'BILLING DETAILS'}
+            {(() => {
+              const bs = (data.billingStatus || '').trim().toLowerCase();
+              if (bs === 'reservation') return 'RESERVATION DETAILS';
+              if (bs.includes('post')) return 'BILLING DETAILS';
+              // Fallback: if explicit reservation fields present, treat as reservation
+              if (data.reservationRate || data.reservationQty) return 'RESERVATION DETAILS';
+              return 'BILLING DETAILS';
+            })()}
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
             <tbody>
-              {/* Show Reservation fields if billingStatus is "Reservation" */}
-              {data.billingStatus === 'Reservation' && (
+              {/* Reservation block (case-insensitive) */}
+              {(() => {
+                const bs = (data.billingStatus || '').trim().toLowerCase();
+                return bs === 'reservation';
+              })() && (
                 <>
                   <tr>
                     <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Reservation Rate (Rs/MT)</td>
@@ -328,9 +341,11 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
                   </tr>
                 </>
               )}
-              
-              {/* Show Billing fields if billingStatus is "Post Reservation" */}
-              {data.billingStatus === 'Post Reservation' && (
+              {/* Post-reservation billing (support multiple naming variants) */}
+              {(() => {
+                const bs = (data.billingStatus || '').trim().toLowerCase();
+                return bs.includes('post');
+              })() && (
                 <>
                   <tr>
                     <td style={{ ...labelStyle, border: `2px solid ${borderColor}`, background: headerBg, padding: cellPad }}>Billing Cycle</td>

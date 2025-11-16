@@ -4,6 +4,7 @@ export interface CloudinaryUploadResult {
   secure_url: string;
   original_filename: string;
   format: string;
+  resource_type?: string;
 }
 
 export const uploadToCloudinary = async (file: File): Promise<CloudinaryUploadResult> => {
@@ -21,8 +22,9 @@ export const uploadToCloudinary = async (file: File): Promise<CloudinaryUploadRe
   // Determine resource_type based on file type
   let resourceType = 'auto'; // Use 'auto' to let Cloudinary determine the type
   
-  // For PDF files, you might want to use 'raw' or specific handling
-  if (file.type === 'application/pdf') {
+  // For PDF files, use 'raw' delivery to ensure direct access
+  const nameLower = (file as any).name ? String((file as any).name).toLowerCase() : '';
+  if (file.type === 'application/pdf' || nameLower.endsWith('.pdf')) {
     resourceType = 'raw';
   }
 
