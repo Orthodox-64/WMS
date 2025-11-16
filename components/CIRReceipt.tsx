@@ -1,5 +1,28 @@
 import React from 'react';
 
+// Helper function to format dates to dd-mm-yyyy
+const formatDate = (dateString: string | undefined | null): string => {
+  if (!dateString || dateString === '-') return '-';
+  
+  // If already in dd-mm-yyyy format, return as is
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateString)) {
+    return dateString;
+  }
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString; // Invalid date, return original
+    
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return dateString; // Return original if parsing fails
+  }
+};
+
 interface CIRReceiptProps {
   data: {
     inwardId?: string;
@@ -90,7 +113,7 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
       <div style={{ marginBottom: '12px' }}>
         <div><strong>Inward ID:</strong> {data.inwardId || '-'}</div>
         <div><strong>CIR Status:</strong> {data.cirStatus || '-'}</div>
-        <div><strong>Date of Inward:</strong> {data.dateOfInward || '-'}</div>
+        <div><strong>Date of Inward:</strong> {formatDate(data.dateOfInward)}</div>
         <div><strong>CAD Number:</strong> {data.cadNumber || '-'}</div>
         <div><strong>Base Receipt:</strong> {data.bankReceipt || '-'}</div>
       </div>
@@ -177,35 +200,6 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
         </div>
       )}
 
-      {/* Lab Parameters */}
-      {data.labParameterNames && data.labParameterNames.length > 0 && (
-        <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>QUALITY PARAMETERS</div>
-          <div><strong>Sampling Date:</strong> {data.dateOfSampling || '-'}</div>
-          <div><strong>Testing Date:</strong> {data.dateOfTesting || '-'}</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', border: '1px solid #000' }}>
-            <thead>
-              <tr>
-                <th style={{ border: '1px solid #000', padding: '6px', textAlign: 'left', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>Parameter</th>
-                <th style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>Actual Value (%)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.labParameterNames.map((name: string, idx: number) => (
-                <tr key={idx}>
-                  <td style={{ border: '1px solid #000', padding: '6px' }}>{name}</td>
-                  <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center' }}>
-                    {typeof data.labResults?.[idx] === 'object' && data.labResults[idx]?.value 
-                      ? data.labResults[idx].value 
-                      : (data.labResults?.[idx] || '-')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
       {/* Bank Details */}
       <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
         <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>BANK DETAILS</div>
@@ -238,8 +232,8 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
             <>
               <div><strong>Reservation Rate (Rs/MT):</strong> {data.reservationRate || '-'}</div>
               <div><strong>Reservation Quantity (MT):</strong> {data.reservationQty || '-'}</div>
-              <div><strong>Reservation Start Date:</strong> {data.reservationStart || '-'}</div>
-              <div><strong>Reservation End Date:</strong> {data.reservationEnd || '-'}</div>
+              <div><strong>Reservation Start Date:</strong> {formatDate(data.reservationStart)}</div>
+              <div><strong>Reservation End Date:</strong> {formatDate(data.reservationEnd)}</div>
             </>
           )}
           {(() => {
@@ -260,10 +254,11 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
         <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>INSURANCE DETAILS</div>
           {data.insuranceEntries.map((insurance: any, index: number) => {
-            const insuranceTakenBy = (insurance.insuranceTakenBy || '').toLowerCase();
-            const isBankFunded = insuranceTakenBy === 'bank' || insuranceTakenBy === 'bank-funded';
+            const insuranceTakenBy = (insurance.insuranceTakenBy || '').toLowerCase().trim();
+            const isBankFunded = insuranceTakenBy === 'bank' || insuranceTakenBy === 'bank-funded' || insuranceTakenBy.includes('bank');
             
             if (isBankFunded) {
+              // For bank-funded insurance, show only 3 fields
               return (
                 <div key={index} style={{ marginBottom: '8px' }}>
                   <div><strong>Insurance Taken By:</strong> {insurance.insuranceTakenBy || '-'}</div>
@@ -273,6 +268,7 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
               );
             }
             
+            // For non-bank-funded insurance, show all fields
             return (
               <div key={index} style={{ marginBottom: '8px' }}>
                 <div><strong>Insurance ID:</strong> {insurance.insuranceId || '-'}</div>
@@ -287,10 +283,38 @@ const CIRReceipt: React.FC<CIRReceiptProps> = ({ data }) => {
         </div>
       )}
 
+      {/* Lab Parameters - Positioned at the end before footer */}
+      {data.labResults && Array.isArray(data.labResults) && data.labResults.length > 0 && (
+        <div style={{ marginBottom: '12px', borderTop: '1px solid #000', paddingTop: '8px', pageBreakInside: 'avoid' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>QUALITY PARAMETERS</div>
+          <div><strong>Sampling Date:</strong> {formatDate(data.dateOfSampling)}</div>
+          <div><strong>Testing Date:</strong> {formatDate(data.dateOfTesting)}</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', border: '1px solid #000', pageBreakInside: 'avoid' }}>
+            <thead>
+              <tr>
+                <th style={{ border: '1px solid #000', padding: '6px', textAlign: 'left', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>Parameter</th>
+                <th style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>Actual Value (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.labResults.map((result: any, idx: number) => (
+                <tr key={idx}>
+                  <td style={{ border: '1px solid #000', padding: '6px' }}>
+                    {result.parameterName || result.parameter || '-'}
+                  </td>
+                  <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center' }}>
+                    {result.value || '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{ marginTop: '15px', borderTop: '1px solid #000', paddingTop: '8px' }}>
-        <div><strong>Place:</strong> {data.place || 'Indore'}</div>
-        <div><strong>Date:</strong> {data.date || new Date().toLocaleDateString('en-IN')}</div>
+        
       </div>
     </div>
   );
