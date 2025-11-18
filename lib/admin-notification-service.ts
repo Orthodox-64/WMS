@@ -131,7 +131,7 @@ export const adminNotificationService = {
               user: 'agrogreensoftware@gmail.com',
               pass: 'lsln qkyd qvml whgk'
             },
-            from: 'WMS System <noreply@wms.com>'
+            from: 'Agrogreen Software <agrogreensoftware@gmail.com>'
           }
         })
       });

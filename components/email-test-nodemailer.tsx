@@ -182,7 +182,7 @@ export function EmailTestNodemailer() {
           <p>Host: smtp.gmail.com</p>
           <p>Port: 587</p>
           <p>User: agrogreensoftware@gmail.com</p>
-          <p>From: QuickCourt &lt;noreply@quickcourt.com&gt;</p>
+          <p>From: Agrogreen Software &lt;agrogreensoftware@gmail.com&gt;</p>
         </div>
       </CardContent>
     </Card>
