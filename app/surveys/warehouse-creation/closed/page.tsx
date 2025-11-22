@@ -358,7 +358,7 @@ export default function ClosedWarehousePage() {
             </h1>
           </div>
           
-          {/* Export Button */>
+          {/* Export Button */}
           <div className="w-full sm:w-auto">
             {(hasActiveFilters ? filteredInspections.length > 0 : inspections.length > 0) && (
               <Button 
