@@ -1101,80 +1101,76 @@ export default function InspectionCreationPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Header with Back Button and Centered Title */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        {/* Header with Back Button and Add Inspection Button */}
+        <div className="flex items-center justify-between gap-4">
+          <button 
+            onClick={() => router.back()}
+            className="text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors whitespace-nowrap"
+          >
+            ← Dashboard
+          </button>
+          
+          {/* Add New Inspection Button - Only for Maker and Admin */}
+          {(userRole === 'maker' || userRole === 'admin') && (
             <button 
-              onClick={() => router.back()}
-              className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
-            >
-              ← Dashboard
-            </button>
-          </div>
-          
-          {/* Centered Title with Light Orange Background */}
-          <div className="flex-1 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
-              Inspection Creation
-            </h1>
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex space-x-2">
-            <Dialog open={showAddModal} onOpenChange={(open) => {
-              setShowAddModal(open);
-              if (!open) {
-                // Reset editing state when modal closes
+              onClick={() => {
+                setShowAddModal(true);
                 setIsEditing(false);
                 setEditingInspectionId(null);
-                setFormData({
-                  state: '',
-                  branch: '',
-                  location: '',
-                  businessType: '',
-                  warehouseStatus: '',
-                  warehouseName: '',
-                  existingWarehouse: '',
-                  bankState: '',
-                  bank: '', // Combined bank field
-                  bankBranch: '', // Hidden field for storage
-                  bankName: '', // Hidden field for storage
-                  ifscCode: '',
-                  receiptType: ''
-                });
-              }
-            }}>
-              {/* Add New Inspection Button - Only for Maker and Admin */}
-              {(userRole === 'maker' || userRole === 'admin') && (
-                <DialogTrigger asChild>
-                  <Button 
-                    className="bg-green-500 hover:bg-green-600 text-white"
-                    onClick={() => {
-                      // Reset editing state when opening for new inspection
-                      setIsEditing(false);
-                      setEditingInspectionId(null);
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add New Inspection
-                  </Button>
-                </DialogTrigger>
-              )}
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center">
-                    <ClipboardCheck className="mr-2 h-5 w-5" />
-                    {isEditing ? 'Edit Inspection Survey' : 'New Inspection Survey'}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {isEditing ? 'Update the inspection details below.' : 'Fill out the details below to create a new inspection survey.'}
-                  </DialogDescription>
-                </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-6">
+              }}
+              className="text-lg font-semibold tracking-tight bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors whitespace-nowrap"
+            >
+              + Add Inspection
+            </button>
+          )}
+        </div>
+
+        {/* Centered Title with Light Orange Background */}
+        <div className="flex justify-center">
+          <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+            Inspection Creation
+          </h1>
+        </div>
+
+        {/* Add/Edit Inspection Dialog */}
+        <Dialog open={showAddModal} onOpenChange={(open) => {
+          setShowAddModal(open);
+          if (!open) {
+            // Reset editing state when modal closes
+            setIsEditing(false);
+            setEditingInspectionId(null);
+            setFormData({
+              state: '',
+              branch: '',
+              location: '',
+              businessType: '',
+              warehouseStatus: '',
+              warehouseName: '',
+              existingWarehouse: '',
+              bankState: '',
+              bank: '',
+              bankBranch: '',
+              bankName: '',
+              ifscCode: '',
+              receiptType: ''
+            });
+          }
+        }}>
+          <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center text-base sm:text-lg">
+                <ClipboardCheck className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                {isEditing ? 'Edit Inspection Survey' : 'New Inspection Survey'}
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm">
+                {isEditing ? 'Update the inspection details below.' : 'Fill out the details below to create a new inspection survey.'}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
               {/* Location Section */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Location Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <h3 className="text-base sm:text-lg font-medium border-b pb-2">Location Details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="state">State <span className="text-red-500">*</span></Label>
                     <Select value={formData.state} onValueChange={(value) => setFormData(prev => ({ ...prev, state: value }))} required>
@@ -1221,8 +1217,8 @@ export default function InspectionCreationPage() {
 
               {/* Business Details */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Business Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-base sm:text-lg font-medium border-b pb-2">Business Details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="businessType">Type of Business <span className="text-red-500">*</span></Label>
                     <Select value={formData.businessType} onValueChange={(value) => setFormData(prev => ({ ...prev, businessType: value }))} required>
@@ -1283,8 +1279,8 @@ export default function InspectionCreationPage() {
 
               {/* Bank Section */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Bank Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-base sm:text-lg font-medium border-b pb-2">Bank Details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="bankState">Bank State {formData.businessType === 'cm' && <span className="text-red-500">*</span>}</Label>
                     <Select value={formData.bankState} onValueChange={(value) => setFormData(prev => ({ ...prev, bankState: value }))} required={formData.businessType === 'cm'}>
@@ -1328,7 +1324,7 @@ export default function InspectionCreationPage() {
 
               {/* Receipt Type */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Receipt Details</h3>
+                <h3 className="text-base sm:text-lg font-medium border-b pb-2">Receipt Details</h3>
                 <div className="space-y-2">
                   <Label htmlFor="receiptType">Receipt Type <span className="text-red-500">*</span></Label>
                   <Select value={formData.receiptType} onValueChange={(value) => setFormData(prev => ({ ...prev, receiptType: value }))} required>
@@ -1347,19 +1343,17 @@ export default function InspectionCreationPage() {
                   {isEditing ? 'Update Inspection' : 'Create Inspection'}
                 </Button>
               </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
+            </DialogContent>
+          </Dialog>
 
         {/* Search Bar */}
         {inspections.length > 0 && (
           <Card className="border-green-300">
-            <CardHeader className="bg-green-50">
-              <CardTitle className="text-green-700">Search & Filter</CardTitle>
+            <CardHeader className="bg-green-50 p-4">
+              <CardTitle className="text-base sm:text-lg text-green-700">Search & Filter</CardTitle>
             </CardHeader>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-4">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
                 <div className="relative flex-grow">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input
@@ -1371,7 +1365,7 @@ export default function InspectionCreationPage() {
                 </div>
                 <Button 
                   onClick={exportToCSV}
-                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                  className="bg-blue-500 hover:bg-blue-600 text-white w-full sm:w-auto text-sm"
                 >
                   <Download className="mr-2 h-4 w-4" />
                   Export CSV
@@ -1381,7 +1375,7 @@ export default function InspectionCreationPage() {
                     onClick={() => setSearchTerm('')}
                     variant="outline"
                     size="sm"
-                    className="border-gray-300 text-gray-600 hover:bg-gray-50"
+                    className="border-gray-300 text-gray-600 hover:bg-gray-50 w-full sm:w-auto"
                   >
                     Clear
                   </Button>
@@ -1389,7 +1383,7 @@ export default function InspectionCreationPage() {
               </div>
               
               {/* Entry Count */}
-              <div className="mt-3 text-sm text-green-600">
+              <div className="mt-3 text-xs sm:text-sm text-green-600">
                 {searchTerm ? (
                   <>
                     <span className="font-medium">
@@ -1409,19 +1403,19 @@ export default function InspectionCreationPage() {
         {/* Inspections Table */}
         {inspections.length > 0 && (
           <Card className="border-green-300">
-            <CardHeader className="bg-green-50">
-              <CardTitle className="text-green-700">Created Inspections</CardTitle>
-              <CardDescription className="text-green-600">
+            <CardHeader className="bg-green-50 p-4">
+              <CardTitle className="text-base sm:text-lg text-green-700">Created Inspections</CardTitle>
+              <CardDescription className="text-xs sm:text-sm text-green-600">
                 All created inspection surveys with their details and actions. Sorted by inspection code in ascending order.
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               <DataTable
                 columns={inspectionColumns}
                 data={filteredAndSortedInspections}
-                wrapperClassName="border-green-300"
-                headClassName="bg-orange-100 text-orange-600 font-bold text-center"
-                cellClassName="text-green-800 text-center"
+                wrapperClassName="border-green-300 min-w-full"
+                headClassName="bg-orange-100 text-orange-600 font-bold text-center text-xs sm:text-sm"
+                cellClassName="text-green-800 text-center text-xs sm:text-sm"
                 stickyHeader={true}
                 stickyFirstColumn={true}
                 showGridLines={true}
@@ -1432,9 +1426,9 @@ export default function InspectionCreationPage() {
 
         {/* Add Bank Dialog */}
         <Dialog open={showAddBankModal} onOpenChange={setShowAddBankModal}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center">
+              <DialogTitle className="flex items-center text-base sm:text-lg">
                 <Plus className="mr-2 h-5 w-5 text-blue-600" />
                 Add Bank to Warehouse: {selectedInspectionForBank?.warehouseCode}
               </DialogTitle>
@@ -1445,8 +1439,8 @@ export default function InspectionCreationPage() {
             
             <form onSubmit={handleBankSubmit} className="space-y-6">
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Bank Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-base sm:text-lg font-medium border-b pb-2">Bank Details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="bankState">Bank State <span className="text-red-500">*</span></Label>
                     <Select 
@@ -1497,15 +1491,16 @@ export default function InspectionCreationPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:space-x-2">
                 <Button 
                   type="button" 
                   variant="outline" 
                   onClick={() => setShowAddBankModal(false)}
+                  className="w-full sm:w-auto"
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-500 hover:bg-blue-600">
+                <Button type="submit" className="bg-blue-500 hover:bg-blue-600 w-full sm:w-auto">
                   Add Bank
                 </Button>
               </div>
@@ -1515,9 +1510,9 @@ export default function InspectionCreationPage() {
 
         {/* Warehouse Inspection Details Modal */}
         <Dialog open={showWarehouseInspectionModal} onOpenChange={setShowWarehouseInspectionModal}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center">
+              <DialogTitle className="flex items-center text-base sm:text-lg">
                 <Eye className="mr-2 h-5 w-5 text-green-600" />
                 Warehouse Inspection Details: {selectedWarehouseInspection?.warehouseCode}
               </DialogTitle>
@@ -1549,11 +1544,11 @@ export default function InspectionCreationPage() {
 
                 {/* Basic Information */}
                 <Card className="border-green-300">
-                  <CardHeader className="bg-green-50">
-                    <CardTitle className="text-green-700">Basic Information</CardTitle>
+                  <CardHeader className="bg-green-50 p-3 sm:p-4">
+                    <CardTitle className="text-sm sm:text-base text-green-700">Basic Information</CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <Label className="font-medium">Warehouse Name:</Label>
                         <p className="text-gray-700">{selectedWarehouseInspection.warehouseName}</p>
@@ -1582,10 +1577,10 @@ export default function InspectionCreationPage() {
                 {/* Address */}
                 {selectedWarehouseInspection.address && (
                   <Card className="border-green-300">
-                    <CardHeader className="bg-green-50">
-                      <CardTitle className="text-green-700">Address</CardTitle>
+                    <CardHeader className="bg-green-50 p-3 sm:p-4">
+                      <CardTitle className="text-sm sm:text-base text-green-700">Address</CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4">
+                    <CardContent className="p-3 sm:p-4">
                       <p className="text-gray-700">{selectedWarehouseInspection.address}</p>
                     </CardContent>
                   </Card>
@@ -1593,11 +1588,11 @@ export default function InspectionCreationPage() {
 
                 {/* Bank Details */}
                 <Card className="border-green-300">
-                  <CardHeader className="bg-green-50">
-                    <CardTitle className="text-green-700">Bank Details</CardTitle>
+                  <CardHeader className="bg-green-50 p-3 sm:p-4">
+                    <CardTitle className="text-sm sm:text-base text-green-700">Bank Details</CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <Label className="font-medium">Bank State:</Label>
                         <p className="text-gray-700">{selectedWarehouseInspection.bankState}</p>
@@ -1620,11 +1615,11 @@ export default function InspectionCreationPage() {
 
                 {/* Warehouse Dimensions */}
                 <Card className="border-green-300">
-                  <CardHeader className="bg-green-50">
-                    <CardTitle className="text-green-700">Warehouse Dimensions</CardTitle>
+                  <CardHeader className="bg-green-50 p-3 sm:p-4">
+                    <CardTitle className="text-sm sm:text-base text-green-700">Warehouse Dimensions</CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                       <div>
                         <Label className="font-medium">Length (sq ft):</Label>
                         <p className="text-gray-700">{selectedWarehouseInspection.warehouseLength}</p>
@@ -1657,11 +1652,11 @@ export default function InspectionCreationPage() {
 
                 {/* OE Details */}
                 <Card className="border-green-300">
-                  <CardHeader className="bg-green-50">
-                    <CardTitle className="text-green-700">Operational Executive Details</CardTitle>
+                  <CardHeader className="bg-green-50 p-3 sm:p-4">
+                    <CardTitle className="text-sm sm:text-base text-green-700">Operational Executive Details</CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <Label className="font-medium">Name of Operational Executive:</Label>
                         <p className="text-gray-700">{selectedWarehouseInspection.nameOfOE}</p>

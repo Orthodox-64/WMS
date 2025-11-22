@@ -661,13 +661,13 @@ export default function ReactivateWarehousePage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-4 sm:space-y-8">
         {/* Header with Dashboard Button and Centered Title */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center space-x-4 w-full sm:w-auto">
             <button 
               onClick={() => router.push('/surveys/warehouse-creation')}
-              className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+              className="inline-flex items-center text-base sm:text-lg font-semibold whitespace-nowrap tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
             >
               <ArrowLeft className="w-5 h-5 mr-2" />
               Warehouse Creation
@@ -675,18 +675,18 @@ export default function ReactivateWarehousePage() {
           </div>
           
           {/* Centered Title with Light Orange Background */}
-          <div className="flex-1 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+          <div className="flex-1 text-center w-full sm:w-auto">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-2 sm:py-3 bg-orange-100 rounded-lg">
               Reactivate Warehouses ({inspections.length})
             </h1>
           </div>
           
-          {/* Export Button */}
-          <div className="flex space-x-2">
+          {/* Export Button */>
+          <div className="w-full sm:w-auto">
             {filteredAndSortedInspections.length > 0 && (
               <Button 
                 onClick={exportToCSV}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
+                className="bg-blue-500 hover:bg-blue-600 text-white w-full sm:w-auto text-sm whitespace-nowrap"
               >
                 <Download className="mr-2 h-4 w-4" />
                 Export CSV
@@ -697,12 +697,12 @@ export default function ReactivateWarehousePage() {
 
         {/* Search and Filter Section */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Search & Filter</CardTitle>
+          <CardHeader className="bg-green-50 p-4">
+            <CardTitle className="text-base sm:text-lg text-green-700">Search & Filter</CardTitle>
           </CardHeader>
-          <CardContent className="p-4 space-y-4">
+          <CardContent className="p-3 sm:p-4 space-y-4">
             {/* Search Bar */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
               <div className="relative flex-grow">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <Input
@@ -837,13 +837,13 @@ export default function ReactivateWarehousePage() {
                 All reactivate warehouse inspection surveys with validation checks sorted by inspection code in ascending order.
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               <DataTable
                 columns={reactivateColumns}
                 data={filteredAndSortedInspections}
                 wrapperClassName="border-green-300"
-                headClassName="bg-orange-100 text-orange-600 font-bold text-center"
-                cellClassName="text-green-800 text-center"
+                headClassName="bg-orange-100 text-orange-600 font-bold text-center text-xs sm:text-sm"
+                cellClassName="text-green-800 text-center text-xs sm:text-sm"
                 stickyHeader={true}
                 stickyFirstColumn={true}
                 showGridLines={true}

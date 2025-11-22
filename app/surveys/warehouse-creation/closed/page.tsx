@@ -351,15 +351,15 @@ export default function ClosedWarehousePage() {
           </div>
           
           {/* Centered Title with Light Orange Background */}
-          <div className="flex-1 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+          <div className="flex-1 text-center w-full sm:w-auto">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-2 sm:py-3 bg-orange-100 rounded-lg">
               <Archive className="inline mr-2 h-8 w-8 text-gray-500" />
               Closed Warehouses
             </h1>
           </div>
           
-          {/* Export Button */}
-          <div className="flex space-x-2">
+          {/* Export Button */>
+          <div className="w-full sm:w-auto">
             {(hasActiveFilters ? filteredInspections.length > 0 : inspections.length > 0) && (
               <Button 
                 onClick={exportToCSV}
@@ -564,7 +564,7 @@ export default function ClosedWarehousePage() {
                 All closed warehouse inspection surveys with their details and actions.
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               <div 
                 className="overflow-x-auto relative"
                 style={{

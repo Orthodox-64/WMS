@@ -160,21 +160,21 @@ export default function WarehouseCreationPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-4 sm:space-y-8">
         {/* Header with Back Button and Centered Title */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center space-x-4 w-full sm:w-auto">
             <button 
               onClick={() => router.push('/surveys')}
-              className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+              className="inline-block text-base sm:text-lg font-semibold tracking-tight bg-orange-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md hover:bg-orange-600 transition-colors whitespace-nowrap"
             >
               ← Dashboard
             </button>
           </div>
           
           {/* Centered Title with Light Orange Background */}
-          <div className="flex-1 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+          <div className="flex-1 text-center w-full sm:w-auto">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-2 sm:py-3 bg-orange-100 rounded-lg">
               Warehouse Creation
             </h1>
             {userRole === 'checker' && (
@@ -195,7 +195,7 @@ export default function WarehouseCreationPage() {
         </div>
         
         {/* Warehouse Status Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {getAccessibleTabs().map((module) => {
             const Icon = module.icon;
             return (
@@ -206,21 +206,21 @@ export default function WarehouseCreationPage() {
                 }`}
                 onClick={() => handleCardClick(module.id)}
               >
-                <CardContent className="p-6 flex flex-col items-center justify-center space-y-4 text-center h-full">
-                  <div className="p-3 rounded-lg bg-white shadow-sm">
-                    <Icon className={`w-8 h-8 ${module.color}`} />
+                <CardContent className="p-4 sm:p-6 flex flex-col items-center justify-center space-y-3 sm:space-y-4 text-center h-full">
+                  <div className="p-2 sm:p-3 rounded-lg bg-white shadow-sm">
+                    <Icon className={`w-6 h-6 sm:w-8 sm:h-8 ${module.color}`} />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-300 pb-1">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 border-b border-gray-300 pb-1">
                       {module.title}
                       {getSurveyTabMode(module.id) === 'view' && (
                         <span className="ml-2 text-xs text-gray-500 font-normal">(Read Only)</span>
                       )}
                     </h3>
-                    <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${module.color} ${module.bgColor} border ${module.borderColor}`}>
+                    <div className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${module.color} ${module.bgColor} border ${module.borderColor}`}>
                       {module.count} Warehouses
                     </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                       {module.description}
                     </p>
                   </div>
@@ -232,7 +232,7 @@ export default function WarehouseCreationPage() {
 
         {/* Role-specific guidance */}
         {userRole === 'checker' && (
-          <div className="mt-8 p-6 bg-green-50 rounded-lg border border-green-200">
+          <div className="mt-4 sm:mt-8 p-4 sm:p-6 bg-green-50 rounded-lg border border-green-200">
             <div className="flex items-start space-x-3">
               <div className="flex-shrink-0">
                 <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -252,7 +252,7 @@ export default function WarehouseCreationPage() {
         )}
         
         {/* Additional Info Section */}
-        <div className="mt-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="mt-4 sm:mt-8 p-4 sm:p-6 bg-blue-50 rounded-lg border border-blue-200">
           <div className="flex items-start space-x-3">
             <div className="flex-shrink-0">
               <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">

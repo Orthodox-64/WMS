@@ -3081,40 +3081,40 @@ export default function WarehouseInspectionForm({
   };
 
   return (
-    <div className="min-h-screen bg-white p-6">
+    <div className="min-h-screen bg-white p-3 sm:p-6">
       {/* Company Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-4 sm:mb-8">
         <div className="flex justify-center mb-4">
           <Image
             src="/logo 3.jpeg"
             alt="Company Logo"
             width={100}
             height={100}
-            className="rounded-full w-25 h-25 max-w-[100px] max-h-[100px] object-cover"
-            style={{ width: '100px', height: '100px' }}
+            className="rounded-full w-20 h-20 sm:w-25 sm:h-25 max-w-[80px] sm:max-w-[100px] max-h-[80px] sm:max-h-[100px] object-cover"
+            style={{ width: '80px', height: '80px' }}
           />
         </div>
-        <h1 className="text-3xl font-bold text-orange-600">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600">
           AGROGREEN WAREHOUSING PRIVATE LTD.
         </h1>
-        <p className="text-lg text-green-600 font-medium">
+        <p className="text-sm sm:text-base md:text-lg text-green-600 font-medium px-2">
           603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
         </p>
-        <h2 className="text-xl font-semibold text-orange-600 mt-6" style={{ textDecoration: 'underline', textDecorationColor: '#16a34a' }}>
+        <h2 className="text-lg sm:text-xl font-semibold text-orange-600 mt-4 sm:mt-6" style={{ textDecoration: 'underline', textDecorationColor: '#16a34a' }}>
           WAREHOUSE INSPECTION REPORT
         </h2>
         
         {/* Status and Role Indicators */}
-        <div className="mt-4 flex flex-wrap gap-2 justify-center">
+        <div className="mt-3 sm:mt-4 flex flex-wrap gap-2 justify-center px-2">
           {formData.status !== 'pending' && (
-            <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+            <div className="inline-flex items-center px-3 py-1 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium bg-blue-100 text-blue-800">
               Status: {formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
               {isReadOnly && <span className="ml-2 text-xs">(View Only)</span>}
             </div>
           )}
           
           {/* Role-based permission indicator */}
-          <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+          <div className={`inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${
             userRole === 'admin' ? 'bg-red-100 text-red-800' :
             userRole === 'checker' ? 'bg-green-100 text-green-800' :
             'bg-yellow-100 text-yellow-800'
@@ -3126,7 +3126,7 @@ export default function WarehouseInspectionForm({
           
           {/* Insurance function access indicator */}
           {canAccessInsuranceFunction(formData.status || '') && (
-            <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+            <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium bg-purple-100 text-purple-800">
               🛡️ Insurance Functions Available
             </div>
           )}
@@ -3198,7 +3198,7 @@ export default function WarehouseInspectionForm({
           color: #ea580c !important;
         }
       `}</style>
-      <form onSubmit={handleSubmit} className={`space-y-8 max-w-6xl mx-auto ${isFormReadOnly ? 'form-read-only' : ''}`}>
+      <form onSubmit={handleSubmit} className={`space-y-4 sm:space-y-8 max-w-6xl mx-auto ${isFormReadOnly ? 'form-read-only' : ''}`}>
         {/* Global read-only styles for non-pending status */}
         <style>{`
           ${isFormReadOnly ? `
@@ -3227,8 +3227,8 @@ export default function WarehouseInspectionForm({
             sectionName="warehouseDetails" 
           />
           {!collapsedSections.warehouseDetails && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="warehouseName">Warehouse Name <span className="text-red-500">*</span></Label>
                 
@@ -3343,7 +3343,7 @@ export default function WarehouseInspectionForm({
 
 
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="typeOfWarehouse">Type of Warehouse <span className="text-red-500">*</span></Label>
                 <Select 
@@ -3390,7 +3390,7 @@ export default function WarehouseInspectionForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="license">License <span className="text-red-500">*</span></Label>
                 <Select 
@@ -3460,7 +3460,7 @@ export default function WarehouseInspectionForm({
             sectionName="bankDetails" 
           />
           {!collapsedSections.bankDetails && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
                 {/* Bank Details Form - Show selected bank details */}
                 <div className="mb-6 p-4 border border-green-200 rounded-lg bg-green-50">
                   <Label className="text-sm font-medium text-green-700 mb-3 block">
@@ -3471,7 +3471,7 @@ export default function WarehouseInspectionForm({
                       </span>
                     )}
                   </Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="bankState">Bank State <span className="text-red-500">*</span></Label>
                       <Input
@@ -3531,8 +3531,8 @@ export default function WarehouseInspectionForm({
             sectionName="ownershipDetails" 
           />
           {!collapsedSections.ownershipDetails && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="godownOwnership">Godown Ownership <span className="text-red-500">*</span></Label>
                 <Select 
@@ -3564,7 +3564,7 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="godownOwnerName">Godown Owner Name <span className="text-red-500">*</span></Label>
                 <Input
@@ -3594,7 +3594,7 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="warehouseLength">Warehouse Length (sq ft) <span className="text-red-500">*</span></Label>
                 <Input
@@ -3635,7 +3635,7 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="divisionFactor">Division Factor <span className="text-red-500">*</span></Label>
                 <Input
@@ -3674,7 +3674,7 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Label htmlFor="totalChambers">Total Number of Chambers <span className="text-red-500">*</span></Label>
@@ -3744,7 +3744,7 @@ export default function WarehouseInspectionForm({
                       </div>
                     </CardHeader>
                     <CardContent className="p-4">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4">
                         <div className="space-y-2">
                           <Label>Length (sq ft) <span className="text-red-500">*</span></Label>
                           <Input
@@ -3779,7 +3779,7 @@ export default function WarehouseInspectionForm({
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div className="space-y-2">
                           <Label>Division Factor <span className="text-red-500">*</span></Label>
                           <Input
@@ -3817,8 +3817,8 @@ export default function WarehouseInspectionForm({
             sectionName="physicalCondition" 
           />
           {!collapsedSections.physicalCondition && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="flooring">Flooring <span className="text-red-500">*</span></Label>
                 <Select 
@@ -3878,7 +3878,7 @@ export default function WarehouseInspectionForm({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="walls">Walls <span className="text-red-500">*</span></Label>
                 <Select 
@@ -3917,7 +3917,7 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="plinthHeight">Plinth Height (sq ft) <span className="text-red-500">*</span></Label>
                 <Input
@@ -3968,7 +3968,7 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="electricWiring">Electric Wiring Inside Warehouse <span className="text-red-500">*</span></Label>
                 <Select 
@@ -4023,7 +4023,7 @@ export default function WarehouseInspectionForm({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="compoundGate">Compound Gate <span className="text-red-500">*</span></Label>
                 <Select
@@ -4058,7 +4058,7 @@ export default function WarehouseInspectionForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="isWarehouseClean">Is Warehouse Clean <span className="text-red-500">*</span></Label>
                 <Select
@@ -4118,8 +4118,8 @@ export default function WarehouseInspectionForm({
             sectionName="coldStorageDetails" 
           />
           {!collapsedSections.coldStorageDetails && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="typeOfColdStorage">Type of Cold Storage <span className="text-red-500">*</span></Label>
                   <Input
@@ -4143,7 +4143,7 @@ export default function WarehouseInspectionForm({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="typeOfInsulation">Type of Insulation <span className="text-red-500">*</span></Label>
                   <Input
@@ -4178,7 +4178,7 @@ export default function WarehouseInspectionForm({
             sectionName="insuranceDetails" 
           />
           {!collapsedSections.insuranceDetails && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
             
             {/* Available Insurance Summary Box - SELECT INSURANCES HERE */}
             <div className="mb-6 p-4 border-2 border-green-400 rounded-lg bg-green-50 shadow-lg">
@@ -4410,7 +4410,7 @@ export default function WarehouseInspectionForm({
             
             {/* OLD INSURANCE INPUT METHOD - HIDDEN, REPLACED BY CHECKBOX SELECTION ABOVE */}
             {false && (<>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="insuranceTakenBy">Insurance Taken By</Label>
                 <Select 
@@ -4714,7 +4714,7 @@ export default function WarehouseInspectionForm({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
 
               {/* Client Name and Address dropdowns for Client selection */}
               {formData.insuranceTakenBy === 'client' && (
@@ -5265,7 +5265,7 @@ export default function WarehouseInspectionForm({
                       ))
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firePolicyCompanyName">Fire Policy Company Name</Label>
                       <Input
@@ -5391,7 +5391,7 @@ export default function WarehouseInspectionForm({
                       ))
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="burglaryPolicyCompanyName">Burglary Policy Company Name</Label>
                       <Input
@@ -5538,7 +5538,7 @@ export default function WarehouseInspectionForm({
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div className="space-y-2">
                           <Label>Fire Policy Company Name</Label>
                           <div className="p-2 bg-gray-50 rounded border text-green-700">
@@ -5586,7 +5586,7 @@ export default function WarehouseInspectionForm({
                           Auto-filled from: {section.insurance.insuranceId}
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div className="space-y-2">
                           <Label>Burglary Policy Company Name</Label>
                           <div className="p-2 bg-gray-50 rounded border text-green-700">
@@ -5745,7 +5745,7 @@ export default function WarehouseInspectionForm({
                 
                 {/* Read-only Insurance Info Fields */}
                 <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label>Insurance Taken By</Label>
                     <Input
@@ -5767,7 +5767,7 @@ export default function WarehouseInspectionForm({
 
                 {/* Client fields for Client insurance - Read-only */}
                 {insurance.insuranceTakenBy === 'client' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4">
                     <div className="space-y-2">
                       <Label>Client Name</Label>
                       <Input
@@ -5790,7 +5790,7 @@ export default function WarehouseInspectionForm({
 
                 {/* Bank field for Bank insurance - Read-only */}
                 {insurance.insuranceTakenBy === 'bank' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4">
                     <div className="space-y-2">
                       <Label>Bank Name</Label>
                       <Input
@@ -5805,7 +5805,7 @@ export default function WarehouseInspectionForm({
 
                 {/* OLD EDITABLE FIELDS - HIDDEN SINCE WE USE CHECKBOX SELECTION */}
                 {false && (<>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label>Insurance Taken By</Label>
                     <Select 
@@ -5952,7 +5952,7 @@ export default function WarehouseInspectionForm({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4">
                   {/* Client fields for Client selection */}
                   {insurance.insuranceTakenBy === 'client' && (
                     <>
@@ -6284,7 +6284,7 @@ export default function WarehouseInspectionForm({
                   <>
                     <div className="border-t pt-4 mt-4">
                       <h5 className="text-md font-medium text-green-700 mb-4">Fire Policy Details</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div className="space-y-2">
                           <Label>Fire Policy Company Name</Label>
                           <Input
@@ -6409,7 +6409,7 @@ export default function WarehouseInspectionForm({
 
                     <div className="border-t pt-4 mt-4">
                       <h5 className="text-md font-medium text-green-700 mb-4">Burglary Policy Details</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div className="space-y-2">
                           <Label>Burglary Policy Company Name</Label>
                           <Input
@@ -6544,8 +6544,8 @@ export default function WarehouseInspectionForm({
           <CardHeader className="bg-green-50">
             <CardTitle className="text-green-700">Security at Warehouse</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="p-3 sm:p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="securityAvailable">Security Available <span className="text-red-500">*</span></Label>
                 <Select
@@ -6607,8 +6607,8 @@ export default function WarehouseInspectionForm({
           <CardHeader className="bg-green-50">
             <CardTitle className="text-green-700">Inside the Warehouse</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="p-3 sm:p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="stackingDone">Any Stacking Already Done <span className="text-red-500">*</span></Label>
                 <Select
@@ -6639,7 +6639,7 @@ export default function WarehouseInspectionForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="dunnageUsed">If Dunnage is Used <span className="text-red-500">*</span></Label>
                 <Select
@@ -6686,7 +6686,7 @@ export default function WarehouseInspectionForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="stockCountable">Whether the Stock is Countable <span className="text-red-500">*</span></Label>
                 <Select
@@ -6751,7 +6751,7 @@ export default function WarehouseInspectionForm({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="otherCollateralManager">Any Other Collateral Manager Working in Same Warehouse <span className="text-red-500">*</span></Label>
                 <Select
@@ -6789,8 +6789,8 @@ export default function WarehouseInspectionForm({
           <CardHeader className="bg-green-50">
             <CardTitle className="text-green-700">Plan for Stocking of Commodity</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="p-3 sm:p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="commodity">Commodity <span className="text-red-500">*</span></Label>
                 <Input
@@ -6825,8 +6825,8 @@ export default function WarehouseInspectionForm({
             sectionName="warehouseUpkeep" 
           />
           {!collapsedSections.warehouseUpkeep && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="dividedIntoChambers">Whether Warehouse is Divided into Chambers or Partitions <span className="text-red-500">*</span></Label>
                 <Select
@@ -6858,7 +6858,7 @@ export default function WarehouseInspectionForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="usingStackCards">Whether Using Stack Cards <span className="text-red-500">*</span></Label>
                 <Select
@@ -6892,7 +6892,7 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fireFightingEquipments">Whether Fire Fighting Equipments Available <span className="text-red-500">*</span></Label>
                 <Select
@@ -6949,7 +6949,7 @@ export default function WarehouseInspectionForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="weighbridgeFacility">Whether Weighbridge Facility Available at Warehouse <span className="text-red-500">*</span></Label>
                 <Select
@@ -6998,7 +6998,7 @@ export default function WarehouseInspectionForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="distanceToPoliceStation">Distance to Nearest Police Station (km) <span className="text-red-500">*</span></Label>
                 <Input
@@ -7036,8 +7036,8 @@ export default function WarehouseInspectionForm({
             sectionName="otherDetails" 
           />
           {!collapsedSections.otherDetails && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="riskOfCargoAffected">Any Risk of Cargo Getting Affected <span className="text-red-500">*</span></Label>
                 <Select
@@ -7098,7 +7098,7 @@ export default function WarehouseInspectionForm({
           <CardHeader className="bg-green-50">
             <CardTitle className="text-green-700">Insurance Claim Theft/Fraud/Shortage/Fire History (3 Years)</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="p-3 sm:p-6 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="insuranceClaimHistory">Insurance Claim History <span className="text-red-500">*</span></Label>
               <Select
@@ -7136,8 +7136,8 @@ export default function WarehouseInspectionForm({
           <CardHeader className="bg-green-50">
             <CardTitle className="text-green-700">Operational Executive Details</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="p-3 sm:p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="nameOfOE">Name of Operational Executive <span className="text-red-500">*</span></Label>
                 <Input
@@ -7173,7 +7173,7 @@ export default function WarehouseInspectionForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="contactNumber">Contact Number <span className="text-red-500">*</span></Label>
                 <Input
@@ -7306,7 +7306,7 @@ export default function WarehouseInspectionForm({
             sectionName="remarks" 
           />
           {!collapsedSections.remarks && (
-            <CardContent className="p-6 space-y-4 transition-all duration-200 ease-in-out">
+            <CardContent className="p-3 sm:p-6 space-y-4 transition-all duration-200 ease-in-out">
             <div className="space-y-2">
               <Label htmlFor="remarks">Additional Notes/Comments</Label>
               <Textarea
@@ -7325,7 +7325,7 @@ export default function WarehouseInspectionForm({
 
         {/* Certification */}
         <Card className="border-green-300">
-          <CardContent className="p-6">
+          <CardContent className="p-3 sm:p-6">
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="warehouseFitCertification"
@@ -7357,17 +7357,17 @@ export default function WarehouseInspectionForm({
           </div>
         )}
         
-        <div className="flex justify-between">
-          <Button type="button" variant="outline" onClick={onClose} className="action-button">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
+          <Button type="button" variant="outline" onClick={onClose} className="action-button w-full sm:w-auto">
             Cancel
           </Button>
           
-          <div className="flex space-x-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-0 sm:space-x-4">
             {/* Save button - hide for activated status */}
             {formData.status !== 'activated' && (
               <Button 
                 type="button" 
-                className="bg-blue-500 hover:bg-blue-600 action-button"
+                className="bg-blue-500 hover:bg-blue-600 action-button w-full sm:w-auto"
                 onClick={async () => {
                   try {
                     await saveFormData();
@@ -7392,7 +7392,7 @@ export default function WarehouseInspectionForm({
             
             {/* PENDING state only */}
             {(formData.status === 'pending' || !formData.status || formData.status === '') && canEditSurvey(formData.status || 'pending') && (
-              <Button type="submit" className="bg-green-500 hover:bg-green-600 action-button">
+              <Button type="submit" className="bg-green-500 hover:bg-green-600 action-button w-full sm:w-auto">
                 Proceed to Submit
               </Button>
             )}
@@ -7403,7 +7403,7 @@ export default function WarehouseInspectionForm({
                 {onActivate && (
                   <Button 
                     type="button" 
-                    className="bg-green-500 hover:bg-green-600 action-button"
+                    className="bg-green-500 hover:bg-green-600 action-button w-full sm:w-auto"
                     onClick={async () => {
                       // Save the form data FIRST before validating
                       try {
