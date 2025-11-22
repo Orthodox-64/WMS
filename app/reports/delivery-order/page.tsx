@@ -1032,12 +1032,12 @@ export default function DeliveryOrderReportsPage() {
         {/* Data Table */}
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-gray-200">
+            <div className="overflow-x-auto w-full">
+              <table className="min-w-full border-collapse border border-gray-200 table-auto md:table-fixed">
                 <thead className="bg-orange-100">
                   <tr>
-                    {visibleColumns.includes('state') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">State</th>}
-                    {visibleColumns.includes('branch') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Branch</th>}
+                    {visibleColumns.includes('state') && <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>State</th>}
+                    {visibleColumns.includes('branch') && <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Branch</th>}
                     {visibleColumns.includes('location') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Location</th>}
                     {visibleColumns.includes('typeOfBusiness') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Type of Business</th>}
                     {visibleColumns.includes('warehouseType') && <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Type</th>}
