@@ -857,14 +857,14 @@ export default function InsuranceReportsPage() {
         <div className="table-container">
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto max-h-[600px]">
-                <table className="w-full border-collapse border border-gray-200">
+              <div className="overflow-x-auto w-full max-h-[600px]">
+                <table className="min-w-full border-collapse border border-gray-200 table-auto md:table-fixed">
                   <thead className="sticky-header bg-orange-100">
                     <tr>
                       {allColumns
                         .filter(col => visibleColumns.includes(col.key))
                         .map(column => (
-                          <th key={column.key} className="border border-orange-300 px-4 py-3 text-left text-orange-800 font-semibold whitespace-nowrap">
+                          <th key={column.key} className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-left text-xs md:text-sm text-orange-800 font-semibold whitespace-nowrap" style={{ minWidth: 120 }}>
                             {column.label}
                           </th>
                         ))}

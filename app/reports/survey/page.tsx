@@ -464,18 +464,18 @@ export default function SurveyReportsPage() {
         {/* Data Table */}
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-gray-200">
+            <div className="overflow-x-auto w-full">
+              <table className="min-w-full border-collapse border border-gray-200 table-auto md:table-fixed">
                 <thead className="bg-orange-100">
                   <tr>
-                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Date</th>
-                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Name</th>
-                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Warehouse Type</th>
-                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Client</th>
-                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Commodity</th>
-                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Status</th>
-                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inspector</th>
-                    <th className="border border-orange-300 px-4 py-2 text-left text-orange-800 font-semibold">Inspection Date</th>
+                    <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Date</th>
+                    <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Warehouse Name</th>
+                    <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Warehouse Type</th>
+                    <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Client</th>
+                    <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Commodity</th>
+                    <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Status</th>
+                    <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Inspector</th>
+                    <th className="border border-orange-300 px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-orange-800 font-semibold" style={{ minWidth: 120 }}>Inspection Date</th>
                   </tr>
                 </thead>
                 <tbody>
