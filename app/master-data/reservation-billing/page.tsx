@@ -950,22 +950,22 @@ export default function ReservationBillingPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
             <Button
               onClick={() => router.push('/master-data')}
               variant="outline"
-              className="border-orange-300 text-orange-600 hover:bg-orange-50"
+              className="border-orange-300 text-orange-600 hover:bg-orange-50 w-full sm:w-auto px-3 sm:px-4 py-2 text-sm sm:text-base"
             >
               ← Dashboard
             </Button>
-            <h1 className="text-3xl font-bold">Reservation & Billing Management</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center sm:text-left">Reservation & Billing Management</h1>
           </div>
           {/* Add Reservation button */}
           <Button
             onClick={() => setAddReservationDialog(true)}
-            className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 shadow-lg"
+            className="bg-green-500 hover:bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3 shadow-lg text-sm sm:text-base w-full sm:w-auto"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Reservation
@@ -974,11 +974,11 @@ export default function ReservationBillingPage() {
 
         {/* Search and Controls */}
         <Card className="border-green-300">
-          <CardHeader className="bg-orange-100">
-            <CardTitle className="text-orange-600">Search & Filters</CardTitle>
+          <CardHeader className="bg-orange-100 p-3 sm:p-4">
+            <CardTitle className="text-base sm:text-lg text-orange-600">Search & Filters</CardTitle>
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-4">
+          <CardContent className="pt-4 sm:pt-6 p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input

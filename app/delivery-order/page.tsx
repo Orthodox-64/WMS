@@ -1206,34 +1206,34 @@ export default function DeliveryOrderPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <Button onClick={() => router.push('/dashboard')} variant="ghost" className="flex items-center bg-orange-500 text-white hover:bg-orange-600">
+      <div className="p-3 sm:p-6">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
+          <Button onClick={() => router.push('/dashboard')} variant="ghost" className="flex items-center bg-orange-500 text-white hover:bg-orange-600 w-full sm:w-auto text-sm sm:text-base px-3 py-2 sm:px-4">
             ← Dashboard
           </Button>
-          <h1 className="text-3xl font-bold text-orange-600 text-center flex-1">Delivery Order</h1>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600 text-center flex-1">Delivery Order</h1>
           {canCreateDeliveryOrder() && (
             <Button onClick={() => {
               resetForm();
               setShowAddModal(true);
-            }} className="bg-green-500 hover:bg-green-600 text-white">
+            }} className="bg-green-500 hover:bg-green-600 text-white w-full sm:w-auto text-sm sm:text-base px-3 py-2 sm:px-4">
               <Plus className="h-4 w-4 mr-2" /> Add DO
             </Button>
           )}
         </div>
 
         {/* Search and Export */}
-        <div className="bg-green-50 rounded-lg p-4 mb-6 border border-green-200">
-          <div className="text-lg font-semibold text-green-800 mb-3">Search & Export Options</div>
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <span className="mr-2 text-gray-600">Search:</span>
-              <div className="relative">
+        <div className="bg-green-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 border border-green-200">
+          <div className="text-base sm:text-lg font-semibold text-green-800 mb-2 sm:mb-3">Search & Export Options</div>
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1">
+              <span className="text-gray-600 text-xs sm:text-sm whitespace-nowrap">Search:</span>
+              <div className="relative w-full sm:w-auto">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   type="search"
-                  placeholder="Search by DO Code, SR/WR No, State, Branch, Location, Warehouse Name/Code, Client Name..."
-                  className="pl-8 pr-8 w-[400px]"
+                  placeholder="Search by DO Code, SR/WR No, State..."
+                  className="pl-8 pr-8 w-full sm:w-[300px] md:w-[400px] text-sm"
                   value={searchTerm}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                 />
@@ -1250,12 +1250,12 @@ export default function DeliveryOrderPage() {
                   </button>
                 )}
               </div>
-              <div className="ml-3 text-sm text-gray-600">
-                Showing {Math.min((currentPage - 1) * pageSize + 1, filteredDOs.length)}-{Math.min(currentPage * pageSize, filteredDOs.length)} of {filteredDOs.length} entries
+              <div className="text-xs sm:text-sm text-gray-600">
+                Showing {Math.min((currentPage - 1) * pageSize + 1, filteredDOs.length)}-{Math.min(currentPage * pageSize, filteredDOs.length)} of {filteredDOs.length}
                 {searchTerm && ` (filtered from ${latestDOs.length})`}
               </div>
             </div>
-            <Button onClick={handleExportCSV} className="bg-blue-500 hover:bg-blue-600 text-white">
+            <Button onClick={handleExportCSV} className="bg-blue-500 hover:bg-blue-600 text-white text-sm w-full sm:w-auto px-3 py-2 sm:px-4">
               <Download className="h-4 w-4 mr-2" /> Export CSV
             </Button>
           </div>
@@ -1263,47 +1263,47 @@ export default function DeliveryOrderPage() {
 
         {/* Main Table */}
         <div className="bg-white rounded-lg shadow-md">
-          <div className="py-3 px-4 bg-green-50 border-b border-green-100">
-            <div className="flex justify-between items-center">
-              <h2 className="text-green-700 text-xl font-semibold">Delivery Orders</h2>
-              <div className="flex items-center space-x-6">
+          <div className="py-2 sm:py-3 px-3 sm:px-4 bg-green-50 border-b border-green-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
+              <h2 className="text-green-700 text-base sm:text-xl font-semibold">Delivery Orders</h2>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-6">
                 <div className="flex items-center">
                   <span className="inline-block w-3 h-3 rounded-full bg-orange-500 mr-2"></span>
-                  <span className="text-sm text-gray-700">Direct DO (No Bank Details)</span>
+                  <span className="text-xs sm:text-sm text-gray-700">Direct DO (No Bank)</span>
                 </div>
                 <div className="flex items-center">
                   <span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
-                  <span className="text-sm text-gray-700">Regular DO (From Release Order)</span>
+                  <span className="text-xs sm:text-sm text-gray-700">Regular DO (From RO)</span>
                 </div>
               </div>
             </div>
           </div>
-          <div className="overflow-x-auto" style={{ maxHeight: '70vh' }}>
-            <table className="min-w-[1400px] border text-sm w-full">
+          <div className="overflow-x-auto -mx-2 sm:mx-0" style={{ maxHeight: '70vh' }}>
+            <table className="min-w-[1400px] border text-xs sm:text-sm w-full">
               <thead className="bg-orange-100 sticky top-0 z-10">
                 <tr>
-                  <th className="px-2 py-1 border sticky left-0 bg-orange-100 z-20"></th>
-                  <th className="px-2 py-1 border sticky left-[60px] bg-orange-100 z-20">DO Code</th>
-                  <th className="px-2 py-1 border">SR/WR No.</th>
-                  <th className="px-2 py-1 border">State</th>
-                  <th className="px-2 py-1 border">Branch</th>
-                  <th className="px-2 py-1 border">Location</th>
-                  <th className="px-2 py-1 border">Warehouse Name</th>
-                  <th className="px-2 py-1 border">Warehouse Code</th>
-                  <th className="px-2 py-1 border">Warehouse Address</th>
-                  <th className="px-2 py-1 border">Client Name</th>
-                  <th className="px-2 py-1 border">Client Code</th>
-                  <th className="px-2 py-1 border">Client Address</th>
-                  <th className="px-2 py-1 border">Inward Bags</th>
-                  <th className="px-2 py-1 border">Inward Quantity (MT)</th>
-                  <th className="px-2 py-1 border">Release RO Bags</th>
-                  <th className="px-2 py-1 border">Release RO Quantity (MT)</th>
-                  <th className="px-2 py-1 border">DO Bags</th>
-                  <th className="px-2 py-1 border">DO Quantity (MT)</th>
-                  <th className="px-2 py-1 border">Balance Bags</th>
-                  <th className="px-2 py-1 border">Balance Quantity (MT)</th>
-                  <th className="px-2 py-1 border">DO Status</th>
-                  <th className="px-2 py-1 border">Remark</th>
+                  <th className="px-2 py-1 border sticky left-0 bg-orange-100 z-20 text-xs"></th>
+                  <th className="px-2 py-1 border sticky left-[60px] bg-orange-100 z-20 text-xs">DO Code</th>
+                  <th className="px-2 py-1 border text-xs">SR/WR No.</th>
+                  <th className="px-2 py-1 border text-xs">State</th>
+                  <th className="px-2 py-1 border text-xs">Branch</th>
+                  <th className="px-2 py-1 border text-xs">Location</th>
+                  <th className="px-2 py-1 border text-xs">Warehouse Name</th>
+                  <th className="px-2 py-1 border text-xs">Warehouse Code</th>
+                  <th className="px-2 py-1 border text-xs">Warehouse Address</th>
+                  <th className="px-2 py-1 border text-xs">Client Name</th>
+                  <th className="px-2 py-1 border text-xs">Client Code</th>
+                  <th className="px-2 py-1 border text-xs">Client Address</th>
+                  <th className="px-2 py-1 border text-xs">Inward Bags</th>
+                  <th className="px-2 py-1 border text-xs">Inward Quantity (MT)</th>
+                  <th className="px-2 py-1 border text-xs">Release RO Bags</th>
+                  <th className="px-2 py-1 border text-xs">Release RO Quantity (MT)</th>
+                  <th className="px-2 py-1 border text-xs">DO Bags</th>
+                  <th className="px-2 py-1 border text-xs">DO Quantity (MT)</th>
+                  <th className="px-2 py-1 border text-xs">Balance Bags</th>
+                  <th className="px-2 py-1 border text-xs">Balance Quantity (MT)</th>
+                  <th className="px-2 py-1 border text-xs">DO Status</th>
+                  <th className="px-2 py-1 border text-xs">Remark</th>
                 </tr>
               </thead>
               <tbody>
@@ -1505,25 +1505,27 @@ export default function DeliveryOrderPage() {
           
           {/* Pagination Controls */}
           {filteredDOs.length > pageSize && (
-            <div className="flex justify-between items-center mt-4 px-4">
-              <div className="text-sm text-gray-600">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-0 mt-4 px-3 sm:px-4">
+              <div className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
                 Showing {Math.min((currentPage - 1) * pageSize + 1, filteredDOs.length)} to {Math.min(currentPage * pageSize, filteredDOs.length)} of {filteredDOs.length} entries
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-center space-x-2">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="px-2 py-1 text-xs sm:px-3 sm:text-sm"
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                 >
                   Previous
                 </Button>
-                <span className="text-sm text-gray-600">
+                <span className="text-xs sm:text-sm text-gray-600">
                   Page {currentPage} of {Math.ceil(filteredDOs.length / pageSize)}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="px-2 py-1 text-xs sm:px-3 sm:text-sm"
                   onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredDOs.length / pageSize), prev + 1))}
                   disabled={currentPage === Math.ceil(filteredDOs.length / pageSize)}
                 >
@@ -1542,9 +1544,9 @@ export default function DeliveryOrderPage() {
             resetForm();
           }
         }}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
             <div>
-              <DialogTitle className="text-xl text-center text-orange-600 font-bold">
+              <DialogTitle className="text-base sm:text-xl text-center text-orange-600 font-bold">
                 {selectedDO ? 'EDIT DELIVERY ORDER (DO)' : 'DELIVERY ORDER (DO) / DIRECT DO'}
                 <div className="mt-1 text-sm font-normal text-gray-600">
                   {selectedDO 
@@ -1557,10 +1559,10 @@ export default function DeliveryOrderPage() {
             <form onSubmit={handleSubmit} className="overflow-y-auto pr-1">
               {formError && <div className="bg-red-100 p-3 mb-4 text-red-600 rounded-md text-center font-medium">{formError}</div>}
               
-              <div className="space-y-5 pt-4">
+              <div className="space-y-3 sm:space-y-5 pt-3 sm:pt-4">
                 {/* RO Selection */}
-                <div className="bg-green-50 p-4 rounded-md border border-green-200">
-                  <Label htmlFor="ro-select" className="text-green-800 font-semibold text-lg mb-2 block">
+                <div className="bg-green-50 p-3 sm:p-4 rounded-md border border-green-200">
+                  <Label htmlFor="ro-select" className="text-green-800 font-semibold text-sm sm:text-lg mb-2 block">
                     Select Release Order (RO) or Entry Without Bank Details
                   </Label>
                   {filteredROOptions.some((opt: any) => opt.source === 'inward') && (
@@ -1671,7 +1673,7 @@ export default function DeliveryOrderPage() {
 
                 {/* Auto-populated Fields */}
                 {selectedRO && (
-                  <div className="grid grid-cols-2 gap-6 p-4 bg-green-50 rounded-md border border-green-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 p-3 sm:p-4 bg-green-50 rounded-md border border-green-200">
                     <div>
                       <Label className="text-green-800 font-medium">CAD NUMBER</Label>
                       <Input value={selectedRO.cadNumber || ''} readOnly className="bg-white border-green-100" />
@@ -1696,7 +1698,7 @@ export default function DeliveryOrderPage() {
                       <Label className="text-green-800 font-medium">WAREHOUSE CODE</Label>
                       <Input value={selectedRO.warehouseCode || ''} readOnly className="bg-white border-green-100" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
                       <Label className="text-green-800 font-medium">WAREHOUSE ADDRESS</Label>
                       <Input value={selectedRO.warehouseAddress || ''} readOnly className="bg-white border-green-100" />
                     </div>
@@ -1708,7 +1710,7 @@ export default function DeliveryOrderPage() {
                       <Label className="text-green-800 font-medium">CLIENT CODE</Label>
                       <Input value={selectedRO.clientCode || ''} readOnly className="bg-white border-green-100" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
                       <Label className="text-green-800 font-medium">CLIENT ADDRESS</Label>
                       <Input value={selectedRO.clientAddress || ''} readOnly className="bg-white border-green-100" />
                     </div>
@@ -1809,7 +1811,7 @@ export default function DeliveryOrderPage() {
 
                     {/* Existing Attachments (for edit mode) */}
                     {selectedDO && selectedDO.attachmentUrls && Array.isArray(selectedDO.attachmentUrls) && selectedDO.attachmentUrls.length > 0 && (
-                      <div className="col-span-2">
+                      <div className="col-span-1 sm:col-span-2">
                         <Label className="text-blue-600 font-medium">CURRENT ATTACHMENTS</Label>
                         <div className="mt-2 bg-blue-50 p-3 rounded-md border border-blue-100">
                           <div className="space-y-2">
@@ -1838,7 +1840,7 @@ export default function DeliveryOrderPage() {
                     )}
 
                     {/* Attachment - Now Mandatory */}
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
                       <Label htmlFor="attachment" className="text-orange-600 font-medium flex items-center">
                         {selectedDO ? 'NEW ATTACHMENTS (OPTIONAL)' : 'ATTACHMENT (ALL FILE TYPES ALLOWED)'}
                         {!selectedDO && <span className="text-red-500 ml-1">*</span>}
@@ -1886,7 +1888,7 @@ export default function DeliveryOrderPage() {
                     </div>
 
                     {/* Remark */}
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
                       <Label htmlFor="remark" className="text-green-800 font-medium">REMARK</Label>
                       <Input
                         id="remark"
@@ -1900,12 +1902,12 @@ export default function DeliveryOrderPage() {
                 )}
               </div>
 
-              <div className="mt-8 pt-4 border-t border-green-100 flex gap-4 justify-end">
-                <Button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white px-6" disabled={isUploading}>
+              <div className="mt-6 sm:mt-8 pt-3 sm:pt-4 border-t border-green-100 flex flex-col sm:flex-row gap-2 sm:gap-4 justify-end">
+                <Button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 text-xs sm:px-6 sm:text-sm w-full sm:w-auto" disabled={isUploading}>
                   {isUploading ? (selectedDO ? 'Updating...' : 'Submitting...') : (selectedDO ? 'UPDATE' : 'SUBMIT')}
                 </Button>
                 <DialogClose asChild>
-                  <Button type="button" variant="outline" className="border-green-200 text-green-800 hover:bg-green-50">Cancel</Button>
+                  <Button type="button" variant="outline" className="border-green-200 text-green-800 hover:bg-green-50 px-3 py-2 text-xs sm:px-4 sm:text-sm w-full sm:w-auto">Cancel</Button>
                 </DialogClose>
               </div>
             </form>
@@ -1914,22 +1916,22 @@ export default function DeliveryOrderPage() {
 
         {/* DO Details Dialog */}
         <Dialog open={showDODetails} onOpenChange={setShowDODetails}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
             <div className="border-b border-green-100 pb-4">
            
             </div>
             {selectedDO && (
               <div className="max-h-[80vh] overflow-y-auto p-2">
                 {/* Agrogreen Logo and DO Details Header */}
-                <div className="flex flex-col items-center justify-center mb-8 mt-2">
-                  <Image src="/Group 86.png" alt="Agrogreen Logo" width={120} height={100} style={{ marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
-                  <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
+                <div className="flex flex-col items-center justify-center mb-6 sm:mb-8 mt-2">
+                  <Image src="/Group 86.png" alt="Agrogreen Logo" width={100} height={80} className="sm:w-[120px] sm:h-[100px] mb-2 rounded-[30%] object-cover" />
+                  <div className="text-sm sm:text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
                     AGROGREEN WAREHOUSING PRIVATE LTD.
                   </div>
-                  <div className="text-base font-semibold text-green-600 mb-2 text-center">
+                  <div className="text-xs sm:text-base font-semibold text-green-600 mb-2 text-center px-2">
                     603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
                   </div>
-                  <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
+                  <div className="text-sm sm:text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
                     DELIVERY ORDER (DO) DETAILS
                   </div>
                 </div>
@@ -2009,8 +2011,8 @@ export default function DeliveryOrderPage() {
 
                 {/* Generate Receipt Button (only if approved and user has permission) */}
                 {selectedDO.doStatus === 'approved' && canViewDOPDF() && (
-                  <div className="flex justify-end mt-2">
-                    <Button type="button" className="bg-orange-600 hover:bg-orange-700 text-white" onClick={async () => {
+                  <div className="flex justify-center sm:justify-end mt-2">
+                    <Button type="button" className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm w-full sm:w-auto" onClick={async () => {
                       try {
                         // Import required libraries dynamically (following RO pattern)
                         const html2canvas = (await import('html2canvas')).default;
@@ -2215,11 +2217,11 @@ export default function DeliveryOrderPage() {
                         />
                         {/* Status action buttons - only for checkers */}
                         {showDOActionButtons() && (
-                          <div className="flex gap-4 mt-4 justify-end">
+                          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-4 justify-end">
                             {canApproveDeliveryOrder() && (
                               <Button 
                                 type="button" 
-                                className="bg-green-600 hover:bg-green-700 text-white" 
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm w-full sm:w-auto" 
                                 onClick={() => handleDOStatusChange('approved')} 
                                 disabled={doStatusUpdating}
                               >
@@ -2229,7 +2231,7 @@ export default function DeliveryOrderPage() {
                             {canRejectDeliveryOrder() && (
                               <Button 
                                 type="button" 
-                                className="bg-red-600 hover:bg-red-700 text-white" 
+                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm w-full sm:w-auto" 
                                 onClick={() => handleDOStatusChange('rejected')} 
                                 disabled={doStatusUpdating}
                               >

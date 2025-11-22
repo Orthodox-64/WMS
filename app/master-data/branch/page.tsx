@@ -902,21 +902,19 @@ export default function BranchModulePage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-4 sm:space-y-8">
         {/* Header with Back Button and Centered Title */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button 
-              onClick={() => router.back()}
-              className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
-            >
-              ← Dashboard
-            </button>
-          </div>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <button 
+            onClick={() => router.back()}
+            className="text-base sm:text-lg font-semibold tracking-tight bg-orange-500 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-orange-600 transition-colors whitespace-nowrap w-full sm:w-auto"
+          >
+            ← Dashboard
+          </button>
           
           {/* Centered Title with Light Orange Background */}
-          <div className="flex-1 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+          <div className="flex-1 text-center w-full sm:w-auto">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-2 sm:py-3 bg-orange-100 rounded-lg">
               Branch & Location Module
             </h1>
           </div>
@@ -924,7 +922,7 @@ export default function BranchModulePage() {
           {/* Add Branch Button */}
           <Button
             onClick={handleAddNewBranch}
-            className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 shadow-lg"
+            className="bg-green-500 hover:bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3 shadow-lg text-sm sm:text-base w-full sm:w-auto"
           >
             ✅ Add New Branch
           </Button>
@@ -932,11 +930,11 @@ export default function BranchModulePage() {
 
         {/* Search and Export Section */}
         <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-green-700">Search & Export Options</CardTitle>
+          <CardHeader className="bg-green-50 p-3 sm:p-4">
+            <CardTitle className="text-base sm:text-lg text-green-700">Search & Export Options</CardTitle>
           </CardHeader>
-          <CardContent className="p-4">
-            <div className="flex flex-wrap items-center gap-4">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
               <div className="flex items-center space-x-2 flex-1 min-w-[300px]">
                 <Search className="w-4 h-4 text-green-600" />
                 <Label htmlFor="searchTerm" className="text-green-600 font-medium whitespace-nowrap">Search:</Label>
@@ -991,7 +989,7 @@ export default function BranchModulePage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             {/* DataTable with sticky features and pagination */}
             <DataTable
               columns={branchColumns}

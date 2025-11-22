@@ -7039,25 +7039,25 @@ export default function InwardPage() {
   // Render CIR Modal (add this near your modals or at the bottom of the component)
   {showCIRModal && (
     <Dialog open={showCIRModal} onOpenChange={setShowCIRModal}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
         {/* Logo and company info header (copied from SR/WR receipt) */}
-        <div className="flex flex-col items-center justify-center mb-8 mt-2">
-          <Image src="/Group 86.png" alt="Agrogreen Logo" width={120} height={100} style={{ marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
-          <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
+        <div className="flex flex-col items-center justify-center mb-4 sm:mb-8 mt-2">
+          <Image src="/Group 86.png" alt="Agrogreen Logo" width={100} height={85} style={{ marginBottom: 6, borderRadius: '30%', objectFit: 'cover' }} className="sm:w-[120px] sm:h-[100px]" />
+          <div className="text-base sm:text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
             AGROGREEN WAREHOUSING PRIVATE LTD.
           </div>
-          <div className="text-base font-semibold text-green-600 mb-2 text-center">
+          <div className="text-sm sm:text-base font-semibold text-green-600 mb-2 text-center px-2">
             603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
           </div>
         </div>
         <DialogHeader>
-          <DialogTitle className="text-orange-700 text-xl">
+          <DialogTitle className="text-orange-700 text-lg sm:text-xl">
             CIR Inward Details
           </DialogTitle>
         </DialogHeader>
-        <form className="space-y-4">
+        <form className="space-y-3 sm:space-y-4">
           {/* State, Branch, Location, Warehouse Name, Warehouse Code, Business Type, Warehouse Address, Client Name, Client Code, Client Address */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <Label className="block font-semibold mb-1">State</Label>
               <Input value={cirModalData?.state || ''} readOnly disabled />
@@ -7100,9 +7100,9 @@ export default function InwardPage() {
             </div>
           </div>
           {/* Inward Details */}
-          <div className="border-t pt-4">
-            <h3 className="text-lg font-semibold mb-4 text-orange-700">Inward Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="border-t pt-3 sm:pt-4">
+            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-orange-700">Inward Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4">
               <div>
                 <Label className="block font-semibold mb-1">Date of Inward</Label>
                 <Input value={cirModalData?.dateOfInward || ''} readOnly disabled />
@@ -7112,17 +7112,17 @@ export default function InwardPage() {
                 <Input value={cirModalData?.cadNumber || ''} readOnly disabled />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <Label className="block font-semibold mb-1">Base Receipt</Label>
+                <Label className="block font-semibold mb-1 text-sm sm:text-base">Base Receipt</Label>
                 <Input value={cirModalData?.bankReceipt || ''} readOnly disabled />
               </div>
             </div>
           </div>
           {/* Commodity Information */}
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-semibold mb-6 text-orange-700">Commodity Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="border-t pt-4 sm:pt-6">
+            <h3 className="text-base sm:text-lg font-semibold mb-4 sm:mb-6 text-orange-700">Commodity Information</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
               <div>
                 <Label className="block font-semibold mb-2">Commodity</Label>
                 <Input value={cirModalData?.commodity || ''} readOnly disabled />
@@ -7613,9 +7613,9 @@ export default function InwardPage() {
             disabled={cirModalData?.cirStatus === 'Approved'}
           />
         </div>
-        <div className="flex justify-end space-x-2 mt-4">
+        <div className="flex flex-wrap justify-end gap-2 mt-3 sm:mt-4">
           {cirModalData?.cirStatus === 'Approved' ? (
-            <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm" disabled={isPrinting}>
+            <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm" disabled={isPrinting}>
               {isPrinting ? 'Generating PDF...' : 'Print'}
             </Button>
           ) : cirModalData?.cirStatus === 'Resubmitted' ? null : cirModalData?.cirStatus === 'Rejected' ? null : (
@@ -7623,17 +7623,17 @@ export default function InwardPage() {
               showCIRActionButtons() ? (
                 <>
                   {canApproveCIR() && (
-                    <Button onClick={handleCIRApprove} className="bg-green-600 hover:bg-green-700 text-white" disabled={!cirRemarks.trim()}>
+                    <Button onClick={handleCIRApprove} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm" disabled={!cirRemarks.trim()}>
                       Approve
                     </Button>
                   )}
                   {canRejectCIR() && (
-                    <Button onClick={handleCIRReject} className="bg-red-600 hover:bg-red-700 text-white" disabled={!cirRemarks.trim()}>
+                    <Button onClick={handleCIRReject} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm" disabled={!cirRemarks.trim()}>
                       Reject
                     </Button>
                   )}
                   {canResubmitCIR() && (
-                    <Button onClick={handleCIRResubmit} className="bg-yellow-400 hover:bg-yellow-500 text-white" disabled={!cirRemarks.trim()}>
+                    <Button onClick={handleCIRResubmit} className="bg-yellow-400 hover:bg-yellow-500 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm" disabled={!cirRemarks.trim()}>
                       Resubmit
                     </Button>
                   )}
@@ -7659,18 +7659,18 @@ export default function InwardPage() {
     <DashboardLayout>
       <div className="min-h-screen flex flex-col">
         {/* Module title and dashboard button row */}
-        <div className="flex items-center justify-between mt-4 mb-10 px-8">
-        <Button className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 text-2xl font-semibold shadow-lg rounded-xl flex items-center gap-2" onClick={() => router.push('/dashboard')}>
-          <span className="text-2xl">&#8592;</span> Dashboard
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0 mt-3 sm:mt-4 mb-6 sm:mb-10 px-4 sm:px-8">
+        <Button className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 text-base sm:px-8 sm:py-3 sm:text-2xl font-semibold shadow-lg rounded-xl flex items-center gap-2 w-full sm:w-auto justify-center" onClick={() => router.push('/dashboard')}>
+          <span className="text-xl sm:text-2xl">&#8592;</span> Dashboard
         </Button>
-        <div className="flex-1 text-center">
-          <h1 className="text-3xl font-extrabold tracking-tight text-orange-600 inline-block border-b-4 border-[#1aad4b] pb-2 px-10 py-1 bg-orange-50 rounded-xl shadow" style={{ letterSpacing: '0.02em' }}>
+        <div className="flex-1 text-center w-full sm:w-auto">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-orange-600 inline-block border-b-4 border-[#1aad4b] pb-2 px-6 sm:px-10 py-1 bg-orange-50 rounded-xl shadow" style={{ letterSpacing: '0.02em' }}>
             Inward Module
           </h1>
         </div>
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-end w-full sm:w-auto">
           {canCreateInwardEntry() ? (
-            <Button className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 text-lg font-semibold shadow-lg rounded-xl" onClick={() => {
+            <Button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 text-sm sm:px-8 sm:py-3 sm:text-lg font-semibold shadow-lg rounded-xl w-full sm:w-auto" onClick={() => {
               setIsEditMode(false);
               setEditingRow(null);
               resetForm();
@@ -7682,15 +7682,15 @@ export default function InwardPage() {
               + Add Inward
             </Button>
           ) : (
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end w-full sm:w-auto">
               <Button 
-                className="bg-gray-400 cursor-not-allowed text-white px-8 py-3 text-lg font-semibold shadow-lg rounded-xl opacity-50" 
+                className="bg-gray-400 cursor-not-allowed text-white px-4 py-2 sm:px-8 sm:py-3 text-sm sm:text-lg font-semibold shadow-lg rounded-xl opacity-50 w-full sm:w-auto" 
                 disabled
                 title="You don't have permission to create inward entries"
               >
                 + Add Inward (Read Only)
               </Button>
-              <span className="text-xs text-gray-500 mt-1">
+              <span className="text-xs text-gray-500 mt-1 text-center sm:text-right">
                 {userRole === 'checker' ? 'Checkers can only view/approve entries' : 'No permission to create entries'}
               </span>
             </div>
@@ -7698,13 +7698,13 @@ export default function InwardPage() {
         </div>
         {/* Alert dialog for expired reservation/insurance */}
         <Dialog open={alertOpen} onOpenChange={(open) => setAlertOpen(open)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg w-[90vw] sm:w-full">
             <DialogHeader>
-              <DialogTitle className="text-red-700">{alertTitle}</DialogTitle>
-              <DialogDescription className="text-sm text-gray-700">{alertMessage}</DialogDescription>
+              <DialogTitle className="text-red-700 text-base sm:text-lg">{alertTitle}</DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-gray-700">{alertMessage}</DialogDescription>
             </DialogHeader>
-            <div className="mt-4 flex justify-end">
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setAlertOpen(false)}>Close</Button>
+            <div className="mt-3 sm:mt-4 flex justify-end">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3 py-2 sm:px-4" onClick={() => setAlertOpen(false)}>Close</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -7713,26 +7713,28 @@ export default function InwardPage() {
         {/* Main content area - flex-1 to push footer down */}
         <div className="flex-1 overflow-auto">
           {/* Search and Export */}
-          <div className="px-8 mb-4">
+          <div className="px-4 sm:px-8 mb-3 sm:mb-4">
         <Card className="bg-green-50 border border-green-200">
-          <CardHeader>
-            <CardTitle className="text-green-800">Search & Export Options</CardTitle>
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="text-green-800 text-base sm:text-lg">Search & Export Options</CardTitle>
           </CardHeader>
-          <CardContent className="flex items-center gap-4">
-            <div className="flex-grow flex items-center gap-2">
-              <Search className="text-gray-500" />
-              <Label htmlFor="search-input" className="font-semibold text-gray-700">Search:</Label>
+          <CardContent className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 p-3 sm:p-6">
+            <div className="flex-grow flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <div className="flex items-center gap-2">
+                <Search className="text-gray-500 h-4 w-4 flex-shrink-0" />
+                <Label htmlFor="search-input" className="font-semibold text-gray-700 text-xs sm:text-sm whitespace-nowrap">Search:</Label>
+              </div>
               <Input
                 id="search-input"
                 placeholder="Search by state, branch, location, warehouse name, client, or receipt type..."
-                className="w-full"
+                className="w-full text-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <Button
               onClick={handleExportCSV}
-              className="bg-blue-500 hover:bg-blue-600 text-white"
+              className="bg-blue-500 hover:bg-blue-600 text-white text-sm w-full sm:w-auto"
             >
               <Download className="mr-2 h-4 w-4" />
               Export CSV
@@ -7742,27 +7744,27 @@ export default function InwardPage() {
       </div>
 
       {/* Entry Count Display */}
-      <div className="px-8 mb-4">
+      <div className="px-4 sm:px-8 mb-3 sm:mb-4">
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 p-2 rounded">
-          <span className="text-blue-700 font-medium text-sm">
+          <span className="text-blue-700 font-medium text-xs sm:text-sm">
             {searchTerm ? `Showing ${filteredData.length} of ${inwardData.length} entries` : `Total entries: ${filteredData.length}`}
           </span>
         </div>
       </div>
       
       {/* Data Table */}
-      <div className="px-8">
+      <div className="px-4 sm:px-8">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-green-700 text-xl">Inward Entries</CardTitle>
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="text-green-700 text-lg sm:text-xl">Inward Entries</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="flex items-center gap-4 mb-2">
+          <CardContent className="p-2 sm:p-6">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-2">
               <div className="flex items-center gap-2">
-                <label className="font-semibold text-sm">Sort by Inward Code:</label>
+                <label className="font-semibold text-xs sm:text-sm">Sort by Inward Code:</label>
                 <button
                   onClick={() => setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'))}
-                  className="ml-1 px-2 py-1 border rounded text-lg"
+                  className="ml-1 px-2 py-1 border rounded text-base sm:text-lg"
                   title={sortDirection === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                   type="button"
                 >
@@ -7772,7 +7774,7 @@ export default function InwardPage() {
               {/* Column Visibility Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="ml-2">Columns</Button>
+                  <Button variant="outline" size="sm" className="ml-0 sm:ml-2 text-xs sm:text-sm">Columns</Button>
                 </DropdownMenuTrigger>
 +                <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
                   <DropdownMenuLabel>Show/Hide Columns</DropdownMenuLabel>
@@ -7805,42 +7807,44 @@ export default function InwardPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <DataTable
-              columns={visibleColumns}
-              data={filteredData}
-              isLoading={loading}
-              error={error || undefined}
-              wrapperClassName="border-green-300"
-              headClassName="text-center bg-orange-100 text-orange-600 font-bold"
-              cellClassName="text-center"
-              stickyHeader={true}
-              stickyFirstColumn={true}
-              showGridLines={true}
-              pageSize={25}
-              showPagination={true}
-            />
+            <div className="overflow-x-auto -mx-2 sm:mx-0">
+              <DataTable
+                columns={visibleColumns}
+                data={filteredData}
+                isLoading={loading}
+                error={error || undefined}
+                wrapperClassName="border-green-300"
+                headClassName="text-center bg-orange-100 text-orange-600 font-bold text-xs sm:text-sm"
+                cellClassName="text-center text-xs sm:text-sm"
+                stickyHeader={true}
+                stickyFirstColumn={true}
+                showGridLines={true}
+                pageSize={25}
+                showPagination={true}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Add/Edit Inward Modal */}
       <Dialog open={showAddModal} onOpenChange={handleModalClose}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
           <DialogHeader>
-            <DialogTitle className="text-orange-700 text-xl">
+            <DialogTitle className="text-orange-700 text-lg sm:text-xl">
               {isEditMode ? 'Edit Inward' : 'Add Inward'}
             </DialogTitle>
           </DialogHeader>
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-3 sm:space-y-4" onSubmit={handleSubmit}>
             {!canCreateInwardEntry && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 sm:p-3 mb-3 sm:mb-4">
                 <div className="flex items-center text-blue-800">
-                  <Info className="h-4 w-4 mr-2" />
-                  <span className="text-sm font-medium">Read-Only Mode: You can view inward details but cannot modify entry fields. Use CIR, SR, and WR sections for approvals.</span>
+                  <Info className="h-4 w-4 mr-2 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm font-medium">Read-Only Mode: You can view inward details but cannot modify entry fields. Use CIR, SR, and WR sections for approvals.</span>
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <Label className="block font-semibold mb-1">State</Label>
                 <Select 
@@ -9528,10 +9532,10 @@ export default function InwardPage() {
 
 
 
-            <div className="flex justify-end pt-8">
+            <div className="flex justify-end pt-6 sm:pt-8">
               <Button 
                 type="submit" 
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-3" 
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 text-sm sm:py-3 sm:text-base w-full sm:w-auto" 
                 disabled={isUploading || !canCreateInwardEntry}
               >
                 {!canCreateInwardEntry 
@@ -9567,31 +9571,31 @@ export default function InwardPage() {
 
       {/* SR/WR View Modal */}
       <Dialog open={showSRForm} onOpenChange={setShowSRForm}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
           {/* Custom Header Section */}
-          <div className="flex flex-col items-center justify-center mb-8 mt-2">
-            <Image src="/Group 86.png" alt="Agrogreen Logo" width={120} height={100} style={{ marginBottom: 8, borderRadius: '30%', objectFit: 'cover' }} />
-            <div className="text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
+          <div className="flex flex-col items-center justify-center mb-4 sm:mb-8 mt-2">
+            <Image src="/Group 86.png" alt="Agrogreen Logo" width={100} height={85} style={{ marginBottom: 6, borderRadius: '30%', objectFit: 'cover' }} className="sm:w-[120px] sm:h-[100px]" />
+            <div className="text-base sm:text-lg font-extrabold text-orange-600 mt-2 mb-1 text-center" style={{ letterSpacing: '0.02em' }}>
               AGROGREEN WAREHOUSING PRIVATE LTD.
             </div>
-            <div className="text-base font-semibold text-green-600 mb-2 text-center">
+            <div className="text-sm sm:text-base font-semibold text-green-600 mb-2 text-center px-2">
               603, 6th Floor, Princess Business Skyline, Indore, Madhya Pradesh - 452010
             </div>
-            <div className="text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
+            <div className="text-sm sm:text-md font-bold text-orange-600 underline text-center mb-2" style={{ letterSpacing: '0.01em' }}>
               {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt' : 'Storage Receipt'}
             </div>
           </div>
           <DialogHeader>
-            <DialogTitle className="text-green-700 text-xl">
+            <DialogTitle className="text-green-700 text-lg sm:text-xl">
               {/* {selectedRowForSR?.receiptType === 'WR' ? 'Warehouse Receipt View' : 'Storage Receipt View'} */}
             </DialogTitle>
           </DialogHeader>
           {selectedRowForSR && (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {/* CAD No and SR/WR No */}
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <div className="flex-1">
-                  <Label className="font-semibold">{selectedRowForSR.receiptType === 'WR' ? 'WR No' : 'SR No'}</Label>
+                  <Label className="font-semibold text-sm sm:text-base">{selectedRowForSR.receiptType === 'WR' ? 'WR No' : 'SR No'}</Label>
                   <Input value={selectedRowForSR.srNo || `${selectedRowForSR.receiptType === 'WR' ? 'WR' : 'SR'}-${selectedRowForSR.inwardId || 'XXX'}-${selectedRowForSR.dateOfInward ? selectedRowForSR.dateOfInward.replace(/-/g, '') : ''}`} readOnly />
                 </div>
                 <div className="flex-1">
@@ -9613,9 +9617,9 @@ export default function InwardPage() {
                 <Input value={selectedRowForSR.dateOfInward || ''} readOnly />
               </div>
               {/* Bank, Warehouse, Client, Commodity Details */}
-              <div className="mt-6">
-                <Label className="font-semibold text-orange-500">Bank Details</Label>
-                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+              <div className="mt-4 sm:mt-6">
+                <Label className="font-semibold text-orange-500 text-sm sm:text-base">Bank Details</Label>
+                <div className="border border-gray-200 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4 bg-gray-50">
                 <div className="flex flex-wrap gap-4 items-center">
                 <div>
                     <Label className="text-sm font-medium">Bank Name</Label>
@@ -9670,10 +9674,10 @@ export default function InwardPage() {
                 </div>
                 </div>
               </div>
-              <div className="mt-6">
-                <Label className="font-semibold text-orange-500">Commodity Details</Label>
-                <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mt-4 sm:mt-6">
+                <Label className="font-semibold text-orange-500 text-sm sm:text-base">Commodity Details</Label>
+                <div className="border border-gray-200 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4 bg-gray-50">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div>
                       <Label className="text-sm font-medium">Commodity</Label>
                       <Input value={selectedRowForSR?.commodity || ''} readOnly className="text-sm mt-1 bg-white w-72" />
@@ -10043,11 +10047,11 @@ export default function InwardPage() {
                 const status = selectedRowForSR?.status;
                 if (isFormApproved || status === 'approved') {
                   return (
-                    <div className="flex justify-end mt-4">
+                    <div className="flex justify-end mt-3 sm:mt-4">
                       {(canPrintStorageReceipt() || canPrintWarehouseReceipt()) ? (
                         <Button
                           onClick={handlePrint}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm"
                           disabled={isPrinting}
                         >
                           {isPrinting ? 'Generating PDF...' : 'Print Receipt'}
@@ -10061,29 +10065,29 @@ export default function InwardPage() {
                   );
                 } else if (status === 'rejected') {
                   return (
-                    <div className="flex justify-end mt-4">
-                      <Button disabled className="bg-red-600 text-white px-4 py-2 text-sm opacity-70 cursor-not-allowed">
+                    <div className="flex justify-end mt-3 sm:mt-4">
+                      <Button disabled className="bg-red-600 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm opacity-70 cursor-not-allowed">
                         Rejected
                       </Button>
                     </div>
                   );
                 } else if (status === 'resubmited') {
                   return (
-                    <div className="flex justify-end mt-4">
-                      <Button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 text-sm">
+                    <div className="flex justify-end mt-3 sm:mt-4">
+                      <Button className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm">
                         Your {selectedRowForSR?.receiptType === 'WR' ? 'WR' : 'SR'} needs to be updated
                       </Button>
                     </div>
                   );
                 } else {
                   return (
-                    <div className="flex gap-4 mt-4 justify-end">
+                    <div className="flex flex-wrap gap-2 sm:gap-4 mt-3 sm:mt-4 justify-end">
                       {canGenerateStorageReceipt() || canGenerateWarehouseReceipt() ? (
                         <>
                           <Button
                             onClick={() => handleApproveSR(selectedRowForSR)}
                             disabled={isInsuranceExpired(selectedRowForSR)}
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm"
                           >
                             {selectedRowForSR.receiptType === 'WR' ? 'Proceed to WR' : 'Proceed to SR'}
                           </Button>
@@ -10097,7 +10101,7 @@ export default function InwardPage() {
                           {(canPrintStorageReceipt() || canPrintWarehouseReceipt()) && (
                             <Button
                               onClick={handlePrint}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm mt-2"
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-xs sm:px-4 sm:text-sm mt-2"
                               disabled={isPrinting}
                             >
                               {isPrinting ? 'Generating PDF...' : 'Print Receipt'}
@@ -10764,7 +10768,7 @@ export default function InwardPage() {
                 required
               />
             </div>
-            <div className="flex justify-end space-x-2 mt-4">
+            <div className="flex flex-wrap justify-end gap-2 sm:space-x-2 mt-3 sm:mt-4">
               {cirModalData?.cirStatus === 'Approved' ? (
                 <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm">
                   Print

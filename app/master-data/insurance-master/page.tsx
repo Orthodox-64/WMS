@@ -1200,17 +1200,17 @@ export default function InsuranceMasterPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
             <Button 
                onClick={() => router.push('/master-data')} 
                 variant="ghost" 
-                className="flex items-center justify-center bg-orange-500 text-white hover:bg-orange-600 w-full lg:w-auto px-4 py-3"
+                className="flex items-center justify-center bg-orange-500 text-white hover:bg-orange-600 w-full sm:w-auto px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base"
                 >
                 ← Master Data
              </Button>
-            <h1 className="text-3xl font-bold">Insurance Master Module</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center sm:text-left">Insurance Master Module</h1>
           </div>
           {/* Add Insurance button at top right corner */}
           <Button
@@ -1246,7 +1246,7 @@ export default function InsuranceMasterPage() {
               setSelectedCommodities([]);
               setShowAddModal(true);
             }}
-            className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 shadow-lg"
+            className="bg-green-500 hover:bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3 shadow-lg text-sm sm:text-base w-full sm:w-auto"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Insurance
@@ -1327,7 +1327,7 @@ export default function InsuranceMasterPage() {
           <CardHeader className="bg-orange-100">
             <CardTitle className="text-orange-600">Insurance Policies</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <DataTable
               columns={insuranceColumns}
               data={filteredInsurance}
