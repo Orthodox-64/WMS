@@ -353,20 +353,20 @@ export default function AnalyticsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-7xl mx-auto px-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center space-x-4">
             <button 
               onClick={() => router.push('/reports')}
-              className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+              className="inline-flex items-center text-base sm:text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors w-full md:w-auto"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Reports
             </button>
           </div>
           
-          <div className="text-center flex flex-col items-center">
+          <div className="text-center flex flex-col items-center w-full md:w-auto">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
               {/* <Image 
@@ -377,13 +377,13 @@ export default function AnalyticsPage() {
                 priority
               /> */}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-2 bg-orange-100 rounded-lg">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-2 bg-orange-100 rounded-lg w-full md:w-auto">
               Analytics & Summary
             </h1>
             <p className="text-muted-foreground">Comprehensive business intelligence and insights</p>
           </div>
           
-          <div className="flex space-x-2">
+          <div className="flex space-x-2 justify-center md:justify-end w-full md:w-auto">
             <Select value={timeRange} onValueChange={setTimeRange}>
               <SelectTrigger className="w-32">
                 <SelectValue />
@@ -405,7 +405,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Inward</CardTitle>
@@ -460,7 +460,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Transaction Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -509,7 +509,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Top Performers */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -590,7 +590,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Additional Info */}
-        <div className="mt-8 p-6 bg-green-50 rounded-lg border border-green-200">
+        <div className="mt-6 sm:mt-8 p-4 sm:p-6 bg-green-50 rounded-lg border border-green-200">
           <div className="flex items-start space-x-3">
             <div className="flex-shrink-0">
               <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -598,8 +598,8 @@ export default function AnalyticsPage() {
               </div>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-green-900">Analytics Insights</h4>
-              <p className="text-sm text-green-700 mt-1">
+              <h4 className="text-sm sm:text-base font-medium text-green-900">Analytics Insights</h4>
+              <p className="text-xs sm:text-sm text-green-700 mt-1 leading-relaxed">
                 This dashboard provides comprehensive insights into warehouse operations, 
                 transaction patterns, and business performance metrics. Use the time range 
                 selector to analyze different periods and export data for further analysis.

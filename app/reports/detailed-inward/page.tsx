@@ -1,7 +1,7 @@
 "use client";
 
 import DashboardLayout from '@/components/dashboard-layout';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, ArrowLeft, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
@@ -108,14 +108,9 @@ export default function DetailedInwardReportsPage() {
     setStartDate(sixMonthsAgo.toISOString().split('T')[0]);
   }, []);
 
-  // Fetch inward data when component mounts or when date filters change
-  useEffect(() => {
-    if (startDate && endDate) {
-      fetchInwardData();
-    }
-  }, [startDate, endDate]);
+  // (moved) fetch effect placed after fetchInwardData definition for correct ordering
 
-  const fetchInwardData = async () => {
+  const fetchInwardData = useCallback(async () => {
     setLoading(true);
     try {
       console.log('Fetching inward data with date range:', startDate, 'to', endDate);
@@ -399,7 +394,14 @@ export default function DetailedInwardReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate]);
+
+  // Fetch inward data when component mounts or when date filters change
+  useEffect(() => {
+    if (startDate && endDate) {
+      fetchInwardData();
+    }
+  }, [startDate, endDate, fetchInwardData]);
 
   // Get unique filter options
   const uniqueClients = useMemo(() => {
@@ -667,20 +669,20 @@ export default function DetailedInwardReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-7xl mx-auto px-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center space-x-4">
             <button 
               onClick={() => router.push('/reports')}
-              className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+              className="inline-flex items-center text-base sm:text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors w-full md:w-auto"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Reports
             </button>
           </div>
           
-          <div className="text-center flex flex-col items-center">
+          <div className="text-center flex flex-col items-center w-full md:w-auto">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
               {/* <Image 
@@ -691,17 +693,17 @@ export default function DetailedInwardReportsPage() {
                 priority
               /> */}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-3 bg-orange-100 rounded-lg w-full md:w-auto">
               Detailed Inward Report
             </h1>
             <p className="text-sm text-gray-600 mt-1">Comprehensive detailed inward transaction analysis</p>
           </div>
           
-          <div className="flex items-center justify-end w-48">
+          <div className="flex items-center justify-center md:justify-end w-full md:w-48">
             <Button 
               onClick={exportToCSV} 
               disabled={filteredData.length === 0}
-              className="bg-blue-500 hover:bg-blue-600 text-white"
+              className="bg-blue-500 hover:bg-blue-600 text-white w-full md:w-auto"
             >
               <Download className="h-4 w-4 mr-2" />
               Export CSV

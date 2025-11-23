@@ -89,43 +89,37 @@ export default function ReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      {/* Constrain width & add responsive horizontal padding similar to inward page */}
+      <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header with Back Button and Centered Title */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => router.push('/dashboard')}
-            className="inline-block text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
-          >
-           ← Dashboard
-          </button>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="flex items-center justify-between md:justify-start w-full md:w-auto">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors w-full md:w-auto"
+            >
+              ← Dashboard
+            </button>
           </div>
-          
+
           {/* Centered Title with Logo and Light Orange Background */}
           <div className="flex-1 text-center flex flex-col items-center">
-            {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
-              {/* <Image 
-                src="/AGlogo.webp" 
-                alt="AgroGreen Logo" 
-                fill
-                className="object-contain"
-                priority
-              /> */}
+              {/* Logo placeholder */}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-3 bg-orange-100 rounded-lg w-full md:w-auto">
               Reports & Analytics
             </h1>
           </div>
-          
-          {/* Empty space for layout balance */}
-          <div className="flex space-x-2">
-            {/* Future: Add quick actions or filters */}
+
+          {/* Right side future actions area */}
+          <div className="flex space-x-2 justify-center md:justify-end">
+            {/* Reserved for future quick actions */}
           </div>
         </div>
-        
+
         {/* Report Module Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {reportModules.map((module) => {
             const Icon = module.icon;
             return (
@@ -134,18 +128,18 @@ export default function ReportsPage() {
                 className={`hover:shadow-lg transition-all duration-300 cursor-pointer ${module.bgColor} hover:bg-opacity-80 rounded-lg ${module.borderColor} border-2 h-full`}
                 onClick={() => handleCardClick(module.id)}
               >
-                <CardContent className="p-6 flex flex-col items-center justify-center space-y-4 text-center h-full">
+                <CardContent className="p-4 sm:p-6 flex flex-col items-center justify-center space-y-4 text-center h-full">
                   <div className="p-3 rounded-lg bg-white shadow-sm">
                     <Icon className={`w-8 h-8 ${module.color}`} />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-300 pb-1">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 border-b border-gray-300 pb-1">
                       {module.title}
                     </h3>
                     <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${module.color} ${module.bgColor} border ${module.borderColor}`}>
                       {module.count}
                     </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                       {module.description}
                     </p>
                   </div>
@@ -156,7 +150,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Additional Info Section */}
-        <div className="mt-8 p-6 bg-green-50 rounded-lg border border-green-200">
+        <div className="mt-4 sm:mt-8 p-4 sm:p-6 bg-green-50 rounded-lg border border-green-200">
           <div className="flex items-start space-x-3">
             <div className="flex-shrink-0">
               <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -164,8 +158,8 @@ export default function ReportsPage() {
               </div>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-green-900">Report Generation</h4>
-              <p className="text-sm text-green-700 mt-1">
+              <h4 className="text-sm sm:text-base font-medium text-green-900">Report Generation</h4>
+              <p className="text-xs sm:text-sm text-green-700 mt-1 leading-relaxed">
                 Access comprehensive reports and analytics for all warehouse operations. 
                 Generate detailed insights for inward, outward, release orders, delivery orders, and insurance data.
               </p>

@@ -1,7 +1,7 @@
 "use client";
 
 import DashboardLayout from '@/components/dashboard-layout';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Download, ArrowLeft, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
@@ -108,14 +108,9 @@ export default function ReleaseOrderReportsPage() {
     setStartDate(sixMonthsAgo.toISOString().split('T')[0]);
   }, []);
 
-  // Fetch release order data when component mounts or when date filters change
-  useEffect(() => {
-    if (startDate && endDate) {
-      fetchROData();
-    }
-  }, [startDate, endDate]);
+  // (moved) fetch effect placed after fetchROData definition for correct ordering
 
-  const fetchROData = async () => {
+  const fetchROData = useCallback(async () => {
     setLoading(true);
     try {
       const roCollection = collection(db, 'releaseOrders');
@@ -394,7 +389,14 @@ export default function ReleaseOrderReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate]);
+
+  // Fetch release order data when component mounts or when date filters change
+  useEffect(() => {
+    if (startDate && endDate) {
+      fetchROData();
+    }
+  }, [startDate, endDate, fetchROData]);
 
   // Get unique filter options
   const uniqueStates = useMemo(() => {
@@ -465,7 +467,7 @@ export default function ReleaseOrderReportsPage() {
     }
     
     return filtered;
-  }, [roData, searchTerm, statusFilter, warehouseFilter, clientFilter, stateFilter, branchFilter, commodityFilter, startDate, endDate]);
+  }, [roData, searchTerm, statusFilter, warehouseFilter, clientFilter, stateFilter, branchFilter, commodityFilter]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -662,13 +664,13 @@ export default function ReleaseOrderReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-7xl mx-auto px-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center space-x-4">
             <button 
               onClick={() => router.push('/reports')}
-              className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+              className="inline-flex items-center text-base sm:text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors w-full md:w-auto"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Reports
@@ -676,16 +678,16 @@ export default function ReleaseOrderReportsPage() {
         
           </div>
           
-          <div className="text-center flex flex-col items-center">
+          <div className="text-center flex flex-col items-center w-full md:w-auto">
             {/* Logo */}
             
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-3 bg-orange-100 rounded-lg w-full md:w-auto">
               Release Order Reports
             </h1>
             <p className="text-muted-foreground">Generate and view release order transaction reports</p>
           </div>
           
-          <div className="flex space-x-2">
+          <div className="flex space-x-2 justify-center md:justify-end w-full md:w-auto">
             <Button onClick={exportToCSV} disabled={filteredData.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV

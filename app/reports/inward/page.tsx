@@ -1039,13 +1039,13 @@ export default function InwardReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-7xl mx-auto px-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center space-x-4">
             <button 
               onClick={() => router.push('/reports')}
-              className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+              className="inline-flex items-center text-base sm:text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors w-full md:w-auto"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Reports
@@ -1053,20 +1053,20 @@ export default function InwardReportsPage() {
       
           </div>
           
-          <div className="text-center flex flex-col items-center">
+          <div className="text-center flex flex-col items-center w-full md:w-auto">
             {/* Logo */}
           
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-3 bg-orange-100 rounded-lg w-full md:w-auto">
               Stock Reports
             </h1>
             <p className="text-sm text-gray-600 mt-1">Comprehensive inward data analysis</p>
           </div>
           
-          <div className="flex items-center justify-end w-48">
+          <div className="flex items-center justify-center md:justify-end w-full md:w-48">
             <Button 
               onClick={exportToCSV} 
               disabled={filteredData.length === 0}
-              className="bg-orange-500 hover:bg-orange-600 text-white"
+              className="bg-orange-500 hover:bg-orange-600 text-white w-full md:w-auto"
             >
               <Download className="h-4 w-4 mr-2" />
               Export CSV
@@ -1327,7 +1327,7 @@ export default function InwardReportsPage() {
         {/* Data Table */}
         <Card>
           <CardContent className="p-0">
-            <div className="table-container">
+            <div className="table-container overflow-x-auto">
               <table className="w-full border-collapse border border-gray-200">
                 <thead className="bg-orange-100 sticky-header">
                   <tr>

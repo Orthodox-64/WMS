@@ -1,7 +1,7 @@
 "use client";
 
 import DashboardLayout from '@/components/dashboard-layout';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,10 +38,7 @@ export default function SurveyReportsPage() {
   const [surveyData, setSurveyData] = useState<SurveyReportData[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Fetch survey data
-  useEffect(() => {
-    fetchSurveyData();
-  }, []);
+  // (moved) fetch effect placed after fetchSurveyData definition for correct ordering
 
   // Set default date range (last 6 months)
   useEffect(() => {
@@ -53,7 +50,7 @@ export default function SurveyReportsPage() {
     setStartDate(sixMonthsAgo.toISOString().split('T')[0]);
   }, []);
 
-  const fetchSurveyData = async () => {
+  const fetchSurveyData = useCallback(async () => {
     setLoading(true);
     try {
       const inspectionsCollection = collection(db, 'inspections');
@@ -102,7 +99,12 @@ export default function SurveyReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate]);
+
+  // Fetch survey data
+  useEffect(() => {
+    fetchSurveyData();
+  }, [fetchSurveyData]);
 
   // Get unique filter options
   const uniqueWarehouses = useMemo(() => {
@@ -252,20 +254,20 @@ export default function SurveyReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-7xl mx-auto px-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center space-x-4">
             <button 
               onClick={() => router.push('/dashboard')}
-              className="inline-flex items-center text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+              className="inline-flex items-center text-base sm:text-lg font-semibold tracking-tight bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors w-full md:w-auto"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Dashboard
             </button>
           </div>
           
-          <div className="text-center flex flex-col items-center">
+          <div className="text-center flex flex-col items-center w-full md:w-auto">
             {/* Logo */}
             <div className="w-36 h-10 relative mb-3 bg-white rounded-lg px-2 py-1">
               <Image 
@@ -276,7 +278,7 @@ export default function SurveyReportsPage() {
                 priority
               />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-6 py-3 bg-orange-100 rounded-lg">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-600 inline-block border-b-4 border-green-500 pb-2 px-4 sm:px-6 py-3 bg-orange-100 rounded-lg w-full md:w-auto">
               Survey Reports
             </h1>
             <p className="text-muted-foreground">Generate and view warehouse survey and inspection reports</p>
