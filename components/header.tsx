@@ -66,16 +66,7 @@ export default function Header() {
           />
         </div>
         
-        <Button
-          variant="secondary"
-          size="sm"
-          className="md:hidden bg-gray-200 hover:bg-gray-300 text-gray-700"
-          onClick={() => setIsNavOpen(!isNavOpen)}
-          aria-label="Toggle navigation"
-        >
-          <MenuIcon size={24} />
-        </Button>
-
+      
         <nav className={cn(
           "md:flex items-center space-x-4 ml-2 md:ml-6",
           isNavOpen ? "absolute top-16 left-0 w-full bg-green-600 shadow-md flex-col space-x-0 space-y-2 p-4 md:relative md:flex-row md:space-y-0 md:p-0 md:shadow-none" : "hidden md:flex"
