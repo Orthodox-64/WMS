@@ -75,7 +75,7 @@ function todayYYYYMMDD() {
 
 // Add this helper at the top-level scope:
 function parseDDMMYYYY(dateStr: string): Date | null {
-  if (!dateStr) return null;
+  if (!dateStr || typeof dateStr !== 'string') return null;
   const [day, month, year] = dateStr.split('-').map(Number);
   if (!day || !month || !year) return null;
   return new Date(year, month - 1, day);
@@ -104,7 +104,7 @@ function validateInsuranceEntry(insurance: any): boolean {
 
 // 1. Add helper functions at the top-level scope:
 function isDateExpired(dateStr: string): boolean {
-  if (!dateStr) return false;
+  if (!dateStr || typeof dateStr !== 'string') return false;
   let d: Date | null = null;
   if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
     d = parseDDMMYYYY(dateStr);
@@ -119,7 +119,7 @@ function isDateExpired(dateStr: string): boolean {
   return d < today;
 }
 function isDateWithinDays(dateStr: string, days: number): boolean {
-  if (!dateStr) return false;
+  if (!dateStr || typeof dateStr !== 'string') return false;
   let d: Date | null = null;
   if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
     d = parseDDMMYYYY(dateStr);

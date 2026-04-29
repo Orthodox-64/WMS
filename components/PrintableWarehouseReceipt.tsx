@@ -98,10 +98,14 @@ const PrintableWarehouseReceipt: React.FC<PrintableWarehouseReceiptProps> = ({
         if (insurance.firePolicyEndDate) {
           // Normalize date
           let dateStr = insurance.firePolicyEndDate;
-          if (dateStr.includes('T')) {
+          if (typeof dateStr === 'string' && dateStr.includes('T')) {
             dateStr = dateStr.slice(0, 10);
+          } else if (dateStr instanceof Date) {
+            dateStr = dateStr.toISOString().slice(0, 10);
+          } else if (dateStr && typeof dateStr.toDate === 'function') {
+            dateStr = dateStr.toDate().toISOString().slice(0, 10);
           }
-          return dateStr;
+          return typeof dateStr === 'string' ? dateStr : String(dateStr);
         }
       }
     }

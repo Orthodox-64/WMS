@@ -7733,7 +7733,7 @@ export default function WarehouseInspectionForm({
                     </SelectTrigger>
                     <SelectContent>
                       {clientsData.map(client => (
-                        <SelectItem key={client.id} value={client.firmName}>{client.firmName}</SelectItem>
+                        <SelectItem key={client.id} value={client.firmName || 'Unnamed Client'}>{client.firmName}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -7934,18 +7934,19 @@ export default function WarehouseInspectionForm({
               {/* Commodity Filter */}
               <div className="mt-4">
                 <Label className="text-blue-700 font-medium">Filter by Commodity (Optional)</Label>
-                <Select 
-                  value={selectedCommodityFilter} 
+                <Select
+                  value={selectedCommodityFilter || "all-commodities"}
                   onValueChange={(value) => {
-                    setSelectedCommodityFilter(value);
-                    fetchWarehouseInsurances(value);
+                    const newValue = value === "all-commodities" ? "" : value;
+                    setSelectedCommodityFilter(newValue);
+                    fetchWarehouseInsurances(newValue);
                   }}
                 >
                   <SelectTrigger className="bg-white border-blue-300">
                     <SelectValue placeholder="All Commodities" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Commodities</SelectItem>
+                    <SelectItem value="all-commodities">All Commodities</SelectItem>
                     {commoditiesData.map((commodity) => (
                       <SelectItem key={commodity.id} value={commodity.commodityName}>
                         {commodity.commodityName}

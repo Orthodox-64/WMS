@@ -1516,13 +1516,13 @@ export default function InsuranceMasterPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {banks.length === 0 ? (
-                          <SelectItem value="" disabled>
+                          <SelectItem value="no-banks" disabled>
                             No banks available - Check Firebase collection
                           </SelectItem>
                         ) : (
                           banks.map(bank => {
                             console.log('Rendering bank in dropdown:', bank);
-                            const displayName = bank.bankName || bank.branch || `Bank in ${bank.state}`;
+                            const displayName = (bank.bankName || bank.branch || `Bank in ${bank.state}`) || 'Unnamed Bank';
                             return (
                               <SelectItem key={bank.id} value={displayName}>
                                 {displayName}
@@ -1986,12 +1986,12 @@ export default function InsuranceMasterPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {banks.length === 0 ? (
-                          <SelectItem value="" disabled>
+                          <SelectItem value="no-banks" disabled>
                             No banks available
                           </SelectItem>
                         ) : (
                           banks.map(bank => {
-                            const displayName = bank.bankName || bank.branch || `Bank in ${bank.state}`;
+                            const displayName = (bank.bankName || bank.branch || `Bank in ${bank.state}`) || 'Unnamed Bank';
                             return (
                               <SelectItem key={bank.id} value={displayName}>
                                 {displayName}
